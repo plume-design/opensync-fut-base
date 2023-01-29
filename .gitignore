@@ -1,0 +1,15 @@
+__pycache__/
+.pytest_cache/
+fut/.files
+fut_cmd.sh
+fut_tr.tar
+resource/git/
+resource/shell/
+resource/test_fw/
+resource/um/
+resource/ut/
+shell/config/regulatory.txt
+docker/env.list
+docker/env.list.git
+config/locations/osrt.yaml
+.coverage

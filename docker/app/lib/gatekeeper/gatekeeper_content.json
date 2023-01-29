@@ -1,0 +1,26 @@
+{
+    "fqdn": {
+    },
+    "http_url": {
+        "http://fut.opensync.io/gatekeeper/test/http_url/allow": {
+            "action": "allow"
+        },
+        "http://fut.opensync.io/gatekeeper/test/http_url/block": {
+            "action": "block"
+        },
+        "http://fut.opensync.io/gatekeeper/test/http_url/redirect": {
+            "action": "redirect",
+            "redirect_cname": "www.google.com"
+        }
+    },
+    "http_host": {
+    },
+    "https_sni": {
+    },
+    "ipv4": {
+    },
+    "ipv6": {
+    },
+    "app": {
+    }
+}

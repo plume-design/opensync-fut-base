@@ -1,0 +1,125 @@
+tb_maintainer: FUT-OSRT
+purpose: FUT OSRT location config file
+build_profile: dev-debug
+ssh_gateway:
+  user: plume
+  hostname: 127.0.0.1
+
+# List of location nodes
+Nodes:
+  - name: dut
+    model: PP203X
+    host:
+      name: gw
+      user: plume
+    switch:
+      dut_eth0:
+        - uplink
+        - mn
+      dut_eth1:
+        - lan
+  - name: ref
+    model: PP203X
+    host:
+      name: leaf1
+      user: plume
+    switch:
+      ref_eth0:
+        - lan
+        - mn
+      ref_eth1:
+        - lan
+  - name: ref2
+    model: PP203X
+    host:
+      name: leaf2
+      user: plume
+    switch:
+      ref2_eth0:
+        - lan
+        - mn
+      ref2_eth1:
+        - lan
+    static_eth_client: eclient1
+
+# List of clients
+Clients:
+  - name: wclient
+    type: rpi
+    host:
+      name: rpi1
+      user: plume
+      pass: plume
+      netns: nswifi1
+    wifi: true
+  - name: wclient2
+    type: rpi
+    host:
+      name: rpi2
+      user: plume
+      pass: plume
+      netns: nswifi1
+    wifi: true
+
+  - name: eclient
+    type: rpi
+    host:
+      name: rpi1
+      user: plume
+      pass: plume
+      netns: nseth305
+    eth: true
+
+  - name: eclient2
+    type: rpi
+    host:
+      name: rpi2
+      user: plume
+      pass: plume
+      netns: nseth351
+    eth: true
+    vlan: 351
+
+  - name: eclient3
+    type: rpi
+    host:
+      name: rpi2
+      user: plume
+      pass: plume
+      netns: nseth352
+    eth: true
+    vlan: 352
+
+Networks:
+  - ssid: fut_testbed_ssid
+    key: 12testtest
+    alias: home
+
+
+# Switch configuration
+Switch:
+  - name: stb-switch
+    type: tplink
+    ipaddr: 192.168.5.254
+    user: admin
+    pass: 12testtest
+    port: 23
+    alias:
+      - backhaul: 303
+        name: dut_eth0
+        port: 3
+      - backhaul: 304
+        name: ref_eth0
+        port: 4
+      - backhaul: 305
+        name: ref2_eth0
+        port: 5
+      - backhaul: 309
+        name: dut_eth1
+        port: 9
+      - backhaul: 310
+        name: ref_eth1
+        port: 10
+      - backhaul: 311
+        name: ref2_eth1
+        port: 11

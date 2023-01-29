@@ -1,0 +1,163 @@
+body,html {
+    margin: 0;
+    padding: 0;
+}
+* {
+    box-sizing: border-box;
+}
+
+body {
+    background-image: url("/static/extras/OpenSync.png");
+    background-size: auto;
+    background-repeat: no-repeat;
+    background-position: center;
+}
+
+div.top_nav {
+    height: 50px;
+    display: flex;
+    width: 100%;
+    background-color: rgb(66, 66, 66);
+}
+.top_nav > a {
+    width: 8%;
+    text-align: center;
+    line-height: 50px;
+    color: white;
+}
+.top_nav > a:hover {
+    background-color: rgb(88, 88, 88);
+    text-decoration: none;
+}
+
+div.app {
+    display: flex;
+    flex-flow: column;
+    position: relative;
+    height: 100vh;
+    width: 100%;
+}
+
+div.fut_terminal_tab {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+}
+
+.fut_terminal_tab iframe {
+    height: calc(100% - 2px);;
+    width: 100%;
+}
+
+div.fut_builds_nav {
+    width: 400px;
+    flex-grow: 1;
+    flex-direction: column;
+    display: flex;
+    background-color: rgb(27, 27, 27);
+}
+
+div.allure_tab {
+    display: flex;
+    flex-grow: 1;
+    flex-direction: column;
+    position: relative;
+}
+
+.allure_tab div.left_nav {
+    width: 400px;
+    display: flex;
+    flex-grow: 1;
+}
+
+.allure_tab iframe {
+    width: 100%;
+    height: 100%;
+}
+
+div.fut_builds_nav {
+    transition: width 0.2s linear;
+    position: absolute;
+    top: 5px;
+    height: calc(100% - 5px);
+}
+
+.fut_builds_nav .top_nav a {
+    width: 50%;
+}
+
+div.fut_builds_nav.hide_tr {
+    overflow: hidden;
+    width: 0px;
+}
+
+div.fut_build_list {
+    display: flex;
+    flex-direction: column;
+}
+
+.fut_build_list a {
+    width: 100%;
+    line-height: 50px;
+    color: white;
+    border: white solid 1px;
+    text-indent: 10px;
+}
+.fut_build_list a:hover {
+    background-color: rgb(88, 88, 88);
+    text-decoration: none;
+}
+
+div.loader {
+    position: absolute;
+    z-index: 5;
+    top: 0;
+    left: 0;
+    text-align: center;
+    height: 100%;
+    color: white;
+    background-color: rgb(100, 100, 100);
+    width: 100%;
+    opacity: 0.7;
+}
+
+.loader p {
+    position: absolute;
+    top: 49%;
+    left: 0;
+    width: 100%;
+    margin: 0;
+    background-color: rgb(0, 0, 0);
+}
+
+div.hidden {
+    display: none;
+}
+
+div.build_div_wrapper {
+    display: flex;
+}
+div.build_div_link_wrapper {
+    width: 60%;
+    display: flex;
+}
+div.build_div_tools_wrapper {
+    width: 40%;
+    display: inline-flex;
+}
+.build_div_tools_wrapper a {
+    line-height: 0px;
+    display: inline-flex;
+    width: 50%;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+}
+.build_div_tools_wrapper img {
+    filter: brightness(0) invert(1);
+    width: 50px;
+    height: auto;
+    padding: 6px;
+    text-align: center;
+    vertical-align: middle;
+}

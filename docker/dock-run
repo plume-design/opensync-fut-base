@@ -1,0 +1,199 @@
+#!/bin/sh
+
+PSEUDO_TTY=${PSEUDO_TTY:-"--interactive --tty"}
+DOCKER_START_FLAG=${DOCKER_START_FLAG:-"-ai"}
+DOCKER_FORCE_REBUILD=${DOCKER_FORCE_REBUILD:-"false"}
+OPENSYNC_ROOT="$(dirname "$(dirname "$(readlink -fm "$0")")")"
+FUT_DOCKER_ROOT="$OPENSYNC_ROOT/docker"
+ENV_FILE="${FUT_DOCKER_ROOT}/env.list"
+export DOCKER_TAG="fut"
+FINAL_DOCKER_TAG="${DOCKER_TAG}-final"
+export DOCKER_SKIP_FULL="true"
+export SKIP_DOCKER_START="true"
+export SKIP_DOCKER_CREATE="true"
+export OPENSYNC_ROOT
+export DOCKER_ROOT=$OPENSYNC_ROOT/lib_testbed/generic/docker
+
+# Check that env.list.base file exists
+if [ -e "${ENV_FILE}.base" ]; then
+    # Dynamically add git commit IDs to env.list file
+    cp "${ENV_FILE}.base" "${ENV_FILE}"
+    echo $(env | grep -e "GIT_.*_ID") >> "${ENV_FILE}"
+    [ -e "${ENV_FILE}.git" ] && cat "${ENV_FILE}.git" >> "${ENV_FILE}"
+else
+    echo "Missing file ${ENV_FILE}.base, aborting"
+    exit 1
+fi
+
+running_containers=$(docker ps --filter "ancestor=${DOCKER_TAG}:latest" --format "{{.ID}}")
+
+if [ "${1}" = "attach" ]; then
+    shift
+    if [ $# -eq 0 ]; then
+        echo "No command provided, will run bash"
+        set -- "bash"
+    fi
+    running_container=${running_containers%% *}
+    if [ -n "${running_container}" ]; then
+        echo "Attaching to container ${running_container}"
+        echo "Executing $*"
+        docker exec -it "${running_container}" "$@"
+        exit
+    else
+        echo "There is no running container to attach, will build"
+    fi
+elif [ -n "${running_containers}" ]; then
+    # Stop any running containers before starting FUT Docker app
+    # Only one instance should be running due to servers starting inside FUT
+    echo "Stopping all containers running ${DOCKER_TAG}:latest"
+    docker stop ${running_containers} || true
+else
+    echo "No running containers found"
+fi
+if [ "${1}" = "stop" ]; then
+    echo "Done."
+    exit 0
+fi
+
+# Use FINAL_DOCKER_TAG to determine if the final image exists
+DOCKER_IMAGE_EXISTS_OUT=$(docker images -q ${FINAL_DOCKER_TAG}:latest 2> /dev/null)
+if [ "$DOCKER_FORCE_REBUILD" = "true" ] || [ "${DOCKER_IMAGE_EXISTS_OUT}" = "" ]; then
+    if [ -z "${QUIET_FUT_DOCKER_BUILD}" ]; then
+        LOUD_DOCKER_BUILD=true
+    fi
+    # Build lib_testbed base Docker image so we get the latest version
+    # Will create two images: ${DOCKER_TAG}-base and ${DOCKER_TAG}
+    # For example fut-base:latest as well as fut:latest
+    . $DOCKER_ROOT/dock-run
+    # Install packages required for FUT
+    docker build $QUIET_BUILD --network=host --tag ${DOCKER_TAG}-apt --build-arg PARENT_IMAGE=${DOCKER_TAG} . -f "${FUT_DOCKER_ROOT}/Dockerfile.fut"
+    # Install required PIP packages for FUT
+    docker build $QUIET_BUILD --network=host --tag ${DOCKER_TAG}-pip --build-arg PARENT_IMAGE=${DOCKER_TAG}-apt . -f "${FUT_DOCKER_ROOT}/Dockerfile.pip_fut"
+    # Run final setup required for FUT
+    docker build $QUIET_BUILD --network=host --tag ${FINAL_DOCKER_TAG} --build-arg PARENT_IMAGE=${DOCKER_TAG}-pip . -f "${FUT_DOCKER_ROOT}/Dockerfile.fut_final"
+fi
+
+if [ "${1}" = "run" ]; then
+    echo "Will run container in background, no interactive mode. Use '$0 attach' to attach to this container"
+    DOCKER_COMMAND="run"
+    DOCKER_COMMAND_ADDITIONAL_OPTS="-d"
+    DOCKER_COMMAND_EXEC='
+    echo "Generating FUT OSRT location file"
+    $OPENSYNC_ROOT/framework/tools/generate_active_osrt_file.py > /dev/null 2>&1
+    echo "FUT OSRT location file generated"
+    (cd $OPENSYNC_ROOT/docker/data/scripts/ && ./init.sh) && tail -f /tmp/fut.log'
+else
+    DOCKER_COMMAND="create"
+    DOCKER_COMMAND_ADDITIONAL_OPTS=""
+    DOCKER_COMMAND_EXEC='
+  export PYTHONDONTWRITEBYTECODE=true
+  export PYTHONPATH="$OPENSYNC_ROOT:$PYTHONPATH"
+  export PYTHON_PATH="$OPENSYNC_ROOT:$PYTHON_PATH"
+  export PATH="$OPENSYNC_ROOT/lib_testbed/generic/tools:/home/plume/.local/bin/:$PATH"
+  export SHELL=/bin/bash
+  (cd $OPENSYNC_ROOT/docker/data/scripts/ && ./init.sh)
+  echo "Generating FUT OSRT location file"
+  $OPENSYNC_ROOT/framework/tools/generate_active_osrt_file.py > /dev/null 2>&1
+  echo "FUT OSRT location file generated"
+  exec "$@"'
+fi
+
+echo "Generating FUT certificate files for server"
+$OPENSYNC_ROOT/shell/tools/server/generate_fut_self_signed_certificates.sh > /dev/null 2>&1
+if [ "$?" = "0" ]; then
+    echo "Certificates generated"
+else
+    echo "FAIL: Fail to generate FUT certificates"
+    exit 1
+fi
+
+# Setup RPI server response policy to enable fut.opensync.io domain
+fut_zone_domain="fut.opensync.io"
+fut_zone_ip="192.168.200.1"
+org_zone_policy="/etc/bind/db.response-policy-zone"
+if [ -f "${org_zone_policy}" ]; then
+    echo "${org_zone_policy} exists"
+    res=$(cat "${org_zone_policy}" | grep "${fut_zone_domain}.*${fut_zone_ip}")
+    if [ "$?" -eq 0 ]; then
+        echo "${fut_zone_domain} present in ${org_zone_policy} at ${fut_zone_ip}"
+    else
+        echo "Enabling ${fut_zone_domain} for ${fut_zone_ip} in ${org_zone_policy}"
+        sudo sh -c "sed -i '/${fut_zone_domain}/d' ${org_zone_policy}"
+        sudo sh -c "echo '${fut_zone_domain}     A       ${fut_zone_ip}' >> ${org_zone_policy}"
+        sudo service bind9 restart
+        if [ "$?" -eq 0 ]; then
+            echo "${fut_zone_domain} enabled on ${fut_zone_ip}"
+        else
+            echo "FAIL: Failed to enable ${fut_zone_domain} for ${fut_zone_ip}"
+            exit 1
+        fi
+    fi
+else
+    echo "WARNING: ${org_zone_policy} is missing on RPI Server"
+    echo "WARNING: Some FUT testcases may fail!"
+    echo "WARNING: Consider upgrading to latest RPI Server image!"
+fi
+
+sig='INT HUP KILL TERM EXIT QUIT'
+id=
+cleanup() { r=$?; trap - $sig; test -z $id || docker kill $id; exit $r; }
+trap cleanup $sig
+id=$(docker $DOCKER_COMMAND \
+    --rm \
+    --hostname $(hostname) \
+    --init \
+    $PSEUDO_TTY \
+    --tmpfs=/tmp:exec \
+    --net host \
+    --user plume:plume \
+    --cap-add=NET_ADMIN \
+    --env debian_chroot="DOCKER:${FINAL_DOCKER_TAG}" \
+    --env HOME="$HOME" \
+    --env TERM \
+    --env JOB_NAME \
+    --env BUILD_NUMBER \
+    --env BUILD_URL \
+    --env CLOUD_SMOKE_USER \
+    --env CLOUD_SMOKE_PASS \
+    --env OPENSYNC_ROOT \
+    --env DISPLAY=$DISPLAY \
+    --env QT_X11_NO_MITSHM=1 \
+    --env FUT_IN_DOCKER=true \
+    --env-file "${ENV_FILE}" \
+    --workdir "$OPENSYNC_ROOT" \
+    --expose=8000 \
+    --expose=8443 \
+    -v/"$OPENSYNC_ROOT":"$OPENSYNC_ROOT"\
+    -v/etc/passwd:/etc/passwd \
+    -v/etc/group:/etc/group \
+    -v$HOME:$HOME \
+    -v/tmp/automation/.local:$HOME/.local \
+    -v/tmp/allure-results:/tmp/allure-results \
+    -v/tmp/automation:/tmp/automation \
+    -v/tmp/.X11-unix:/tmp/.X11-unix \
+    -v/dev/shm:/dev/shm \
+    -v"$OPENSYNC_ROOT"/docker/app:/var/www/app \
+    -v"$OPENSYNC_ROOT"/:/var/www/app/static/fut-base/ \
+    -v/.version:/.version \
+    -v$SSH_AUTH_SOCK:$SSH_AUTH_SOCK \
+    --shm-size 1G \
+    $DOCKER_COMMAND_ADDITIONAL_OPTS \
+    $_MOUNT_CUR_DIR \
+    $_MOUNT_ROOT \
+    $_USER \
+    $_TIMEZONE \
+    $DOCKER_OPTS \
+    $SSHARGS \
+    $DOCKER_CONTAINER_NAME_OPT \
+    "${FINAL_DOCKER_TAG}:latest" \
+    sh -c "$DOCKER_COMMAND_EXEC" - "$@")
+set +e
+
+echo "Created container: $id"
+if [ "${1}" != "run" ]; then
+    echo "Executing: $*"
+    docker start $DOCKER_START_FLAG $id
+    r=$?
+fi
+id=
+exit $r

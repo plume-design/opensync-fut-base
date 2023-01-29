@@ -1,0 +1,55 @@
+server:
+  host: "192.168.4.1"                           # RPI server IP on management subnet
+  username: "plume"
+  password: "plume"
+  rsa:
+    key_path: "/home/plume/.ssh/id_rsa"
+    key_pass: "plume"
+  curl:                                         # Configuration for web hosted file transfer
+    host: "http://fut.opensync.io:8000/"
+  mqtt_settings:
+    hostname: "fut.opensync.io"
+    port: "65002"
+  cloud:
+    tls_version: '1.2'
+  mgmt_vlan: 1                                  # VLAN 1 is the system VLAN for the FUT testbed
+  tb_role: "server"                             # RPI server role in the FUT testbed
+
+devices:
+  dut:                                          # Device under test (these entries are modified for each specific device model)
+    mgmt_ip: "192.168.4.10"                     # DUT management IP
+    mgmt_vlan: 4                                # VLAN of DUT management IP
+    wan_ip: "192.168.200.10"                    # DUT WAN IP
+    CFG_FOLDER: "PP203X"                        # DUT configuration directory name (the name depends on each specific device model)
+    name: "dut"                                 # DUT role in the FUT testbed
+  refs:                                         # Reference devices (typically, model "PP203X" is used)
+  - mgmt_ip: "192.168.4.11"                     # REF management IP
+    mgmt_vlan: 4                                # VLAN of REF management IP
+    wan_ip: "192.168.200.11"                    # REF WAN IP
+    CFG_FOLDER: "PP203X"                        # REF configuration directory name
+    name: "ref"                                 # REF role in the FUT testbed
+  - mgmt_ip: "192.168.4.12"
+    mgmt_vlan: 4
+    wan_ip: "192.168.200.12"
+    CFG_FOLDER: "PP203X"
+    name: "ref2"
+  clients:                                      # Client device
+  - mgmt_ip: "192.168.4.13"                     # Client management IP
+    mgmt_vlan: 4                                # VLAN of client management IP
+    CFG_FOLDER: "rpi_client"                    # Client configuration directory name
+    name: "client"                              # Client role in the FUT testbed
+  - mgmt_ip: "192.168.4.14"                     # Client management IP
+    mgmt_vlan: 4                                # VLAN of client management IP
+    CFG_FOLDER: "rpi_client"                    # Client configuration folder name
+    name: "client2"                             # Client role in the FUT testbed
+
+
+network_switch:                                 # Network switch configuration
+  Switch:
+  - name: "stb-switch"
+    type: "tplink"
+    hostname: "switch"
+    user: "admin"
+    pass: "12testtest"
+    ipaddr: "192.168.5.254"
+    port: "23"

@@ -1,0 +1,6 @@
+{
+  "default": true,
+  "MD007": { "indent": 4 },
+  "MD013": { "tables": false, "code_blocks": false },
+  "MD024": { "siblings_only": true }
+}

@@ -1,0 +1,32 @@
+server {
+    # NON - SSL
+    listen 8000 default_server;
+    listen [::]:8000 default_server;
+
+    # SSL
+    listen 8443 ssl;
+    listen [::]:8443 ssl;
+
+    root /var/www/html;
+
+    # Enable SSL
+    ssl_certificate ${OPENSYNC_ROOT}/shell/tools/server/certs/server.pem;
+    ssl_certificate_key ${OPENSYNC_ROOT}/shell/tools/server/certs/server.key;
+    ssl_session_timeout 12h;
+    ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
+
+    server_name _;
+
+    location / {
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_pass http://0.0.0.0:5000/;
+    }
+
+    location /fut-base/resource/um/ {
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_pass http://0.0.0.0:5000/fut-base/resource/um/;
+        limit_rate 1024k;
+    }
+}

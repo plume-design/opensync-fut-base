@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Fut App</title>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link rel="icon" type="image/png" href="{{ url_for('static', filename='extras/OpenSync_favicon.png') }}">
+        <link rel=stylesheet type=text/css href="{{ url_for('static', filename='styles/bootstrap.min.css') }}">
+        <link rel=stylesheet type=text/css href="{{ url_for('static', filename='styles/app.css') }}">
+        <script src="{{ url_for('static', filename='scripts/jquery-3.4.1.min.js') }}"></script>
+        <script src="{{ url_for('static', filename='scripts/popper.min.js') }}"></script>
+        <script src="{{ url_for('static', filename='scripts/bootstrap.min.js') }}"></script>
+        <script src="{{ url_for('static', filename='scripts/app.js') }}"></script>
+    </head>
+    <body>
+        <div class="app">
+            <div class="top_nav">
+                <a href="#" onclick="show_tab('allure_tab')">Allure</a>
+                <a href="#" onclick="show_tab('fut_terminal_tab')">Terminal</a>
+            </div>
+            <div id="allure_tab" class="allure_tab hidden">
+                <div class="top_nav" style="background-color: rgb(27, 27, 27);">
+                    <a href="#" onclick="show_nav('fut_builds_nav')">Builds</a>
+                </div>
+                <div id="fut_builds_nav" class="fut_builds_nav hide_tr">
+                    <div class="top_nav">
+                        <a href="#" onclick="get_builds()">&#8635;</a>
+                        <a href="#" onclick="hide_nav('fut_builds_nav')">X</a>
+                    </div>
+                    <div id="fut_build_list" class="fut_build_list"></div>
+                </div>
+                <div style="flex-grow: 1;">
+                    <iframe id="allure_iframe" src=''></iframe>
+                </div>
+            </div>
+            <div id="fut_terminal_tab" class="fut_terminal_tab">
+                <div class="top_nav" style="background-color: rgb(27, 27, 27);">
+                    <a href="#" onclick="set_terminal_url()">Reconnect</a>
+                </div>
+                <div style="flex-grow: 1;">
+                    <iframe id="fut_terminal" src=''></iframe>
+                </div>
+            </div>
+            <div id="loader" class="loader hidden">
+                <p>Loading</p>
+            </div>
+        </div>
+    </body>
+</html>

@@ -1,0 +1,23 @@
+ARG PARENT_IMAGE=""
+FROM $PARENT_IMAGE:latest
+
+COPY ./data/.ssh/config /root/.ssh/config
+
+# Settings - Need root for butterfly server
+COPY ./data/etc/nginx/sites-available/default.template /etc/nginx/sites-available/default.template
+RUN \
+ chown root:root -R /root/.ssh && \
+ echo "root:root" | chpasswd root
+
+RUN adduser plume -u 1000
+RUN usermod -aG sudo root && usermod -aG sudo plume
+
+COPY ./data/.ssh/config /home/plume/.ssh/config
+
+RUN \
+ chown plume:plume -R /home/plume/.ssh && \
+ echo "plume:plume" | chpasswd plume
+
+RUN echo "plume  ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+RUN mkdir -p /var/www/app/logs/

@@ -1,0 +1,36 @@
+[flake8]
+ignore =
+    # E402: Module level import not at top of file
+    E402,
+    # E501: Line too long
+    E501,
+    # C901: Code complexity
+    C901,
+    # Temporarily ignored errors to pass GitHub PRs until the errors are fixed
+    # flake8-bugbear
+    # B011: Do not call assert False since python -O removes these calls.
+    B011,
+    # flake8-docstrings
+    # D100: Missing docstring in public module
+    D100,
+    # D101: Missing docstring in public class
+    D101,
+    # D102: Missing docstring in public method
+    D102,
+    # D103: Missing docstring in public function
+    D103,
+    # D104: Missing docstring in public package
+    D104,
+    # D107: Missing docstring in __init__
+    D107,
+    # flake8-pep3101
+    # P103: other string does contain unindexed parameters
+    P103
+
+max-line-length = 120
+exclude = .git, __pycache__, .pytest_cache/, lib_testbed/, internal/trash/, test/hello_world_test.py
+max-complexity = 10
+format = pylint
+show_source = True
+application-import-names = config, framework, lib_testbed, test
+import-order-style = smarkets
