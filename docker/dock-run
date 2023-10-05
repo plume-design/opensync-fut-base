@@ -1,0 +1,52 @@
+#!/bin/sh -ae
+
+DOCKER_START_FLAG=${DOCKER_START_FLAG:-"-ai"}
+OPENSYNC_ROOT="$(dirname "$(dirname "$(readlink -f "$0")")")"
+FUT_DOCKER_ROOT="${OPENSYNC_ROOT}/docker"
+QA_DIR_ROOT="$(dirname ${OPENSYNC_ROOT})"
+
+export ENV_FILE="${FUT_DOCKER_ROOT}/env.list"
+export DOCKER_TAG="fut"
+export OPENSYNC_ROOT
+export DOCKER_ROOT=${OPENSYNC_ROOT}/lib_testbed/generic/docker
+export TOOLS_DIR="${OPENSYNC_ROOT}/lib_testbed/generic/tools"
+
+DOCKER_EXTRA_DOCKERFILE="${FUT_DOCKER_ROOT}/Dockerfile.fut"
+# This is needed for non-interactive mode, and will be overridden in common dock-run if interactive
+TTY="--tty"
+
+DOCKER_OPTS="
+--cap-add=NET_ADMIN
+--env OPENSYNC_TESTBED
+--env-file ${ENV_FILE}
+--expose=8000
+--expose=8443
+-v/etc/mosquitto:/etc/mosquitto
+-v${QA_DIR_ROOT}:${QA_DIR_ROOT}"
+
+${OPENSYNC_ROOT}/shell/tools/server/generate_fut_self_signed_certificates.sh > /dev/null 2>&1
+if [ "$?" = "0" ]; then
+    echo "Generated FUT certificates"
+else
+    echo "Failed to generate FUT certificates" >&2
+    exit 1
+fi
+
+# Check that env.list.base file exists
+if [ -e "${ENV_FILE}.base" ]; then
+    # Dynamically add git commit IDs to env.list file
+    cp "${ENV_FILE}.base" "${ENV_FILE}"
+    for git_dir in $(find -L . -name .git | xargs -r realpath | sort -u | xargs -I {} dirname {}); do
+        git_remote_name="$(git -C ${git_dir} remote -v | grep fetch | awk '{print $2}' | cut -d'/' -f2 | cut -d'.' -f1)"
+        git_env_var="GIT_$(echo ${git_remote_name} | tr '[:lower:]' '[:upper:]' | tr '-' '_')_ID"
+        git_sha="$(git -C ${git_dir} show --pretty=format:"%H" --no-patch)"
+        eval "export ${git_env_var}=${git_sha}"
+        echo "${git_env_var}" >> "${ENV_FILE}"
+    done
+else
+    echo "Missing file ${ENV_FILE}.base, aborting"
+    exit 1
+fi
+
+# Build common Docker image
+. ${DOCKER_ROOT}/dock-run

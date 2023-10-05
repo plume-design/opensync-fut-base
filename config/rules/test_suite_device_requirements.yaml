@@ -1,0 +1,72 @@
+TestBrv:
+  nodes:
+    - gw
+  clients: null
+TestCm2:
+  nodes:
+    - gw
+  clients: null
+TestCpm:
+  nodes:
+    - gw
+  clients: null
+TestDm:
+  nodes:
+    - gw
+  clients: null
+TestFsm:
+  nodes:
+    - gw
+  clients:
+    - w1
+TestLtem:
+  nodes:
+    - gw
+  clients: null
+TestNfm:
+  nodes:
+    - gw
+  clients: null
+TestNm2:
+  nodes:
+    - gw
+  clients:
+    - w1
+TestOnbrd:
+  nodes:
+    - gw
+  clients: null
+TestOthr:
+  nodes:
+    - gw
+    - l1
+  clients:
+    - w1
+TestPm:
+  nodes:
+    - gw
+  clients: null
+TestQm:
+  nodes:
+    - gw
+  clients: null
+TestSm:
+  nodes:
+    - gw
+    - l1
+  clients: null
+TestUm:
+  nodes:
+    - gw
+  clients: null
+TestVpnm:
+  nodes:
+    - gw
+  clients: null
+TestWm2:
+  nodes:
+    - gw
+    - l1
+    - l2
+  clients:
+    - w1

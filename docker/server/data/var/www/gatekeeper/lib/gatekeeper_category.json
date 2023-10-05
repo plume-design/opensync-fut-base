@@ -1,0 +1,12 @@
+{
+    "localhost.lan.foobar": {
+        "category_id": 15,
+        "confidence_level": 30
+    },
+    "www.whitehouse.info": {
+        "category_id": 15
+    },
+    "192.168.20.1": {
+        "category_id": 15
+    }
+}

@@ -1,0 +1,32 @@
+# Testcase fsm_test_cname_based_redirection
+
+## Environment setup and dependencies
+
+Ensure DUT is in OpenSync default state, as is after boot.\
+The wireless client must be connected to the DUT.\
+DUT has
+WAN connectivity.
+
+## Testcase description
+
+The goal of this testcase is to verify:
+
+- FSM can process an FQDN redirect with `cname`.
+
+Testcase falls into the category of complex "end-to-end" FSM testcases.
+
+## Expected outcome and pass criteria
+
+After:
+
+- Client device is successfully connected to the DUT.
+- Egress and ingress rules are configured in the `Openflow_Config` table.
+- `FSM_Policy`, `Flow_Service_Manager_Config` and `Openflow_Tag` tables are configured.
+- `wget` command is made on the connected client.
+
+FSM should process the FDQN redirect with `cname`.\
+IP address should be resolved to that of the redirected `cname`.
+
+## Implementation status
+
+Not Implemented

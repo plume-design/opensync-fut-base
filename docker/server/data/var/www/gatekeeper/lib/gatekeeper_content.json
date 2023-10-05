@@ -1,0 +1,55 @@
+{
+    "fqdn": {
+        "www.wikipedia.org": {
+            "action": "allow"
+        },
+        "www.trigger_an_error.plume": {
+            "action": "trigger_error"
+        },
+        "www.dailymirror.co.uk": {
+            "action": "block"
+        },
+        "www.google.com": {
+            "action": "redirect_allow",
+            "redirect_cname": "forcesafesearch.google.com"
+        },
+        "www.googlefoo.com": {
+            "action": "redirect",
+            "redirect_v4": "216.239.38.120",
+            "redirect_v6": "2001:4860:4802:32::78",
+            "redirect_cname": "forcesafesearch.google.com"
+        },
+        "www.googlebar.com": {
+            "action": "redirect",
+            "redirect_v4": "216.239.38.120",
+            "redirect_v6": "2001:4860:4802:32::78"
+        }
+    },
+    "http_url": {
+        "http://fut.opensync.io/gatekeeper/test/http_url/allow": {
+            "action": "allow"
+        },
+        "http://fut.opensync.io/gatekeeper/test/http_url/block": {
+            "action": "block"
+        },
+        "http://fut.opensync.io/gatekeeper/test/http_url/redirect": {
+            "action": "redirect",
+            "redirect_cname": "www.google.com"
+        }
+    },
+    "http_host": {
+    },
+    "https_sni": {
+        "www.playboy.com": {
+            "action": "redirect",
+            "redirect_v4": "18.204.152.241",
+            "redirect_v6": "fe80::2e0:4cff:fe20:9f85"
+        }
+    },
+    "ipv4": {
+    },
+    "ipv6": {
+    },
+    "app": {
+    }
+}

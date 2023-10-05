@@ -1,0 +1,169 @@
+#
+# Note that all fields marked with "configure" need your attention
+# All other fields are required
+#
+user_name: example-user                                         # configure: location username
+email: example.user@example.com                                 # configure: location user e-mail
+password: example-password                                      # configure: location user password
+tb_maintainer: Test bed maintainer name                         # configure: required for TB reservation
+capabilities: ['OSRT']
+# Deployment name
+profile: null
+ssh_gateway:
+  hostname: <rpi-server or its static IP address>               # configure
+  user: <user>                                                  # configure
+  pass: <password>                                              # configure
+
+# List of location nodes
+Nodes:
+  - name: gw
+    id: <device serial number, example 123456789A>              # configure
+    model: <device model, example PP203X>                       # configure: match OSRT device model
+    host:
+      name: gw
+      user: <user>                                              # configure
+      pass: <password>                                          # configure
+    switch:                                                     # Network switch ports configuration
+      gw_eth0:                                                  # port name: each port can have multiple roles, usually not changed
+        - lan                                                   # port role: connect to LAN client
+        - mn                                                    # port role: management ssh access
+        - uplink                                                # port role: WAN uplink
+      gw_eth1:
+        - lan
+  - name: l1
+    id: <device serial number, example 123456789B>              # configure
+    model: <device model, example PP203X>                       # configure: match OSRT device model
+    host:
+      name: leaf1
+      user: <user>                                              # configure
+      pass: <password>                                          # configure
+    switch:
+      l1_eth0:
+        - lan
+        - mn
+      l1_eth1:
+        - lan
+  - name: l2
+    id: <device serial number, example 123456789C>              # configure
+    model: <device model, example PP203X>                       # configure: match OSRT device model
+    host:
+      name: leaf2
+      user: <user>                                              # configure
+      pass: <password>                                          # configure
+    switch:
+      l2_eth1:
+        - lan
+    static_eth_client: e1
+
+# List of clients
+Clients:
+  - name: w1                                                    # Wireless client 1
+    type: rpi                                                   # configure: match client type: rpi - RaspberryPI, linux - Gigabyte Brix or Shuttle, debian - Debian
+    host:
+      name: rpi1
+      user: <user>                                              # configure
+      pass: <password>                                          # configure
+      netns: nswifi1                                            # use network namespace to separate services, network interfaces, and traffic
+    wifi: true
+  - name: w2                                                    # Wireless client 2
+    type: rpi                                                   # configure: match client type: rpi - RaspberryPI, linux - Gigabyte Brix or Shuttle, debian - Debian
+    host:
+      name: rpi2
+      user: <user>                                              # configure
+      pass: <password>                                          # configure
+      netns: nswifi1
+    wifi: true
+  - name: w3                                                    # Wireless client 3
+    type: rpi
+    host:
+      name: localhost                                           # specify 'localhost' to use RPI server device for this wireless client
+      user: <user>                                              # configure
+      netns: nswifi1
+    wifi: true
+  - name: e1                                                    # Ethernet wired client 1
+    type: rpi                                                   # configure: match client type: rpi - RaspberryPI, linux - Gigabyte Brix or Shuttle, debian - Debian
+    host:
+      name: rpi1
+      user: <user>                                              # configure
+      pass: <password>                                          # configure
+      netns: nseth305
+    eth: true
+  - name: e2                                                    # Ethernet wired client 2
+    type: rpi                                                   # configure: match client type: rpi - RaspberryPI, linux - Gigabyte Brix or Shuttle, debian - Debian
+    host:
+      name: rpi2
+      user: <user>                                              # configure
+      pass: <password>                                          # configure
+      netns: nseth351
+    eth: true
+    vlan: 351                                                   # if two network namespaces are used on the same device, vlan is needed
+  - name: e3                                                    # Ethernet wired client 3
+    type: rpi                                                   # configure: match client type: rpi - RaspberryPI, linux - Gigabyte Brix or Shuttle, debian - Debian
+    host:
+      name: rpi2
+      user: <user>                                              # configure
+      pass: <password>                                          # configure
+      netns: nseth352
+    eth: true
+    vlan: 352                                                   # if two network namespaces are used on the same device, vlan is needed
+  - name: bt1                                                   # Bluetooth client 1
+    type: rpi
+    host:
+      name: rpi1
+      user: <user>                                              # configure
+      pass: <password>                                          # configure
+    bt: true
+
+# Remote power distribution unit (PDU)
+rpower:
+  - ipaddr: <target server IP address or DNS name>              # configure
+    user: admin
+    pass: '1234'
+    port: 9000
+    alias:
+      - name: gw
+        port: 1
+      - name: l1
+        port: 2
+      - name: l2
+        port: 3
+      - name: w1
+        port: 4
+      - name: w2
+        port: 4
+      - name: e1
+        port: 4
+      - name: e2
+        port: 4
+
+# Switch configuration
+Switch:
+  - name: stb-switch
+    type: tplink
+    hostname: <target server IP address or DNS name>            # configure
+    user: admin
+    pass: 12testtest
+    port: 8023                                                  # telnet access to network switch, for dynamic configuration changes
+    alias:
+      - backhaul: 303                                           # GW primary_wan_interface
+        name: gw_eth0                                           # configure: can be eth0 or eth1, depending on the device model
+        port: 3
+      - backhaul: 309                                           # GW primary_lan_interface
+        name: gw_eth1                                           # configure: can be eth0 or eth1, depending on the device model
+        port: 9
+      - backhaul: 304                                           # Leaf1 primary_wan_interface
+        name: l1_eth0                                           # configure: can be eth0 or eth1, depending on the device model
+        port: 4
+      - backhaul: 310                                           # Leaf1 primary_lan_interface
+        name: l1_eth1                                           # configure: can be eth0 or eth1, depending on the device model
+        port: 10
+      - backhaul: 305                                           # Leaf2 primary_wan_interface
+        name: l2_eth0                                           # configure: can be eth0 or eth1, depending on the device model
+        port: 5
+      - backhaul: 311                                           # Leaf2 primary_lan_interface
+        name: l2_eth1                                           # configure: can be eth0 or eth1, depending on the device model
+        port: 11
+
+# IP address to check connectivity
+wifi_check:
+  ipaddr: 192.168.200.1

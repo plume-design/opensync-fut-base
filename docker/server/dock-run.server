@@ -1,0 +1,109 @@
+#!/bin/sh -ae
+
+DOCKER_START_FLAG=${DOCKER_START_FLAG:-"-a"}
+OPENSYNC_ROOT="$(dirname "$(dirname "$(dirname "$(readlink -fm "$0")")")")"
+DOCKER_TAG="fut-server"
+DOCKER_ROOT="${OPENSYNC_ROOT}/docker/server"
+DOCKER_COMMAND=${DOCKER_COMMAND:-"run"}
+DOCKER_DETACH="--detach"
+TTY="--tty"
+
+if [ -z "${OPENSYNC_ROOT}" ]; then
+    echo Missing env OPENSYNC_ROOT >&2
+    exit 1
+fi
+if [ -z "${DOCKER_ROOT}" ]; then
+    echo Missing env DOCKER_ROOT >&2
+    exit 1
+fi
+
+if [ -z "${LOUD_DOCKER_BUILD}" ]; then
+    QUIET_BUILD="--quiet"
+else
+    QUIET_BUILD="--progress=plain"
+fi
+
+_FLOCK_W_ARG=$(flock 2>&1 | grep -qF -- -w && printf "%s" "-w 3600" || echo)
+_FLOCK="flock $_FLOCK_W_ARG -x 9"
+if [ -n "$TZ" ]; then
+    _TIMEZONE="-e TZ=$TZ"
+elif [ -f /etc/timezone ]; then
+    _TIMEZONE="-e TZ=$(cat /etc/timezone)"
+else
+    _TIMEZONE="-v /etc/localtime:/etc/localtime"
+fi
+
+# Prevent several concurrent containers in the background, before the image is rebuilt
+existing_container=$(docker container list --filter=ancestor=fut-server --format "{{.ID}}")
+# variable existing_container can have newlines, do not optimize
+[ "${existing_container}" != "" ] && docker container stop ${existing_container}
+
+(
+    echo grabbing docker build lock ... >&2
+    $_FLOCK
+    cd "$DOCKER_ROOT"
+    echo building docker $DOCKER_TAG ... >&2
+    docker build $QUIET_BUILD --tag "$DOCKER_TAG" . -f Dockerfile.server >&2
+
+) 9>"/tmp/dockrun_$(id -u)_lockfile"
+
+_MOUNT_CUR_DIR=
+if [ "$OPENSYNC_ROOT" != "$(pwd)" ]; then
+    _MOUNT_CUR_DIR="-v$(pwd):$(pwd)"
+fi
+
+DOCKER_COMMAND_EXEC='(cd $OPENSYNC_ROOT/docker/server && ./fut_service.sh > /tmp/fut_service.log 2>&1)'
+
+if [ -n "${DOCKER_DEVELOPMENT}" ]; then
+    # Use this if manual interactive access is needed
+    TTY="--interactive --tty"
+    DOCKER_START_FLAG="-ai"
+    DOCKER_COMMAND="create"
+    DOCKER_DETACH=""
+    DOCKER_COMMAND_EXEC=${DOCKER_COMMAND_EXEC}'
+ exec "$@"'
+fi
+
+sig='INT HUP KILL TERM EXIT QUIT'
+id=
+cleanup() { r=$?; trap - $sig; test -z $id || docker kill $id; exit $r; }
+trap cleanup $sig
+id=$(docker $DOCKER_COMMAND \
+        $DOCKER_DETACH \
+        --rm \
+        $TTY \
+        --tmpfs=/tmp:exec \
+        --net host \
+        --expose 5000 \
+        --expose 8000 \
+        --expose 8443 \
+        --env debian_chroot=DOCKER:"$DOCKER_TAG" \
+        --env HOME="$HOME" \
+        --env OPENSYNC_ROOT \
+        --env SHELL=/bin/bash \
+        --env PYTHONDONTWRITEBYTECODE=true \
+        --env PYTHONPATH="$OPENSYNC_ROOT:$PYTHONPATH" \
+        --env PYTHON_PATH="$OPENSYNC_ROOT:$PYTHON_PATH" \
+        --workdir "$(pwd)" \
+        $_MOUNT_CUR_DIR \
+        -v$HOME:$HOME \
+        -v${OPENSYNC_ROOT}/docker/server/data/var/www:/var/www \
+        -v/"$OPENSYNC_ROOT":"$OPENSYNC_ROOT"\
+        -v/etc/mosquitto:/etc/mosquitto \
+        -v/etc/group:/etc/group \
+        -v/etc/passwd:/etc/passwd \
+        -v/etc/ssl:/etc/ssl \
+        -v/.version:/.version \
+        --user $(id -u):$(id -g) \
+        $_TIMEZONE \
+        "$DOCKER_TAG" \
+        sh -c "$DOCKER_COMMAND_EXEC" - "$@")
+
+set +e
+
+if [ -n "${DOCKER_DEVELOPMENT}" ]; then
+    docker start $DOCKER_START_FLAG $id
+    r=$?
+fi
+id=
+exit $r
