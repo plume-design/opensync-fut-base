@@ -25,12 +25,14 @@ def ltem_setup():
             device_handler.fut_device_setup(test_suite_name="ltem", setup_args=setup_args)
         except Exception as exception:
             raise RuntimeError(f"Unable to perform setup for the {device} device: {exception}")
+    # Set the baseline OpenSync PIDs used for reboot detection
+    pytest.session_baseline_os_pids = pytest.gw.opensync_pid_retrieval(tracked_node_services=pytest.tracked_managers)
 
 
 class TestLtem:
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", ltem_config.get("ltem_force_lte", []))
-    def test_ltem_force_lte(self, cfg):
+    def test_ltem_force_lte(self, cfg: dict):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -45,7 +47,7 @@ class TestLtem:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", ltem_config.get("ltem_validation", []))
-    def test_ltem_validation(self, cfg):
+    def test_ltem_validation(self, cfg: dict):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -74,7 +76,7 @@ class TestLtem:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", ltem_config.get("ltem_verify_table_exists", []))
-    def test_ltem_verify_table_exists(self, cfg):
+    def test_ltem_verify_table_exists(self, cfg: dict):
         gw = pytest.gw
 
         with step("Test Case"):

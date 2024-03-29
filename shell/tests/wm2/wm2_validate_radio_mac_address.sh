@@ -29,10 +29,6 @@ case "${1}" in
     -h | --help)  usage ; exit 0 ;;
 esac
 
-if [ $FUT_SKIP_L2 == 'true' ]; then
-    raise "Flag to skip LEVEL2 testcases enabled, skipping execution." -l "wm2/wm2_validate_radio_mac_address.sh" -s
-fi
-
 NARGS=1
 [ $# -ne ${NARGS} ] && usage && raise "Requires ${NARGS} input argument(s)" -l "wm2/wm2_validate_radio_mac_address.sh" -arg
 if_name=${1}

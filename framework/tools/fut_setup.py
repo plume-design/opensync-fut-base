@@ -5,9 +5,11 @@
 
 import argparse
 import signal
+import subprocess
 import sys
 import threading
 import traceback
+from pathlib import Path
 
 import pytest
 
@@ -88,6 +90,10 @@ def setup_node_handlers(nodes=ALL_NODES_TUPLE):
     log.info("Setting up node handlers")
     try:
         for node in nodes:
+            log.debug(f"Setting up {node} handler")
+            if hasattr(pytest, node):
+                log.info(f"Found existing {node} handler")
+                continue
             with step(f"{node.upper()} handler initialization"):
                 setattr(pytest, node, NodeHandler(name=node))
     except Exception:
@@ -98,35 +104,20 @@ def setup_client_handlers(clients=ALL_CLIENTS_TUPLE):
     log.info("Setting up client handlers")
     try:
         for client in clients:
+            log.debug(f"Setting up {client} handler")
             with step(f"{client.upper()} handler initialization"):
                 setattr(pytest, client, DeviceHandler(name=client))
     except Exception:
         raise RuntimeError(traceback.format_exc())
 
 
-def file_transfer(device_handler, **kwargs):
-    with lock:
-        if "folders" in kwargs:
-            folders = kwargs["folders"]
-            if isinstance(folders, str):
-                folders = [folders]
-            try:
-                for folder in folders:
-                    assert device_handler.transfer(folder=folder, **kwargs)
-            except Exception:
-                raise RuntimeError(traceback.format_exc())
-        assert device_handler.transfer(full=True)
-        assert device_handler.create_and_transfer_fut_set_env()
-
-
 def setup_server_device():
     log.info("Performing server device setup")
     server = pytest.server
-    server._clear_folder(server.fut_dir)
+    server.clear_folder(server.fut_dir)
     try:
         with step("Server device setup"):
-            file_transfer(server, folders=["docker", "framework", "resource"])
-            file_transfer(server, folders="lib_testbed/", tar_cmd="tar -chf")
+            server.file_transfer(folders=["docker", "framework", "resource", "lib_testbed", "shell"], as_sudo=False)
             assert server.execute("server_add_response_policy_zone", suffix=".sh", folder="docker/server")[0] == 0
             # Start FUT services in dedicated docker container
             assert server.execute("dock-run", suffix=".server", folder="docker/server")[0] == 0
@@ -153,7 +144,10 @@ def setup_node_device(node, *args):
             )
 
             # Transfer FUT files
-            file_transfer(node_handler)
+            node_handler.file_transfer(folders=["shell"])
+
+            if Path("internal/shell").is_dir():
+                node_handler.file_transfer(folders=["internal/shell"], skip_env_file=True)
 
             # Verify GW regulatory domain
             device_region = node_handler.regulatory_domain
@@ -174,7 +168,7 @@ def setup_client_device(client, *args):
     try:
         with step(f"{client.upper()} device setup"):
             client_handler = getattr(pytest, client)
-            file_transfer(client_handler)
+            client_handler.file_transfer(folders=["shell"])
     except Exception:
         raise RuntimeError(traceback.format_exc())
 
@@ -189,6 +183,23 @@ def pre_test_device_setup(node_devices=ALL_NODES_TUPLE, client_devices=ALL_CLIEN
         setup_server_handler()
         setup_server_device()
 
+        log.info(f"Performing SSH availability check for the following devices: {node_devices}")
+
+        server = pytest.server
+
+        with step("SSH availability check"):
+            ssh_check_nodes = ",".join(node_devices)
+            stream = subprocess.Popen(
+                [f"{server.fut_base_dir}/framework/tools/wait_for_host_ssh.py", ssh_check_nodes],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            stdout, stderr = stream.communicate()
+            stdout = stdout.decode("utf-8").strip()
+            exit_code = stream.returncode
+            log.info(stdout)
+            assert exit_code == 0
+
         if node_devices:
             setup_node_handlers(node_devices)
             setup_device_map.extend(zip([setup_node_device] * len(node_devices), node_devices))
@@ -199,9 +210,11 @@ def pre_test_device_setup(node_devices=ALL_NODES_TUPLE, client_devices=ALL_CLIEN
                 zip([setup_client_device] * (len(client_devices)), set(client_devices) - {"e1", "e2"}),
             )
 
-        for target, args in setup_device_map:
-            args = flatten_list([args])
-            thread = threading.Thread(target=target, args=args)
+        log.info("Setting up node devices")
+        for target, target_args in setup_device_map:
+            log.debug(f"Setting up {target_args} device")
+            flattened_args = flatten_list([target_args])
+            thread = threading.Thread(target=target, args=flattened_args)
             threads.append(thread)
             thread.start()
 

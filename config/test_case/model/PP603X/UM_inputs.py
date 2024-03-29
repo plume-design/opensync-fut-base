@@ -4,7 +4,7 @@ test_inputs = {
             "fw_name",
         ],
         "inputs": [
-            "qcaATTILA_QSDK11_fit-norplusemmc-4.2.0-129-gabae5c-dev-debug.img",
+            "qcaATTILA_QSDK11_fit-norplusemmc-5.6.0-39-gfe60ab-dev-debug.img",
         ],
     },
 }

@@ -1,4 +1,5 @@
 .coverage
+.framework_cache/
 .pytest_cache/
 __pycache__/
 allure?results/
@@ -19,3 +20,4 @@ resource/um/
 resource/ut/
 shell/config/regulatory.txt
 shell/tools/server/certs/
+tools/server/

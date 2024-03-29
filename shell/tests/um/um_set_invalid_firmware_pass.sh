@@ -78,9 +78,21 @@ update_ovsdb_entry AWLAN_Node -u upgrade_timer 1 &&
     log "um/um_set_invalid_firmware_pass.sh: update_ovsdb_entry - AWLAN_Node::upgrade_timer updated - Success" ||
     raise "FAIL: update_ovsdb_entry - Failed to update AWLAN_Node::upgrade_timer" -l "um/um_set_invalid_firmware_pass.sh" -oe
 
-fw_fail_code=$(get_um_code "UPG_ERR_IMG_FAIL")
-log "um/um_set_invalid_firmware_pass.sh: Waiting for AWLAN_Node::upgrade_status to become UPG_ERR_IMG_FAIL ($fw_fail_code)"
-wait_ovsdb_entry AWLAN_Node -is upgrade_status "$fw_fail_code" &&
+# Some models do not distinguish between image check and flash write
+for fw_fail_enum in "UPG_ERR_IMG_FAIL" "UPG_ERR_FL_WRITE"; do
+    fw_fail_code=$(get_um_code "${fw_fail_enum}")
+    log "um/um_set_invalid_firmware_pass.sh: Waiting for AWLAN_Node::upgrade_status to become ${fw_fail_enum} ($fw_fail_code)"
+    wait_ovsdb_entry AWLAN_Node -is upgrade_status "$fw_fail_code"
+    fw_fail_ec=$?
+    if [ $fw_fail_ec = 0 ]; then
+        log "um/um_set_invalid_firmware_pass.sh: wait_ovsdb_entry - AWLAN_Node::upgrade_status is $fw_fail_code - Success"
+        break
+    else
+        log -err "um/um_set_invalid_firmware_pass.sh: FAIL: wait_ovsdb_entry - AWLAN_Node::upgrade_status is not $fw_fail_code"
+    fi
+done
+
+[ $fw_fail_ec = 0 ] &&
     log "um/um_set_invalid_firmware_pass.sh: wait_ovsdb_entry - AWLAN_Node::upgrade_status is $fw_fail_code - Success" ||
     raise "FAIL: wait_ovsdb_entry - AWLAN_Node::upgrade_status is not $fw_fail_code" -l "um/um_set_invalid_firmware_pass.sh" -tc
 

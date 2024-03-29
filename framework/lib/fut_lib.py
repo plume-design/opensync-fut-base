@@ -5,40 +5,15 @@ This module contains functions that are necessary throughout the entire
 FUT test suite but belong to no particular class.
 """
 
+import hashlib
 import json
-import os
+import subprocess
 from pathlib import Path
 
 import allure
 import yaml
 
 from lib_testbed.generic.util.logger import log
-
-
-def allure_attach_log_file(file, file_name="log_tail"):
-    """
-    Attach log tailing file to Allure report.
-
-    Returns:
-        (bool): True if Allure attachment was successfully attached.
-    """
-    try:
-        if isinstance(file, tuple) and file[0] == "ZIP":
-            allure.attach.file(file[1], name=file_name, extension="zip")
-            # Remove ZIP file after attaching it to Allure
-            try:
-                os.remove(file[1])
-            except Exception as e:
-                log.warning(f"Failed to remove {file[1]} file:\n{e}")
-        else:
-            allure.attach(
-                name=file_name,
-                body=file,
-            )
-    except Exception as e:
-        log.warning(f"Failed to attach log tailing file to the Allure report: {e}")
-
-    return True
 
 
 def allure_attach_to_report(name, body):
@@ -154,7 +129,7 @@ def output_to_json(data, json_file=None, sort_keys=True, indent=4, convert_only=
     """
     try:
         if convert_only:
-            json_string = json.dumps(data, indent=indent)
+            json_string = json.dumps(data, sort_keys=sort_keys, indent=indent)
             return json_string
         with open(json_file, "w") as jsf:
             jsf.write(json.dumps({"data": data}, sort_keys=sort_keys, indent=indent))
@@ -203,6 +178,48 @@ def check_if_dicts_match(dict1, dict2):
     return True
 
 
+def execute_locally(path, args="", suffix=".sh", **kwargs):
+    """
+    Execute the specified script locally with optional arguments.
+
+    Args:
+        path (str): Path to script.
+        args (str): Optional script arguments. Defaults to empty string.
+        suffix (str): File extension. Defaults to .sh
+
+    Keyword Args:
+        dir_path (str): Path to parent directory.
+
+    Returns:
+        list: List comprised of the exit code, standard output and standard error.
+    """
+    dir_path = kwargs.get("dir_path") if kwargs.get("dir_path") else Path(__file__).absolute().parents[2]
+
+    cmd_list = [f"{dir_path}/{path}{suffix}"] + args.split()
+
+    stream = subprocess.Popen(
+        cmd_list,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    cmd_std_out, cmd_std_err = stream.communicate()
+    cmd_std_out, cmd_std_err = cmd_std_out.decode("utf-8").strip(), cmd_std_err.decode("utf-8").strip()
+    cmd_ec = stream.returncode
+
+    allure_attach_to_report(
+        name="log_local",
+        body=f"""
+            {' '.join(cmd_list)}
+            stdout:
+            {cmd_std_out}
+            stderr:
+            {cmd_std_err}
+        """,
+    )
+
+    return cmd_ec, cmd_std_out, cmd_std_err
+
+
 def flatten_list(nested_list):
     """
     Flatten a nested list.
@@ -228,8 +245,16 @@ def determine_required_devices(test_suites: list):
     Returns:
         tuple: Required nodes, required clients.
     """
-    with open("config/rules/test_suite_device_requirements.yaml") as device_req_file:
-        loaded_device_req_file = yaml.safe_load(device_req_file)
+    filename = "test_suite_device_requirements.yaml"
+    dirname = "config/rules"
+    filepaths = []
+    for parent_dir in [".", "internal"]:
+        if Path(parent_dir).joinpath(dirname).is_dir():
+            filepaths.append(*Path(parent_dir).joinpath(dirname).glob(filename))
+    loaded_device_req_file = {}
+    for file in filepaths:
+        with open(file) as device_req_file:
+            loaded_device_req_file.update(yaml.safe_load(device_req_file))
 
     required_nodes, required_clients = [], []
 
@@ -321,3 +346,33 @@ def validate_channel_ht_mode_band(
             f"Failed to validate channel {channel}[{ht_mode}] for {radio_band} against regulatory rules for {reg_domain.upper()}\n{e}",
         )
     return False
+
+
+def get_str_hash(input_string: str, hash_length: int = 32):
+    """Get a hash of the desired length from the input string.
+
+    Args:
+        input_string (str): Any input string that you wish to hash
+        hash_length (int): length of the output hash in the range [4, 32]
+
+    Returns:
+        hash (str): The hashed input string of the desired length hash_length
+    """
+    hash_length = min(32, max(4, hash_length))
+    return hashlib.md5(input_string.encode()).hexdigest()[:hash_length]
+
+
+def find_filename_in_dir(directory: str, pattern: str) -> list:
+    """Recursively find files with a specific file name pattern in the directory tree.
+
+    Args:
+        directory (str): The directory to search for the files
+        pattern (str): The pattern by which file names are searched
+
+    Returns:
+        list_of_files (list): A list containing paths to the found unit test files
+    """
+    list_of_files = [path.as_posix() for path in Path(directory).rglob(pattern)]
+    if list_of_files:
+        log.info(f"Found files: {list_of_files}")
+    return list_of_files

@@ -427,7 +427,7 @@ radio_channels:
   24g: [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13 ]
   5g: null
   5gl: [ 36, 40, 44, 48, 52, 56, 60, 64 ]
-  5gu: [ 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 149, 153, 157, 161, 165 ]
+  5gu: [ 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 149, 153, 157, 161, 165, 169, 173, 177 ]
   6g: null
 ```
 
@@ -514,7 +514,7 @@ test case in the `skipped` category.
 
 The `xfail` key causes the test case to be collected and executed normally by pytest, but modifies the reporting of the
 test results. If the test case succeeds, the report will show the test case in the `passed` category and pytest will
-internally use the `xpass` category. If the test case succeeds, the report will show the test case in the `skipped`
+internally use the `xpass` category. If the test case fails, the report will show the test case in the `skipped`
 category and pytest will internally use the `xfail` category. This is useful for flaky tests that should not contribute
 to test failures, but should still be executed if they perhaps pass.
 

@@ -49,3 +49,5 @@ ${wlan_namespace_cmd} -c "/usr/bin/upnpc -d ${port} ${protocol}" &&
 log "tools/client/stop_upnp_client.sh: Killing the iperf3 server if alive"
 ${wlan_namespace_cmd} -c "PID=$(ps -aux | grep "iperf3 -s -1 -D" | head -n1 |awk '{print $2}')"
 ${wlan_namespace_cmd} -c "kill -9 $PID"
+    log -deb "tools/client/stop_upnp_client.sh: iperf3 server stopped successfully on the device - Success" ||
+    log -deb "FAIL: iperf3 server could not be stopped on the device"

@@ -63,8 +63,9 @@ class FutTestConfigGenClass:
         test_case_mod = path.replace("/", ".")
         inputs_files = [file.stem for file in test_case_dir.iterdir() if suffix in file.name]
         if self.modules:
+            assert isinstance(self.modules, list)
             inputs_files = [
-                f"{mod}{suffix}".rsplit(".")
+                f"{mod}{suffix}".rsplit(".")[0]
                 for mod in self.modules
                 if test_case_dir.joinpath(f"{mod}{suffix}").is_file()
             ]

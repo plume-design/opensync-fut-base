@@ -21,15 +21,22 @@ def vpnm_setup():
             raise RuntimeError(f"{device.upper()} handler is not set up correctly.")
         try:
             device_handler = getattr(pytest, device)
+            if device_handler.name == "gw":
+                check_kconfig_args = device_handler.get_command_arguments("CONFIG_MANAGER_VPNM", "y")
+                check_kconfig_ec = device_handler.execute("tools/device/check_kconfig_option", check_kconfig_args)[0]
+                if check_kconfig_ec != 0:
+                    pytest.skip("VPNM not present on device")
             device_handler.fut_device_setup(test_suite_name="vpnm")
         except Exception as exception:
             raise RuntimeError(f"Unable to perform setup for the {device} device: {exception}")
+    # Set the baseline OpenSync PIDs used for reboot detection
+    pytest.session_baseline_os_pids = pytest.gw.opensync_pid_retrieval(tracked_node_services=pytest.tracked_managers)
 
 
 class TestVpnm:
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", vpnm_config.get("vpnm_ipsec_vpn_healthcheck", []))
-    def test_vpnm_ipsec_vpn_healthcheck(self, cfg):
+    def test_vpnm_ipsec_vpn_healthcheck(self, cfg: dict):
         gw = pytest.gw
 
         with step("Test Case"):
@@ -37,7 +44,7 @@ class TestVpnm:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", vpnm_config.get("vpnm_ipsec_point_2_site", []))
-    def test_vpnm_ipsec_point_2_site(self, cfg):
+    def test_vpnm_ipsec_point_2_site(self, cfg: dict):
         gw = pytest.gw
 
         with step("Test Case"):
@@ -45,7 +52,7 @@ class TestVpnm:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", vpnm_config.get("vpnm_ipsec_site_2_site", []))
-    def test_vpnm_ipsec_site_2_site(self, cfg):
+    def test_vpnm_ipsec_site_2_site(self, cfg: dict):
         gw = pytest.gw
 
         with step("Test Case"):
@@ -53,7 +60,7 @@ class TestVpnm:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", vpnm_config.get("vpnm_ipsec_tunnel_interface", []))
-    def test_vpnm_ipsec_tunnel_interface(self, cfg):
+    def test_vpnm_ipsec_tunnel_interface(self, cfg: dict):
         gw = pytest.gw
 
         with step("Test Case"):

@@ -14,36 +14,30 @@ Description:
     - Setup device for SM testing
 Arguments:
     -h : show this help message
-    \$@ (radio_if_names) : wait for if_name in Wifi_Radio_State table to be present after setup : (string)(optional)
+    \$1 (wireless_manager_name) : provide the name of the wireless manager : (string)(optional)
+    \$@ (radio_if_names)        : wait for if_name in Wifi_Radio_State table to be present after setup : (string)(optional)
 Script usage example:
     ./sm/sm_setup.sh
-    ./sm/sm_setup.sh wifi0 wifi1
+    ./sm/sm_setup.sh wm
+    ./sm/sm_setup.sh owm wifi0 wifi1
 usage_string
 }
+
+trap '
+fut_ec=$?
+if [ $fut_ec -ne 0 ]; then
+    fut_info_dump_line
+    print_tables Wifi_Radio_Config Wifi_Radio_State Wifi_VIF_Config Wifi_VIF_State Wifi_Stats_Config
+    fut_info_dump_line
+fi
+exit $fut_ec
+' EXIT SIGINT SIGTERM
 
 case "${1}" in
     -h | --help)  usage ; exit 0 ;;
 esac
 check_kconfig_option "CONFIG_MANAGER_SM" "y" ||
     raise "CONFIG_MANAGER_SM != y - SM not present on device" -l "sm/sm_setup.sh" -s
-
-if check_kconfig_option "CONFIG_MANAGER_OWM" "y"; then
-    if [ "$(get_ovsdb_entry_value Node_Services status -w service owm)" == "enabled" ]; then
-        wireless_manager=owm
-    elif [ "$(get_ovsdb_entry_value Node_Services status -w service wm)" == "enabled" ]; then
-        wireless_manager=wm
-    else
-        raise "FAIL: No OpenSync wireless manager enabled on the device" -l "sm/sm_setup.sh" -ds
-    fi
-elif [ "$(get_ovsdb_entry_value Node_Services status -w service wm)" == "enabled" ]; then
-    wireless_manager=wm
-else
-    raise "FAIL: WM disabled on the device" -l "sm/sm_setup.sh" -ds
-fi
-
-log "sm/sm_setup.sh - OpenSync wireless manager '${wireless_manager}' is enabled on the device - Success"
-export FUT_OS_WIRELESS_MGR_LC="${wireless_manager}"
-export FUT_OS_WIRELESS_MGR_UC="$(echo ${wireless_manager:?} | awk '{print toupper($0)}')"
 
 device_init &&
     log -deb "sm/sm_setup.sh - Device initialized - Success" ||
@@ -63,6 +57,12 @@ log -deb "sm/sm_setup.sh - Executed restart_managers, exit code: $?"
 empty_ovsdb_table AW_Debug &&
     log -deb "sm/sm_setup.sh - AW_Debug table emptied - Success" ||
     raise "FAIL: empty_ovsdb_table AW_Debug - Could not empty AW_Debug table" -l "sm/sm_setup.sh" -ds
+
+wireless_manager=${1:-"$(get_wireless_manager_name)"}
+[ $# -ge 1 ] && shift
+
+log "sm/sm_setup.sh - OpenSync wireless manager '${wireless_manager}' is enabled on the device - Success"
+FUT_OS_WIRELESS_MGR_UC="$(echo ${wireless_manager:?} | awk '{print toupper($0)}')"
 
 set_manager_log ${FUT_OS_WIRELESS_MGR_UC:?} TRACE &&
     log -deb "sm/sm_setup.sh - Manager log for ${FUT_OS_WIRELESS_MGR_UC:?} set to TRACE - Success" ||

@@ -1,18 +1,15 @@
-import os
-import signal
-import subprocess
+import threading
 import time
-import zipfile
+import traceback
 from pathlib import Path
 
 from framework.fut_configurator import FutConfigurator
-from framework.lib.fut_lib import (
-    allure_attach_log_file,
-    allure_script_execution_post_processing,
-)
+from framework.lib.fut_lib import allure_script_execution_post_processing
 from lib_testbed.generic.client.client import Client
 from lib_testbed.generic.pod.pod import Pod
 from lib_testbed.generic.util.logger import log
+
+lock = threading.Lock()
 
 
 class DeviceHandler:
@@ -153,25 +150,27 @@ class DeviceHandler:
             device_obj = Pod()
 
         device_api = device_obj.resolve_obj(**{"config": self.testbed_cfg, "nickname": self.name})
-        device_api = device_api
+
+        if hasattr(device_api, "override_version_specific_ifnames"):
+            device_api.override_version_specific_ifnames()
 
         return device_api
 
-    def _clear_folder(self, folder_path):
+    def clear_folder(self, folder_path):
         """Remove contents of the target folder on the remote device."""
         if not Path(folder_path).is_absolute():
             folder_path = f"{self.fut_dir}/{folder_path}/"
         cmd = f"[ -d {folder_path} ] && rm -rf {folder_path}"
-        ret = self.device_api.run_raw(cmd)
+        ret = self.device_api.run_raw(cmd, skip_exception=True)
         if ret[0] != 0:
             log.warning(f"Failed to empty {folder_path} on {self.name}.")
         return True
 
     def clear_resource_folder(self):
-        return self._clear_folder(folder_path="resource")
+        return self.clear_folder(folder_path="resource")
 
     def clear_tests_folder(self):
-        return self._clear_folder(folder_path="shell/tests")
+        return self.clear_folder(folder_path="shell/tests")
 
     @staticmethod
     def sanitize_arg(arg):
@@ -247,127 +246,6 @@ class DeviceHandler:
 
         return remote_command
 
-    def _start_log_tail(self):
-        """
-        Start log tailing process on the device.
-
-        Method will create a log file according to current time and
-        date, and start a logging subprocess on the device. If the log
-        tailing processes is not executed correctly, it will only log a
-        warning and not an exception.
-
-        Returns:
-            (bool): True, always.
-        """
-        self.log_tail_file_name = f'/tmp/{self.name}_{time.strftime("%Y%m%d-%H%M%S")}.log'
-        self.log_tail_file = open(self.log_tail_file_name, "w")
-        # Required timeout of at least 70 seconds due to hardcoded channel set timeout of 60s
-        log_tail_start_cmd = (
-            f"timeout {70 if self.test_script_timeout <= 70 else self.test_script_timeout}"
-            f" sshpass -p {self.password}"
-            f" ssh -A -t"
-            " -o StrictHostKeyChecking=no"
-            " -o UserKnownHostsFile=/dev/null"
-            " -o ForwardAgent=yes"
-            " -o HostKeyAlgorithms=ssh-dss,ssh-rsa,ssh-ed25519"
-            f" {self.hostname} "
-            f" /usr/opensync/tools/{self.capabilities.get_logread_command()} -f "
-        )
-        log.debug(f"Log tailing command: {log_tail_start_cmd}")
-
-        try:
-            self.log_tail_process = subprocess.Popen(
-                log_tail_start_cmd.split(),
-                stdout=self.log_tail_file,
-                stderr=self.log_tail_file,
-                shell=False,
-            )
-        except Exception as e:
-            log.warning(f"Encountered issue while starting log tailing process: {e}")
-
-        return True
-
-    def _stop_log_tail(self):
-        """
-        Stop all log tailing processes on the device.
-
-        If the log tailing processes are not stopped correctly, it will
-        only log a warning.
-
-        Returns:
-            (bool): True, always
-        """
-        if self.log_tail_process:
-            # Send SIGTERM to log tail pids
-            try:
-                os.killpg(os.getpgid(self.log_tail_process.pid), signal.SIGTERM)
-                self.log_tail_process.kill()
-            except Exception as e:
-                log.warning(f"Failed to kill log tailing process: {e}")
-
-            # Kill any logread_tail command running on the device as well
-            try:
-                self.device_api.run_raw('kill $(pgrep -f "logread -f") || true', timeout=2, skip_logging=True)
-            except Exception as e:
-                log.warning(f"Failed to kill log tailing process on device: {e}")
-
-        return True
-
-    def _remove_log_tail_file(self):
-        """
-        Remove the log tailing file from the device.
-
-        Logs a warning if the log tailing file cannot be removed.
-
-        Returns:
-            (bool): True, always
-        """
-        try:
-            os.remove(self.log_tail_file_name)
-            log.debug(f"Log file {self.log_tail_file_name} was removed.")
-        except Exception as e:
-            log.warning(f"Failed to remove log tailing file: {e}")
-
-        return True
-
-    def _get_log_tail(self):
-        """
-        Get the log tailing file from the device.
-
-        Logs a warning if the log tailing file cannot be retrieved.
-
-        Returns:
-            dump (str): The log tailing file.
-        """
-        try:
-            file_size = Path(self.log_tail_file_name).stat().st_size / (1024 * 1024)
-
-            if file_size > 5:
-                zip_file_name = f"{self.log_tail_file_name}.zip"
-                zipfile.ZipFile(zip_file_name, "w", zipfile.ZIP_DEFLATED).write(self.log_tail_file_name)
-                self._remove_log_tail_file()
-                return "ZIP", zip_file_name
-
-            try:
-                with open(self.log_tail_file_name, encoding="utf-8", errors="replace") as file:
-                    dump = file.read()
-            except Exception as e:
-                log.warning(f"Failed to open/decode log tail file: {e}")
-
-                try:
-                    with open(self.log_tail_file_name, errors="replace") as file:
-                        dump = file.read()
-                except Exception as e:
-                    log.warning(f"Failed to open/decode log tail file: {e}")
-
-            # Remove dump file after reading it
-            self._remove_log_tail_file()
-            dump = f"{self.name} - {self.log_tail_file_name}\n{dump}"
-        except Exception as e:
-            log.warning(f"Unable to acquire log tailing file: {e}")
-
-        return dump
-
     @staticmethod
     def _get_model_override_dir(override_file):
         """
@@ -401,63 +279,6 @@ class DeviceHandler:
             )
 
         return model_override_path.as_posix()
-
-    def create_tr_tar(self, cfg):
-        """
-        Create tar file for transfer to the device.
-
-        Args:
-            cfg (dict): Configuration dictionary for the tar creation.
-
-        Raises:
-            RuntimeError: If the tar file for the transfer could not be
-                created.
-        """
-        tr_path = cfg.get("tr_path")
-        log.debug("Creating tar file for transfer.")
-        real_path = self.fut_base_dir
-        internal_shell_path = f"{self.fut_base_dir}/internal/shell"
-        additional_files = [
-            self.regulatory_shell_file,
-        ]
-        tar_cmd = cfg.get("tar_cmd", "tar -cf")
-
-        if Path(internal_shell_path).is_dir():
-            # Add internal/shell to additional_files for file transfer to device
-            additional_files.append(internal_shell_path)
-
-        additional_files = " ".join([f"{additional_path}" for additional_path in additional_files])
-
-        if cfg.get("full", False):
-            tar_cmd = f"{tar_cmd} {tr_path} {self.fut_base_dir}/shell/ {additional_files}"
-        elif cfg.get("manager", False):
-            tar_cmd = f'{tar_cmd} {tr_path} {self.fut_base_dir}/shell/tests/{cfg.get("manager")} {additional_files}'
-        elif cfg.get("file", False) or cfg.get("folder", False):
-            tmp_path_param = cfg.get("file", False) if cfg.get("file", False) else cfg.get("folder", False)
-            real_path = (
-                tmp_path_param if Path(tmp_path_param).is_absolute() else f"{self.fut_base_dir}/{tmp_path_param}"
-            )
-            tar_cmd = f"{tar_cmd} {tr_path} {real_path}/"
-            if Path(real_path).name:
-                temp_real_path = real_path.rstrip("/")
-                real_path = os.path.dirname(temp_real_path) + "/"
-        else:
-            tar_cmd = (
-                f"{tar_cmd} {tr_path} {real_path}/shell/lib {real_path}/shell/config {real_path}/shell/tools "
-                f"{additional_files}"
-            )
-
-        tar_home_reg = str(Path(real_path).relative_to("/")).replace("/", "\\/")
-        tar_to_reg = str(Path(cfg.get("to", self.fut_dir)).relative_to("/")).replace("/", "\\/")
-        tar_cmd = tar_cmd + f" --transform 's/{tar_home_reg}/{tar_to_reg}/'"
-        log.debug(f"Executing: {tar_cmd}")
-        # Create tar file.
-        tar_ec = os.system(tar_cmd)
-
-        if tar_ec != 0:
-            raise RuntimeError(
-                f"Failed to create tar file for transfer - configuration: {cfg} tar_cmd: {tar_cmd} tar_ec: {tar_ec}",
-            )
 
     def _get_shell_cfg(self):
         """
@@ -508,7 +329,6 @@ class DeviceHandler:
                 )
                 tmp_cfg["MGMT_IFACE_UP_TIMEOUT"] = 60
                 tmp_cfg["MGMT_CONN_TIMEOUT"] = 2
-                tmp_cfg["FUT_SKIP_L2"] = "true" if os.getenv("FUT_SKIP_L2") == "true" else "false"
             else:
                 tmp_cfg["PATH"] = self.device_config.get("shell_path")
 
@@ -517,7 +337,7 @@ class DeviceHandler:
 
         return tmp_cfg
 
-    def _create_fut_set_env(self):
+    def create_fut_set_env(self):
         """
         Create file containing shell environment variables.
 
@@ -538,116 +358,6 @@ class DeviceHandler:
 
         return shell_fut_env_path
 
-    def transfer(
-        self,
-        tr_name="fut_tr.tar",
-        to=None,
-        full=False,
-        manager=False,
-        file=False,
-        folder=False,
-        exec_perm=True,
-        tr_path=None,
-        **kwargs,
-    ):
-        """
-        Transfer files to device.
-
-        Method creates designated directory on the device, transfers
-        fut tar file to the device, unpacks the contents into the
-        designated directory, sets permissions, removes the file after
-        unpack and updates shell paths.
-
-        Raises:
-            RuntimeError: If unpack of transferred tar file failed.
-            RuntimeError: If the setting of permissions failed.
-            RuntimeError: If the removal of the tar file failed.
-            RuntimeError: If the update of shell paths failed.
-
-        Returns:
-            (bool): True, on success
-        """
-        cfg = locals().copy()
-        cfg.update(kwargs)
-
-        if not cfg.get("to"):
-            cfg.update({"to": self.fut_dir})
-
-        if not cfg.get("tr_path"):
-            cfg.update({"tr_path": f"{self.fut_base_dir}/{tr_name}"})
-
-        log.info(f"Initiated transfer to {self.name}")
-        log.info(f"Transfer configuration: {cfg}")
-
-        self.create_tr_tar(cfg)
-        self.device_api.run_raw(f'mkdir -p {cfg.get("to")}')
-        self.device_api.run_raw(f'chown {self.username} {cfg.get("to")}')
-        log.debug(f'Transferring {cfg.get("tr_path")} to {cfg.get("to")} on {self.name}')
-        self.device_api.put_file(file_name=cfg.get("tr_path"), location=cfg.get("to"))
-
-        # Unpack tar file
-        tr_name = cfg.get("tr_name")
-        unpack_tar_cmd = f'tar -C / -xf {cfg.get("to")}/{tr_name}'
-        log.debug(f"Unpacking {tr_name}: {unpack_tar_cmd}")
-        unpack_res = self.device_api.run_raw(unpack_tar_cmd)
-        unpack_ec, unpack_std, unpack_std_err = unpack_res[0], unpack_res[1], unpack_res[2]
-        if unpack_ec != 0:
-            raise RuntimeError(
-                f"Unpack command failed!\n"
-                f"cmd: {unpack_tar_cmd}\n"
-                f"std_out:\n{unpack_std}\n"
-                f"std_err:\n{unpack_std_err}\n"
-                f"ec: {unpack_ec}",
-            )
-
-        if cfg.get("exec_perm"):
-            # Make scripts executable
-            set_permission_cmd = f'find {self.fut_dir} -type f -iname "*.sh" -exec chmod 755 {{}} \\;'
-            log.debug(f"Setting permissions on {self.fut_dir}: {set_permission_cmd}")
-            permission_ec = self.device_api.run_raw(set_permission_cmd)
-
-            if permission_ec[0] != 0:
-                raise RuntimeError(f"Permission command fail, set_permission_cmd: {set_permission_cmd}")
-
-            # Remove tar file after unpack to free-up space
-            rm_tar_cmd = f'rm {cfg.get("to")}/{tr_name}'
-            log.debug(f"Removing {tr_name}: {rm_tar_cmd}")
-            rm_ec = self.device_api.run_raw(rm_tar_cmd)
-
-            if rm_ec[0] != 0:
-                raise RuntimeError(f"Remove tar command fail, rm_tar_cmd: {rm_tar_cmd}")
-
-            if self.fut_dir != "/tmp/fut-base":
-                log.debug(f"Updating shell paths to match FUT_TOPDIR={self.fut_dir}")
-                escaped_fut_dir = self.fut_dir.replace("/", "\\/")
-                path_update_cmd = (
-                    f"find {self.fut_dir} -type f -exec sed -i 's/\\/tmp\\/fut-base/{escaped_fut_dir}/g' {{}} + "
-                )
-                path_update_res = self.device_api.run_raw(path_update_cmd)
-
-                if path_update_res[0] != 0:
-                    raise RuntimeError(
-                        f"Failed to update shell paths\n"
-                        f"{path_update_cmd}\n"
-                        f"{path_update_res[2]}\n"
-                        f"Please use FUT_TOPDIR=/tmp/fut-base\n",
-                    )
-
-        log.debug(f"Transfer to {self.name} finished successfully.")
-
-        return True
-
-    def create_and_transfer_fut_set_env(self):
-        """
-        Create fut_set_env file and transfers it to the device.
-
-        Returns:
-            (bool): True if transfer was successful.
-        """
-        fut_set_env_path = self._create_fut_set_env()
-
-        return self.transfer(file=fut_set_env_path, to=f"{self.fut_dir}/")
-
     def _version(self):
         """
         Return the version of the device.
@@ -660,9 +370,28 @@ class DeviceHandler:
         if self.model == "rpi":
             version = version.split()[0].split("__")[1]
 
-        log.debug(f"{self.name.upper} version: {version}")
+        log.debug(f"{self.name.upper()} version: {version}")
 
         return version
+
+    def file_transfer(self, folders: list, **kwargs):
+        as_sudo = kwargs.get("as_sudo", True)
+        skip_env_file = kwargs.get("skip_env_file", False)
+        log.info(f"Transferring the {folders} folders to {self.name}")
+        with lock:
+            try:
+                for folder in folders:
+                    self.device_api.put_dir(
+                        directory=f"{self.fut_base_dir}/{folder}/",
+                        location=f"{self.fut_dir}/{folder}/",
+                        as_sudo=as_sudo,
+                    )
+            except Exception:
+                raise RuntimeError(traceback.format_exc())
+
+            if not skip_env_file:
+                device_env_file = self.create_fut_set_env()
+                self.device_api.put_file(file_name=device_env_file, location=self.fut_dir)
 
     def check_fut_file_transfer(self):
         """
@@ -675,8 +404,10 @@ class DeviceHandler:
 
         if fut_file_check[0] != 0:
             log.info(f"{self.fut_dir} missing on {self.name.upper()}")
-            self.transfer(full=True)
-            self.create_and_transfer_fut_set_env()
+            folders = ["shell"]
+            if Path("internal/shell").is_dir():
+                folders.append("internal/shell")
+            self.file_transfer(folders=folders)
         else:
             return True
 
@@ -746,34 +477,38 @@ class DeviceHandler:
 
         Args:
             path (str): Path to script.
-            args (str): Optional script arguments. Defaults to empty
-                string.
+            args (str): Optional script arguments. Defaults to empty string.
             as_sudo (bool): Execute script with superuser privileges.
 
         Keyword Args:
             suffix (str): Suffix of the script.
-            folder (str): Name of the folder where the script is
-                located.
-            skip_rcn (bool): If set to True, the reconnection
-                procedure will be skipped.
+            folder (str): Name of the folder where the script is located.
+            skip_rcn (bool): If set to True, the reconnection procedure will be skipped.
+            skip_logging (bool): If set to True, the logging procedure will be skipped.
+            background_execution (bool): If set to True, the script will be executed in
+                the background.
 
         Returns:
-            list: List comprised of the exit code, standard output and
-                standard error.
+            (tuple): Exit code (int), standard output (str) and standard error (str) of the executed command.
         """
-        skip_rcn = False if "skip_rcn" not in kwargs else kwargs["skip_rcn"]
+        skip_rcn = kwargs.get("skip_rcn", False)
+        skip_logging = kwargs.pop("skip_logging", False)
+        background_execution = kwargs.pop("background_execution", False)
 
         if isinstance(args, list):
             args = " ".join(args)
 
-        cmd = self.get_remote_test_command(path, args)
+        if background_execution:
+            args += " &"
+
+        cmd = self.get_remote_test_command(test_path=path, params=args, **kwargs)
 
         if as_sudo:
             cmd = f"sudo {cmd}"
 
         timeout = self.test_script_timeout * 2 if "timeout" not in kwargs else kwargs["timeout"]
 
-        cmd_res = self.device_api.run_raw(cmd, timeout=timeout, combine_std=False, **kwargs)
+        cmd_res = self.device_api.run_raw(cmd, timeout=timeout, skip_logging=skip_logging, **kwargs)
         if cmd_res[0] == 255 and skip_rcn is False:
             if self._check_mgmt_ssh_connection_down():
                 log.info(
@@ -781,49 +516,17 @@ class DeviceHandler:
                 )
                 self._start_rcn_procedure()
                 self.check_fut_file_transfer()
-                cmd_res = self.device_api.run_raw(cmd, timeout=timeout, combine_std=False, **kwargs)
+                cmd_res = self.device_api.run_raw(cmd, timeout=timeout, skip_logging=skip_logging, **kwargs)
         elif cmd_res[0] == 127 or "command not found" in cmd_res[2] or "No such file or directory" in cmd_res[2]:
             log.info(f"Checking FUT files: {cmd_res[2]}")
             self.check_fut_file_transfer()
-            cmd_res = self.device_api.run_raw(cmd, timeout=timeout, combine_std=False, **kwargs)
+            cmd_res = self.device_api.run_raw(cmd, timeout=timeout, skip_logging=skip_logging, **kwargs)
 
         cmd_ec = cmd_res[0]
         cmd_std_out = "" if not cmd_res[1] else cmd_res[1]
         cmd_std_err = "" if not cmd_res[2] else cmd_res[2]
 
         return cmd_ec, cmd_std_out, cmd_std_err
-
-    def execute_with_logging(self, path, args="", as_sudo=False, **kwargs):
-        """
-        Wrap the execute_script method.
-
-        Enables the creation of a log tailing file
-
-        Args:
-            path (str): Path to script.
-            args (str): Optional script arguments. Defaults to empty
-                string.
-            as_sudo (bool): Execute script with superuser privileges.
-
-        Keyword Args:
-            suffix (str): Suffix of the script.
-            folder (str): Name of the folder where the script is located.
-            skip_rcn (bool): If set to True, the reconnection procedure
-                will be skipped.
-
-        Returns:
-            list: List comprised of the exit code, standard output and
-                standard error if the raw argument is set to True.
-        """
-        self._start_log_tail()
-        cmd_res = self.execute(path, args, as_sudo=as_sudo, **kwargs)
-        self._stop_log_tail()
-
-        if cmd_res[0] != 0:
-            log_tail = self._get_log_tail()
-            allure_attach_log_file(file=log_tail, file_name=f"logtail_{self.name}")
-
-        return cmd_res
 
     def check_wan_connectivity(self):
         """

@@ -166,24 +166,22 @@ wait_ovsdb_entry Wifi_Radio_State -w if_name "$if_name" -is channel "$mismatch_c
     raise "FAIL: wait_ovsdb_entry - Wifi_Radio_Config reflected to Wifi_Radio_State::channel is $mismatch_channel" -l "wm2/wm2_set_channel_neg.sh" -tc ||
     log "wm2/wm2_set_channel_neg.sh: wait_ovsdb_entry - Wifi_Radio_Config is not reflected to Wifi_Radio_State::channel is not $mismatch_channel - Success"
 
-if [ $FUT_SKIP_L2 != 'true' ]; then
-    # LEVEL2 check. Passes if system reports original channel is still set.
-    channel_from_os=$(get_channel_from_os $vif_if_name) ||
-        raise "FAIL: Error while fetching channel from system" -l "wm2/wm2_set_channel_neg.sh" -fc
+# LEVEL2 check. Passes if system reports original channel is still set.
+channel_from_os=$(get_channel_from_os $vif_if_name) ||
+    raise "FAIL: Error while fetching channel from system" -l "wm2/wm2_set_channel_neg.sh" -fc
 
-    if [ "$channel_from_os" = "" ]; then
-        raise "FAIL: Error while fetching channel from os" -l "wm2/wm2_set_channel_neg.sh" -fc
+if [ "$channel_from_os" = "" ]; then
+    raise "FAIL: Error while fetching channel from os" -l "wm2/wm2_set_channel_neg.sh" -fc
+else
+    if [ "$channel_from_os" != "$mismatch_channel" ]; then
+        log "wm2/wm2_set_channel_neg.sh: Channel '$mismatch_channel' not applied to system. System reports current channel '$channel_from_os' - Success"
     else
-        if [ "$channel_from_os" != "$mismatch_channel" ]; then
-            log "wm2/wm2_set_channel_neg.sh: Channel '$mismatch_channel' not applied to system. System reports current channel '$channel_from_os' - Success"
-        else
-            raise "FAIL: Channel '$mismatch_channel' applied to system. System reports current channel '$channel_from_os" -l "wm2/wm2_set_channel_neg.sh" -tc
-        fi
+        raise "FAIL: Channel '$mismatch_channel' applied to system. System reports current channel '$channel_from_os" -l "wm2/wm2_set_channel_neg.sh" -tc
     fi
 fi
 
 # Check if manager survived.
-manager_bin_file="${OPENSYNC_ROOTDIR}/bin/${FUT_OS_WIRELESS_MGR_LC:?}"
+manager_bin_file="${OPENSYNC_ROOTDIR}/bin/$(get_wireless_manager_name)"
 wait_for_function_response 0 "check_manager_alive $manager_bin_file" &&
     log "wm2/wm2_set_channel_neg.sh: WIRELESS MANAGER is running - Success" ||
     raise "FAIL: WIRELESS MANAGER not running/crashed" -l "wm2/wm2_set_channel_neg.sh" -tc

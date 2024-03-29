@@ -24,12 +24,14 @@ def brv_setup():
             device_handler.fut_device_setup(test_suite_name="dm")
         except Exception as exception:
             raise RuntimeError(f"Unable to perform setup for the {device} device: {exception}")
+    # Set the baseline OpenSync PIDs used for reboot detection
+    pytest.session_baseline_os_pids = pytest.gw.opensync_pid_retrieval(tracked_node_services=pytest.tracked_managers)
 
 
 class TestBrv:
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", brv_config.get("brv_busybox_builtins", []))
-    def test_brv_busybox_builtins(self, cfg):
+    def test_brv_busybox_builtins(self, cfg: dict):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -42,7 +44,7 @@ class TestBrv:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", brv_config.get("brv_is_bcm_license_on_system_fut", []))
-    def test_brv_is_bcm_license_on_system_fut(self, cfg):
+    def test_brv_is_bcm_license_on_system_fut(self, cfg: dict):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -59,7 +61,7 @@ class TestBrv:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", brv_config.get("brv_is_script_on_system_fut", []))
-    def test_brv_is_script_on_system_fut(self, cfg):
+    def test_brv_is_script_on_system_fut(self, cfg: dict):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -77,7 +79,7 @@ class TestBrv:
         + brv_config.get("brv_is_tool_on_system_native_bridge", [])
         + brv_config.get("brv_is_tool_on_system_ovs_bridge", []),
     )
-    def test_brv_is_tool_on_system_fut(self, cfg):
+    def test_brv_is_tool_on_system_fut(self, cfg: dict):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -104,7 +106,7 @@ class TestBrv:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", brv_config.get("brv_is_tool_on_system_opensync", []))
-    def test_brv_is_tool_on_system_opensync(self, cfg):
+    def test_brv_is_tool_on_system_opensync(self, cfg: dict):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -117,7 +119,7 @@ class TestBrv:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", brv_config.get("brv_ovs_check_version", []))
-    def test_brv_ovs_check_version(self, cfg):
+    def test_brv_ovs_check_version(self, cfg: dict):
         gw = pytest.gw
 
         with step("Check bridge type"):

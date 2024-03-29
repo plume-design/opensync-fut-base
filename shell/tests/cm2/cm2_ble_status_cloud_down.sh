@@ -42,7 +42,7 @@ case "${1}" in
 esac
 
 check_kconfig_option "CONFIG_MANAGER_BLEM" "y" ||
-    raise "CONFIG_MANAGER_BLEM != y - BLE not present on device" -l "cm2/cm2_ble_status_interface_down.sh" -s
+    raise "CONFIG_MANAGER_BLEM != y - BLE not present on device" -l "cm2/cm2_ble_status_cloud_down.sh" -s
 
 check_kconfig_option "TARGET_CAP_EXTENDER" "y" ||
     raise "TARGET_CAP_EXTENDER != y - Testcase applicable only for EXTENDER-s" -l "cm2/cm2_ble_status_cloud_down.sh" -s

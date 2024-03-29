@@ -21,17 +21,20 @@ def sm_setup():
             raise RuntimeError(f"{device.upper()} handler is not set up correctly.")
         try:
             device_handler = getattr(pytest, device)
+            wireless_manager_name = device_handler.get_wireless_manager_name()
             phy_radio_ifnames = device_handler.capabilities.get_phy_radio_ifnames(return_type=list)
-            setup_args = device_handler.get_command_arguments(*phy_radio_ifnames)
+            setup_args = device_handler.get_command_arguments(wireless_manager_name, *phy_radio_ifnames)
             device_handler.fut_device_setup(test_suite_name="sm", setup_args=setup_args)
         except Exception as exception:
             raise RuntimeError(f"Unable to perform setup for the {device} device: {exception}")
+    # Set the baseline OpenSync PIDs used for reboot detection
+    pytest.session_baseline_os_pids = pytest.gw.opensync_pid_retrieval(tracked_node_services=pytest.tracked_managers)
 
 
 class TestSm:
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", nm2_config.get("sm_dynamic_noise_floor", []))
-    def test_sm_dynamic_noise_floor(self, cfg):
+    def test_sm_dynamic_noise_floor(self, cfg: dict, update_baseline_os_pids):
         fut_configurator, server, gw = pytest.fut_configurator, pytest.server, pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -39,7 +42,7 @@ class TestSm:
             channel = cfg.get("channel")
             ht_mode = cfg.get("ht_mode")
             radio_band = cfg.get("radio_band")
-            encryption = cfg.get("encryption", "WPA2")
+            encryption = cfg["encryption"]
             wifi_security_type = cfg.get("wifi_security_type", "wpa")
             mqtt_topic = cfg.get("mqtt_topic")
             sm_radio_type = cfg.get("sm_radio_type")
@@ -134,13 +137,13 @@ class TestSm:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", nm2_config.get("sm_leaf_report", []))
-    def test_sm_leaf_report(self, cfg):
+    def test_sm_leaf_report(self, cfg: dict, update_baseline_os_pids):
         server, gw, l1 = pytest.server, pytest.gw, pytest.l1
 
         with step("Preparation of testcase parameters"):
             # Arguments from test case configuration
             channel = cfg.get("channel")
-            encryption = cfg.get("encryption", "WPA2")
+            encryption = cfg["encryption"]
             ht_mode = cfg.get("ht_mode")
             gw_radio_band = cfg.get("radio_band")
             wifi_security_type = cfg.get("wifi_security_type", "wpa")
@@ -241,13 +244,13 @@ class TestSm:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", nm2_config.get("sm_neighbor_report", []))
-    def test_sm_neighbor_report(self, cfg):
+    def test_sm_neighbor_report(self, cfg: dict, update_baseline_os_pids):
         fut_configurator, server, gw, l1 = pytest.fut_configurator, pytest.server, pytest.gw, pytest.l1
 
         with step("Preparation of testcase parameters"):
             # Arguments from test case configuration
             channel = cfg.get("channel")
-            encryption = cfg.get("encryption", "WPA2")
+            encryption = cfg["encryption"]
             ht_mode = cfg.get("ht_mode")
             gw_radio_band = cfg.get("radio_band")
             wifi_security_type = cfg.get("wifi_security_type", "wpa")
@@ -404,7 +407,7 @@ class TestSm:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", nm2_config.get("sm_survey_report", []))
-    def test_sm_survey_report(self, cfg):
+    def test_sm_survey_report(self, cfg: dict, update_baseline_os_pids):
         fut_configurator, server, gw = pytest.fut_configurator, pytest.server, pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -412,7 +415,7 @@ class TestSm:
             channel = cfg.get("channel")
             ht_mode = cfg.get("ht_mode")
             radio_band = cfg.get("radio_band")
-            encryption = cfg.get("encryption", "WPA2")
+            encryption = cfg["encryption"]
             wifi_security_type = cfg.get("wifi_security_type", "wpa")
             mqtt_topic = cfg.get("mqtt_topic")
             sm_channel = cfg.get("sm_channel")

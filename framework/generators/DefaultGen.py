@@ -47,7 +47,8 @@ class DefaultGenClass:
             for add_attr in attributes_to_add:
                 setattr(generator_module.__class__, add_attr, self.__getattribute__(add_attr))
 
-    def _get_default_options(self, inputs):
+    @staticmethod
+    def _get_default_options(inputs):
         default = {}
         if "default" in inputs:
             default = inputs["default"]
@@ -100,6 +101,8 @@ class DefaultGenClass:
         for fut_opt in ["skip", "ignore", "xfail"]:
             if fut_opt not in inputs:
                 continue
+            if "input" in inputs[fut_opt]:
+                raise KeyError('Key "input" present in argument, did you mean "inputs"?')
             if isinstance(inputs[fut_opt], dict):
                 inputs[fut_opt] = [inputs[fut_opt]]
             for fut_opt_conf in inputs[fut_opt]:
@@ -111,16 +114,9 @@ class DefaultGenClass:
                         if single_input == fut_opt_conf_input:
                             do_opt = True
                             break
-                elif "input" in fut_opt_conf and single_input:
-                    if not isinstance(fut_opt_conf["input"], list):
-                        fut_opt_conf["input"] = [fut_opt_conf["input"]]
-                    if single_input == fut_opt_conf["input"]:
-                        do_opt = True
-                    else:
-                        continue
-                elif inputs["inputs"] == [{}]:
-                    do_opt = True
                 elif "msg" in fut_opt_conf:
+                    do_opt = True
+                elif inputs["inputs"] == [{}]:
                     do_opt = True
                 if do_opt:
                     if fut_opt == "ignore":
@@ -137,8 +133,7 @@ class DefaultGenClass:
 
     def _do_args_mapping(self, inputs):
         if "inputs" not in inputs:
-            inputs["inputs"] = [inputs]
-            return inputs
+            raise KeyError(f'Key "inputs" not present in argument: {inputs}')
         tmp_inputs = []
         get_encryption = False
         radio_band_index = -1
@@ -192,36 +187,10 @@ class DefaultGenClass:
                     )
                     if not check_channel_band or not check_band_ht_mode:
                         continue
-                if "radio_band" in inputs["args_mapping"] and "channels" in inputs["args_mapping"]:
-                    radio_band_index = inputs["args_mapping"].index("radio_band")
-                    channels_index = inputs["args_mapping"].index("channels")
-                    ht_mode = "HT20"
-                    if "ht_mode" in inputs["args_mapping"]:
-                        ht_mode_index = inputs["args_mapping"].index("ht_mode")
-                        ht_mode = single_input[ht_mode_index]
-                    new_channels = []
-                    for ch in single_input[channels_index]:
-                        check_channel_band = self._check_band_channel_compatible(
-                            single_input[radio_band_index],
-                            ch,
-                            "gw",
-                            ht_mode=ht_mode,
-                        )
-                        check_band_ht_mode = self._check_ht_mode_band_support(
-                            radio_band=single_input[radio_band_index],
-                            ht_mode=ht_mode,
-                        )
-                        if check_channel_band and check_band_ht_mode:
-                            new_channels.append(ch)
-                        else:
-                            log.debug(
-                                f"Channel {ch} is not valid for {single_input[radio_band_index]} for set regulatory domain of {self.regulatory_domain}",
-                            )
-                    single_input[channels_index] = new_channels
                 for il in range(len(single_input)):
                     tmp_cfg[inputs["args_mapping"][il]] = single_input[il]
                 tmp_cfg = self._parse_fut_opts(inputs, single_input=single_input, cfg=tmp_cfg)
-            if tmp_cfg is not None:
+            if tmp_cfg:
                 tmp_inputs.append(tmp_cfg)
         inputs["inputs"] = tmp_inputs
         return inputs
@@ -233,5 +202,11 @@ class DefaultGenClass:
         if "inputs" not in inputs:
             inputs["inputs"] = [{}]
         inputs = self._do_args_mapping(inputs)
-        default_inputs = [{**default, **single_input} for single_input in inputs["inputs"]]
+        """
+            When using dictionary unpacking with the ** operator to merge dictionaries, the order of merging matters.
+            The later dictionary in the sequence take precedence over the earlier one. Therefore, the dictionary
+            containing default test input values ('default') should always come second, so that it is not overwritten by
+            the dictionary containing generated values ('single_input').
+        """
+        default_inputs = [{**single_input, **default} for single_input in inputs["inputs"]]
         return default_inputs

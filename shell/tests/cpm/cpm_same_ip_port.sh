@@ -51,7 +51,7 @@ validate_1_up_2_gone()
     uuid_1=$(get_ovsdb_entry_value Captive_Portal _uuid -w name "default")
     tp_count=$(pidof tinyproxy | wc -w)
     if [ "$tp_count" = "1" ]; then
-        tp_pid=$(ps -w | grep tinyproxy | grep -v grep | awk '{print $1}')
+        tp_pid=$($(get_process_cmd) | grep tinyproxy | grep -v grep | awk '{print $1}')
         tp_uuid_1=$(cat /proc/"$tp_pid"/cmdline | grep -Eo "$uuid_1")
         if [ "$tp_uuid_1" = "$uuid_1" ]; then
             tp_config_count=$(ls -l /tmp/tinyproxy | wc -l)
@@ -69,7 +69,7 @@ trap '
 fut_info_dump_line
 print_tables Captive_Portal
 echo "Final tinyproxies status:"
-ps -w | grep tinyproxy | grep -v grep
+$(get_process_cmd) | grep tinyproxy | grep -v grep
 echo "Final tinyproxies config files status:"
 ls -l /tmp/tinyproxy
 check_restore_ovsdb_server

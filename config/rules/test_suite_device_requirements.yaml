@@ -42,6 +42,7 @@ TestOthr:
     - l1
   clients:
     - w1
+    - e2
 TestPm:
   nodes:
     - gw
@@ -56,6 +57,10 @@ TestSm:
     - l1
   clients: null
 TestUm:
+  nodes:
+    - gw
+  clients: null
+TestUt:
   nodes:
     - gw
   clients: null

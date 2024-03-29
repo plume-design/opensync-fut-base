@@ -88,6 +88,9 @@ class NmGen:
         elif "FutGen|bhaul-sta-by-band-and-type" in single_input:
             token = "FutGen|bhaul-sta-by-band-and-type"
             if_role = "backhaul_sta"
+        elif "FutGen|vif-bhaul-ap-by-band-and-type" in single_input:
+            token = "FutGen|vif-bhaul-ap-by-band-and-type"
+            if_role = "backhaul_ap"
         else:
             RuntimeError(f"Unsupported FutGen token in input '{single_input}'.")
         token_index = single_input.index(token)

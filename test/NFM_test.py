@@ -24,12 +24,14 @@ def nfm_setup():
             device_handler.fut_device_setup(test_suite_name="nfm")
         except Exception as exception:
             raise RuntimeError(f"Unable to perform setup for the {device} device: {exception}")
+    # Set the baseline OpenSync PIDs used for reboot detection
+    pytest.session_baseline_os_pids = pytest.gw.opensync_pid_retrieval(tracked_node_services=pytest.tracked_managers)
 
 
 class TestNfm:
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", nfm_config.get("nfm_native_ebtable_check", []))
-    def test_nfm_native_ebtable_check(self, cfg):
+    def test_nfm_native_ebtable_check(self, cfg: dict):
         gw = pytest.gw
 
         with step("Check bridge type"):
@@ -62,7 +64,7 @@ class TestNfm:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", nfm_config.get("nfm_native_ebtable_template_check", []))
-    def test_nfm_native_ebtable_template_check(self, cfg):
+    def test_nfm_native_ebtable_template_check(self, cfg: dict):
         gw = pytest.gw
 
         with step("Check bridge type"):

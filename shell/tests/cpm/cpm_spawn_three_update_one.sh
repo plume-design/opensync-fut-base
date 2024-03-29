@@ -53,7 +53,7 @@ validate_tinyproxies()
 trap '
 fut_info_dump_line
 print_tables Captive_Portal
-ps -w | grep tinyproxy | grep -v grep
+$(get_process_cmd) | grep tinyproxy | grep -v grep
 check_restore_ovsdb_server
 fut_info_dump_line
 ' EXIT SIGINT SIGTERM

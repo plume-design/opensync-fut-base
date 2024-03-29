@@ -29,12 +29,14 @@ def nm2_setup():
                 device_handler.fut_device_setup(test_suite_name="nm2")
         except Exception as exception:
             raise RuntimeError(f"Unable to perform setup for the {device} device: {exception}")
+    # Set the baseline OpenSync PIDs used for reboot detection
+    pytest.session_baseline_os_pids = pytest.gw.opensync_pid_retrieval(tracked_node_services=pytest.tracked_managers)
 
 
 class TestNm2:
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", nm2_config.get("nm2_configure_nonexistent_iface", []))
-    def test_nm2_configure_nonexistent_iface(self, cfg):
+    def test_nm2_configure_nonexistent_iface(self, cfg: dict):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -56,7 +58,7 @@ class TestNm2:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", nm2_config.get("nm2_configure_verify_native_tap_interface", []))
-    def test_nm2_configure_verify_native_tap_interface(self, cfg):
+    def test_nm2_configure_verify_native_tap_interface(self, cfg: dict):
         gw = pytest.gw
 
         with step("Check bridge type"):
@@ -82,18 +84,50 @@ class TestNm2:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", nm2_config.get("nm2_enable_disable_iface_network", []))
-    def test_nm2_enable_disable_iface_network(self, cfg):
-        gw = pytest.gw
+    def test_nm2_enable_disable_iface_network(self, cfg: dict):
+        fut_configurator, gw = pytest.fut_configurator, pytest.gw
 
         with step("Preparation of testcase parameters"):
             # Arguments from test case configuration
+            channel = cfg.get("channel")
+            ht_mode = cfg.get("ht_mode")
+            radio_band = cfg.get("radio_band")
             if_name = cfg.get("if_name")
             if_type = cfg.get("if_type")
+
+            # Constant arguments
+            ssid, psk = fut_configurator.base_ssid, fut_configurator.base_psk
+
+            if if_type == "vif":
+                with step("Determine encryption"):
+                    if radio_band == "6g":
+                        encryption = "WPA3"
+                    else:
+                        encryption = "WPA2"
+
+                # GW AP arguments
+                if_name = gw.capabilities.get_bhaul_ap_ifname(freq_band=radio_band)
+
+                gw_ap_vif_args = {
+                    "channel": channel,
+                    "ht_mode": ht_mode,
+                    "radio_band": radio_band,
+                    "wpa_psk": psk,
+                    "encryption": encryption,
+                    "ssid": ssid,
+                    "interface_type": "backhaul_ap",
+                    "reset_vif": True,
+                }
+                gw.ap_args = gw_ap_vif_args
+
             test_args = gw.get_command_arguments(
                 if_name,
                 if_type,
             )
 
+        if if_type == "vif":
+            with step("GW AP configuration"):
+                gw.configure_radio_vif_and_network()
         with step("Test Case"):
             assert (
                 gw.execute_with_logging("tests/nm2/nm2_enable_disable_iface_network", test_args)[0]
@@ -102,7 +136,7 @@ class TestNm2:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", nm2_config.get("nm2_ovsdb_configure_interface_dhcpd", []))
-    def test_nm2_ovsdb_configure_interface_dhcpd(self, cfg):
+    def test_nm2_ovsdb_configure_interface_dhcpd(self, cfg: dict):
         fut_configurator, gw = pytest.fut_configurator, pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -111,14 +145,7 @@ class TestNm2:
             if_type = cfg.get("if_type")
             start_pool = cfg.get("start_pool")
             end_pool = cfg.get("end_pool")
-            encryption = cfg.get("encryption", "WPA2")
             wifi_security_type = cfg.get("wifi_security_type", "wpa")
-            test_args = gw.get_command_arguments(
-                if_name,
-                if_type,
-                start_pool,
-                end_pool,
-            )
 
             # Constant arguments
             ssid, psk = fut_configurator.base_ssid, fut_configurator.base_psk
@@ -127,6 +154,10 @@ class TestNm2:
                 channel = cfg.get("channel")
                 ht_mode = cfg.get("ht_mode")
                 radio_band = cfg.get("radio_band")
+                encryption = cfg["encryption"]
+
+                # GW AP arguments
+                if_name = gw.capabilities.get_home_ap_ifname(freq_band=radio_band)
 
                 gw_ap_vif_args = {
                     "channel": channel,
@@ -144,6 +175,13 @@ class TestNm2:
                 with step("GW AP creation"):
                     assert gw.configure_radio_vif_and_network()
 
+            test_args = gw.get_command_arguments(
+                if_name,
+                if_type,
+                start_pool,
+                end_pool,
+            )
+
         with step("Test Case"):
             assert (
                 gw.execute_with_logging("tests/nm2/nm2_ovsdb_configure_interface_dhcpd", test_args)[0]
@@ -152,7 +190,7 @@ class TestNm2:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", nm2_config.get("nm2_ovsdb_ip_port_forward", []))
-    def test_nm2_ovsdb_ip_port_forward(self, cfg):
+    def test_nm2_ovsdb_ip_port_forward(self, cfg: dict):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -162,6 +200,7 @@ class TestNm2:
             dst_ipaddr = cfg.get("dst_ipaddr")
             dst_port = cfg.get("dst_port")
             protocol = cfg.get("protocol")
+            pf_table = cfg.get("pf_table")
 
             if src_ifname == gw.capabilities.get_wan_bridge_ifname():
                 with step("Check device if WANO enabled"):
@@ -176,6 +215,7 @@ class TestNm2:
                 dst_ipaddr,
                 dst_port,
                 protocol,
+                pf_table,
             )
 
         with step("Test Case"):
@@ -183,7 +223,7 @@ class TestNm2:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", nm2_config.get("nm2_ovsdb_remove_reinsert_iface", []))
-    def test_nm2_ovsdb_remove_reinsert_iface(self, cfg):
+    def test_nm2_ovsdb_remove_reinsert_iface(self, cfg: dict):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -203,7 +243,7 @@ class TestNm2:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", nm2_config.get("nm2_set_broadcast", []))
-    def test_nm2_set_broadcast(self, cfg):
+    def test_nm2_set_broadcast(self, cfg: dict):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -222,7 +262,7 @@ class TestNm2:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", nm2_config.get("nm2_set_dns", []))
-    def test_nm2_set_dns(self, cfg):
+    def test_nm2_set_dns(self, cfg: dict):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -243,7 +283,7 @@ class TestNm2:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", nm2_config.get("nm2_set_gateway", []))
-    def test_nm2_set_gateway(self, cfg):
+    def test_nm2_set_gateway(self, cfg: dict):
         fut_configurator, gw = pytest.fut_configurator, pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -251,7 +291,6 @@ class TestNm2:
             if_name = cfg.get("if_name")
             if_type = cfg.get("if_type")
             gateway = cfg.get("gateway")
-            encryption = cfg.get("encryption", "WPA2")
             wifi_security_type = cfg.get("wifi_security_type", "wpa")
 
             # Constant arguments
@@ -267,6 +306,7 @@ class TestNm2:
                 channel = cfg.get("channel")
                 ht_mode = cfg.get("ht_mode")
                 radio_band = cfg.get("radio_band")
+                encryption = cfg["encryption"]
 
                 gw_ap_vif_args = {
                     "channel": channel,
@@ -289,7 +329,7 @@ class TestNm2:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", nm2_config.get("nm2_set_inet_addr", []))
-    def test_nm2_set_inet_addr(self, cfg):
+    def test_nm2_set_inet_addr(self, cfg: dict):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -308,7 +348,7 @@ class TestNm2:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", nm2_config.get("nm2_set_ip_assign_scheme", []))
-    def test_nm2_set_ip_assign_scheme(self, cfg):
+    def test_nm2_set_ip_assign_scheme(self, cfg: dict):
         fut_configurator, gw = pytest.fut_configurator, pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -316,7 +356,6 @@ class TestNm2:
             radio_band = cfg.get("radio_band")
             channel = cfg.get("channel")
             ht_mode = cfg.get("ht_mode")
-            encryption = cfg.get("encryption", "WPA2")
             wifi_security_type = cfg.get("wifi_security_type", "wpa")
             if_type = cfg.get("if_type")
             if_name = cfg.get("if_name")
@@ -336,6 +375,7 @@ class TestNm2:
 
             if radio_band:
                 gw_bhaul_ap_if_name = gw.capabilities.get_ifname(freq_band=radio_band, iftype=gw_bhaul_interface_type)
+                encryption = cfg["encryption"]
                 # GW AP arguments
                 gw_ap_vif_args = {
                     "channel": channel,
@@ -405,28 +445,26 @@ class TestNm2:
                 gw_uplink_gre_mtu,
             )
 
-            try:
-                if if_type in ["bridge", "gre"]:
-                    with step("LAN configuration"):
-                        assert gw.execute("tools/device/vif_reset")[0] == ExpectedShellResult
-                        assert (
-                            gw.execute("tools/device/create_inet_interface", gw_lan_br_inet_args)[0]
-                            == ExpectedShellResult
-                        )
-                if if_type in ["gre"]:
-                    with step("GW AP creation"):
-                        assert gw.configure_radio_vif_and_network()
-                with step("Test case"):
+        try:
+            if if_type in ["bridge", "gre"]:
+                with step("LAN configuration"):
+                    assert gw.execute("tools/device/vif_reset")[0] == ExpectedShellResult
                     assert (
-                        gw.execute_with_logging("tests/nm2/nm2_set_ip_assign_scheme", test_args)[0]
-                        == ExpectedShellResult
+                        gw.execute("tools/device/create_inet_interface", gw_lan_br_inet_args)[0] == ExpectedShellResult
                     )
-            finally:
-                assert gw.execute("tools/device/vif_reset")[0] == ExpectedShellResult
+            if if_type in ["gre"]:
+                with step("GW AP creation"):
+                    assert gw.configure_radio_vif_and_network()
+            with step("Test case"):
+                assert (
+                    gw.execute_with_logging("tests/nm2/nm2_set_ip_assign_scheme", test_args)[0] == ExpectedShellResult
+                )
+        finally:
+            assert gw.execute("tools/device/vif_reset")[0] == ExpectedShellResult
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", nm2_config.get("nm2_set_mtu", []))
-    def test_nm2_set_mtu(self, cfg):
+    def test_nm2_set_mtu(self, cfg: dict):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -445,7 +483,7 @@ class TestNm2:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", nm2_config.get("nm2_set_nat", []))
-    def test_nm2_set_nat(self, cfg):
+    def test_nm2_set_nat(self, cfg: dict):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -464,7 +502,7 @@ class TestNm2:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", nm2_config.get("nm2_set_netmask", []))
-    def test_nm2_set_netmask(self, cfg):
+    def test_nm2_set_netmask(self, cfg: dict):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -483,32 +521,41 @@ class TestNm2:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", nm2_config.get("nm2_set_upnp_mode", []))
-    def test_nm2_set_upnp_mode(self, cfg):
+    def test_nm2_set_upnp_mode(self, cfg: dict):
         fut_configurator, server, gw, w1 = pytest.fut_configurator, pytest.server, pytest.gw, pytest.w1
+
+        with step("Put GW into router mode"):
+            assert gw.configure_device_mode(device_mode="router")
 
         with step("Preparation of testcase parameters"):
             # Arguments from test case configuration
             channel = cfg.get("channel")
             ht_mode = cfg.get("ht_mode")
             radio_band = cfg.get("radio_band")
-            encryption = cfg.get("encryption", "WPA2")
+            encryption = cfg["encryption"]
             wifi_security_type = cfg.get("wifi_security_type", "wpa")
             client_retry = cfg.get("client_retry", 2)
 
             # GW specific arguments
             phy_radio_name = gw.capabilities.get_phy_radio_ifname(freq_band=radio_band)
-            lan_ip_addr = "10.10.10.30"
             eth_wan_ip_addr = server.wan_ip_dict.get("gw")
             device_type = gw.capabilities.get_device_type()
+            lan_ip_addr = gw.device_api.get_ips(iface="br-home")
 
             # W1 specific arguments
             network_namespace = w1.device_config.get("network_namespace")
             wlan_if_name = w1.device_config.get("wlan_if_name")
-            ip_addr = "10.10.10.40"
+            client_ip = w1.device_api.get_client_ips(interface=wlan_if_name)
 
             # Constant arguments
             ssid, psk = fut_configurator.base_ssid, fut_configurator.base_psk
             tcp_port = 5201
+
+            with step("Validate retrieved LAN and W1 IP addresses"):
+                if client_ip is not False and lan_ip_addr is not False:
+                    log.info(f"Successfully retrieved the IP addresses -> CLIENT: {client_ip}, LAN: {lan_ip_addr}")
+                else:
+                    raise ValueError("Unable to retrieve client and LAN IP addresses.")
 
             # GW AP arguments
             gw_ap_vif_args = {
@@ -545,27 +592,23 @@ class TestNm2:
                 phy_radio_name,
             )
             client_upnp_args = w1.get_command_arguments(
-                wlan_if_name,
                 network_namespace,
-                ip_addr,
-                lan_ip_addr,
+                client_ip.get("ipv4"),
+                lan_ip_addr.get("ipv4"),
                 tcp_port,
-            )
-            router_mode_args = gw.get_command_arguments(
-                wan_if_name,
-                lan_br_if_name,
             )
             upnp_mode_args = gw.get_command_arguments(
                 wan_if_name,
                 lan_br_if_name,
-                lan_ip_addr,
+                lan_ip_addr.get("ipv4"),
+                eth_wan_ip_addr,
             )
             check_traffic_args = server.get_command_arguments(
                 eth_wan_ip_addr,
                 tcp_port,
             )
             check_iptable_args = gw.get_command_arguments(
-                ip_addr,
+                client_ip.get("ipv4"),
                 tcp_port,
             )
             w1_cleanup_args = w1.get_command_arguments(
@@ -574,11 +617,6 @@ class TestNm2:
             )
 
         try:
-            with step("Verify router mode on GW"):
-                assert (
-                    gw.execute_with_logging("tests/nm2/nm2_verify_router_mode", router_mode_args)[0]
-                    == ExpectedShellResult
-                )
             with step("Set UPnP mode on GW"):
                 assert gw.execute_with_logging("tests/nm2/nm2_set_upnp_mode", upnp_mode_args)[0] == ExpectedShellResult
             with step("GW AP creation"):
@@ -586,7 +624,15 @@ class TestNm2:
             with step("Check channel readiness"):
                 assert gw.execute("tools/device/check_channel_is_ready", check_chan_args)[0] == ExpectedShellResult
             with step("Client connection"):
-                w1.device_api.connect(ssid=ssid, psk=psk, retry=client_retry)
+                security_args = gw.configure_wifi_security(return_as_dict=True)
+                w1.device_api.connect(
+                    ssid=ssid,
+                    psk=psk,
+                    key_mgmt=security_args["key_mgmt_mapping"],
+                    retry=client_retry,
+                )
+            with step("Verify client connectivity"):
+                assert w1.device_api.ping_check(ipaddr="192.168.7.1")
             with step("Testcase"):
                 assert (
                     w1.execute("tools/client/run_upnp_client", client_upnp_args, as_sudo=True)[0] == ExpectedShellResult
@@ -606,7 +652,7 @@ class TestNm2:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", nm2_config.get("nm2_verify_linux_traffic_control_rules", []))
-    def test_nm2_verify_linux_traffic_control_rules(self, cfg):
+    def test_nm2_verify_linux_traffic_control_rules(self, cfg: dict):
         gw = pytest.gw
 
         with step("Check bridge type"):
@@ -641,7 +687,7 @@ class TestNm2:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", nm2_config.get("nm2_verify_linux_traffic_control_template_rules", []))
-    def test_nm2_verify_linux_traffic_control_template_rules(self, cfg):
+    def test_nm2_verify_linux_traffic_control_template_rules(self, cfg: dict):
         gw = pytest.gw
 
         with step("Check bridge type"):
@@ -674,7 +720,7 @@ class TestNm2:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", nm2_config.get("nm2_verify_native_bridge", []))
-    def test_nm2_verify_native_bridge(self, cfg):
+    def test_nm2_verify_native_bridge(self, cfg: dict):
         gw = pytest.gw
 
         with step("Check bridge type"):
@@ -697,7 +743,7 @@ class TestNm2:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", nm2_config.get("nm2_vlan_interface", []))
-    def test_nm2_vlan_interface(self, cfg):
+    def test_nm2_vlan_interface(self, cfg: dict):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):

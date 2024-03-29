@@ -2,6 +2,7 @@ import json
 import os
 import subprocess
 import time
+from pathlib import Path
 from queue import Queue
 from threading import Thread
 
@@ -461,4 +462,14 @@ class ServerHandler(DeviceHandler):
                     f"The gathered data: {output_to_json(extracted_data, convert_only=True)} does not match the expected data {output_to_json(expected_data, convert_only=True)} for the following keys: {data_comparison}",
                 )
 
+        return True
+
+    def clear_folder(self, folder_path):
+        """Remove contents of the target folder on the remote device."""
+        if not Path(folder_path).is_absolute():
+            folder_path = f"{self.fut_dir}/{folder_path}/"
+        cmd = f"[ -d {folder_path} ] && sudo rm -rf {folder_path}"
+        ret = self.device_api.run_raw(cmd)
+        if ret[0] != 0:
+            log.warning(f"Failed to empty {folder_path} on {self.name}.")
         return True

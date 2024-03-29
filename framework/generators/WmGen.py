@@ -80,6 +80,7 @@ class WmGen:
             channels = self._filter_supported_channels(channels, radio_band, ht_mode)
             if not channels:
                 continue
+            encryption = "WPA2" if radio_band != "6g" else "WPA3"
             for channel in channels:
                 for bcn_interval in bcn_interval_list:
                     tmp_cfg = {
@@ -87,6 +88,7 @@ class WmGen:
                         "ht_mode": ht_mode,
                         "radio_band": radio_band,
                         "bcn_int": bcn_interval,
+                        "encryption": encryption,
                     }
                     tmp_inputs.append(tmp_cfg)
         return self.default_gen(tmp_inputs)
@@ -119,14 +121,19 @@ class WmGen:
         for radio_band, channels in radio_channels_band.items():
             if not isinstance(channels, list):
                 continue
-            max_ht_mode = int(self.gw_capabilities.get(f"interfaces.max_channel_width.{radio_band}"))
-            for ht_mode in self._get_ht_modes(max_ht_mode):
-                channels = self.minimal_channels_map[radio_band]
-                channels = self._filter_supported_channels(channels, radio_band, ht_mode=ht_mode)
-                if not channels:
-                    continue
-                encryption = "WPA2" if radio_band != "6g" else "WPA3"
-                for channel in channels:
+            channels = self.minimal_channels_map[radio_band]
+            for channel in channels:
+                max_ht_mode = int(self.gw_capabilities.get(f"interfaces.max_channel_width.{radio_band}"))
+                for ht_mode in self._get_ht_modes(max_ht_mode):
+                    if not validate_channel_ht_mode_band(
+                        channel=channel,
+                        ht_mode=ht_mode,
+                        radio_band=radio_band,
+                        reg_domain=self.regulatory_domain,
+                        regulatory_rule=self.regulatory_rule,
+                    ):
+                        continue
+                    encryption = "WPA2" if radio_band != "6g" else "WPA3"
                     tmp_cfg = {
                         "channel": channel,
                         "ht_mode": ht_mode,
@@ -165,7 +172,13 @@ class WmGen:
                         "encryption": encryption,
                     }
                     tmp_inputs.append(tmp_cfg)
-        return self.default_gen(tmp_inputs)
+        # Remove incorrect combinations for UNII-4 channels
+        filtered_tmp_data = [
+            tmp_input
+            for tmp_input in tmp_inputs
+            if not (tmp_input["channel"] == 165 and (tmp_input["ht_mode"] == "HT40" or tmp_input["ht_mode"] == "HT80"))
+        ]
+        return self.default_gen(filtered_tmp_data)
 
     def _parse_wm_inputs(self, inputs):
         tmp_inputs = []

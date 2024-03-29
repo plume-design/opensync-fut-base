@@ -162,24 +162,22 @@ wait_ovsdb_entry Wifi_Radio_State -w if_name "$if_name" -is ht_mode "$mismatch_h
     raise "FAIL: wait_ovsdb_entry - Reflected Wifi_Radio_Config to Wifi_Radio_State::ht_mode is $mismatch_ht_mode" -l "wm2/wm2_set_ht_mode_neg.sh" -tc ||
     log "wm2/wm2_set_ht_mode_neg.sh: wait_ovsdb_entry - Wifi_Radio_Config is not reflected to Wifi_Radio_State::ht_mode is not $mismatch_ht_mode - Success"
 
-if [ $FUT_SKIP_L2 != 'true' ]; then
-    # LEVEL2 check. Passes if system reports original ht_mode is still set.
-    ht_mode_from_os=$(get_ht_mode_from_os "$vif_if_name" "$channel") ||
-        raise "FAIL: Error while fetching ht_mode from system" -l "wm2/wm2_set_ht_mode_neg.sh" -fc
+# LEVEL2 check. Passes if system reports original ht_mode is still set.
+ht_mode_from_os=$(get_ht_mode_from_os "$vif_if_name" "$channel") ||
+    raise "FAIL: Error while fetching ht_mode from system" -l "wm2/wm2_set_ht_mode_neg.sh" -fc
 
-    if [ "$ht_mode_from_os" = "" ]; then
-        raise "FAIL: Error while fetching ht_mode from system" -l "wm2/wm2_set_ht_mode_neg.sh" -fc
+if [ "$ht_mode_from_os" = "" ]; then
+    raise "FAIL: Error while fetching ht_mode from system" -l "wm2/wm2_set_ht_mode_neg.sh" -fc
+else
+    if [ "$ht_mode_from_os" != "$mismatch_ht_mode" ]; then
+        log "wm2/wm2_set_ht_mode_neg.sh: ht_mode '$mismatch_ht_mode' not applied to system. System reports current ht_mode '$ht_mode_from_os' - Success"
     else
-        if [ "$ht_mode_from_os" != "$mismatch_ht_mode" ]; then
-            log "wm2/wm2_set_ht_mode_neg.sh: ht_mode '$mismatch_ht_mode' not applied to system. System reports current ht_mode '$ht_mode_from_os' - Success"
-        else
-            raise "FAIL: ht_mode '$mismatch_ht_mode' applied to system. System reports current ht_mode '$ht_mode_from_os'" -l "wm2/wm2_set_ht_mode_neg.sh" -tc
-        fi
+        raise "FAIL: ht_mode '$mismatch_ht_mode' applied to system. System reports current ht_mode '$ht_mode_from_os'" -l "wm2/wm2_set_ht_mode_neg.sh" -tc
     fi
 fi
 
 # Check if manager survived.
-manager_bin_file="${OPENSYNC_ROOTDIR}/bin/${FUT_OS_WIRELESS_MGR_LC:?}"
+manager_bin_file="${OPENSYNC_ROOTDIR}/bin/$(get_wireless_manager_name)"
 wait_for_function_response 0 "check_manager_alive $manager_bin_file" &&
     log "wm2/wm2_set_ht_mode_neg.sh: WIRELESS MANAGER is running - Success" ||
     raise "FAIL: WIRELESS MANAGER not running/crashed" -l "wm2/wm2_set_ht_mode_neg.sh" -tc

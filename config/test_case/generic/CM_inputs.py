@@ -4,11 +4,6 @@ test_inputs = {
             "test_script_timeout": 180,
         },
     },
-    "cm2_ble_status_interface_down": {
-        "default": {
-            "test_script_timeout": 180,
-        },
-    },
     "cm2_ble_status_internet_block": {
         "default": {
             "test_script_timeout": 180,

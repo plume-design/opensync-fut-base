@@ -24,12 +24,14 @@ def pm_setup():
             device_handler.fut_device_setup(test_suite_name="pm")
         except Exception as exception:
             raise RuntimeError(f"Unable to perform setup for the {device} device: {exception}")
+    # Set the baseline OpenSync PIDs used for reboot detection
+    pytest.session_baseline_os_pids = pytest.gw.opensync_pid_retrieval(tracked_node_services=pytest.tracked_managers)
 
 
 class TestPm:
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", pm_config.get("pm_verify_log_severity", []))
-    def test_pm_verify_log_severity(self, cfg):
+    def test_pm_verify_log_severity(self, cfg: dict):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -44,7 +46,7 @@ class TestPm:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", pm_config.get("pm_trigger_cloud_logpull", []))
-    def test_pm_trigger_cloud_logpull(self, cfg):
+    def test_pm_trigger_cloud_logpull(self, cfg: dict):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -52,6 +54,7 @@ class TestPm:
             test_args = gw.get_command_arguments(
                 cfg.get("upload_location"),
                 cfg.get("upload_token"),
+                cfg.get("name"),
             )
 
         with step("Test Case"):

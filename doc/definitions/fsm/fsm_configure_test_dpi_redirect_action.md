@@ -30,4 +30,4 @@ The verdict received from the Gatekeeper service is `blocked`.
 
 ## Implementation status
 
-Implemented
+Not implemented

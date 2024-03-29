@@ -32,6 +32,8 @@ def fsm_setup():
                 device_handler.fut_device_setup(test_suite_name="fsm")
         except Exception as exception:
             RuntimeError(f"Unable to perform setup for the {device} device: {exception}")
+    # Set the baseline OpenSync PIDs used for reboot detection
+    pytest.session_baseline_os_pids = pytest.gw.opensync_pid_retrieval(tracked_node_services=pytest.tracked_managers)
 
 
 class TestFsm:
@@ -44,7 +46,7 @@ class TestFsm:
             channel = cfg.get("channel")
             ht_mode = cfg.get("ht_mode")
             radio_band = cfg.get("radio_band")
-            encryption = cfg.get("encryption", "WPA2")
+            encryption = cfg["encryption"]
             wifi_security_type = cfg.get("wifi_security_type", "wpa")
             client_retry = cfg.get("client_retry", 3)
             test_client_cmd = cfg.get("test_client_cmd")
@@ -178,7 +180,7 @@ class TestFsm:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", fsm_config.get("fsm_configure_fsm_tables", []))
-    def test_fsm_configure_fsm_tables(self, cfg):
+    def test_fsm_configure_fsm_tables(self, cfg: dict, update_baseline_os_pids):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -204,7 +206,7 @@ class TestFsm:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", fsm_config.get("fsm_configure_openflow_rules", []))
-    def test_fsm_configure_openflow_rules(self, cfg):
+    def test_fsm_configure_openflow_rules(self, cfg: dict, update_baseline_os_pids):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -228,7 +230,7 @@ class TestFsm:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", fsm_config.get("fsm_configure_test_dpi_http_request", []))
-    def test_fsm_configure_test_dpi_http_request(self, cfg):
+    def test_fsm_configure_test_dpi_http_request(self, cfg: dict, update_baseline_os_pids):
         expected_action = cfg.get("expected_action")
         test_client_cmd = cfg.get("test_client_cmd")
         validation_parameters = {
@@ -239,7 +241,7 @@ class TestFsm:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", fsm_config.get("fsm_configure_test_dpi_https_sni_request", []))
-    def test_fsm_configure_test_dpi_https_sni_request(self, cfg):
+    def test_fsm_configure_test_dpi_https_sni_request(self, cfg: dict, update_baseline_os_pids):
         expected_action = cfg.get("expected_action")
         test_client_cmd = cfg.get("test_client_cmd")
         netloc = urlparse(test_client_cmd.split()[1]).netloc
@@ -251,22 +253,11 @@ class TestFsm:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", fsm_config.get("fsm_configure_test_dpi_http_url_request", []))
-    def test_fsm_configure_test_dpi_http_url_request(self, cfg):
+    def test_fsm_configure_test_dpi_http_url_request(self, cfg: dict, update_baseline_os_pids):
         expected_action = cfg.get("expected_action")
         test_client_cmd = cfg.get("test_client_cmd")
         validation_parameters = {
             "action": expected_action,
             "httpUrl": test_client_cmd.split()[1],
-        }
-        self.fsm_content_filtering_test_procedure(cfg, validation_parameters)
-
-    @allure.severity(allure.severity_level.NORMAL)
-    @pytest.mark.parametrize("cfg", fsm_config.get("fsm_configure_test_dpi_redirect_action", []))
-    def test_fsm_configure_test_dpi_redirect_action(self, cfg):
-        expected_action = cfg.get("expected_action")
-        test_client_cmd = cfg.get("test_client_cmd")
-        validation_parameters = {
-            "action": expected_action,
-            "httpsSni": test_client_cmd.split()[1],
         }
         self.fsm_content_filtering_test_procedure(cfg, validation_parameters)

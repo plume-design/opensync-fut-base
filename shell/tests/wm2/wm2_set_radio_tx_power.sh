@@ -149,11 +149,9 @@ wait_ovsdb_entry Wifi_Radio_State -w if_name "$if_name" -is tx_power "$tx_power"
     log "wm2/wm2_set_radio_tx_power.sh: wait_ovsdb_entry - Wifi_Radio_Config reflected to Wifi_Radio_State::tx_power is $tx_power - Success" ||
     raise "FAIL: wait_ovsdb_entry - Failed to reflect Wifi_Radio_Config to Wifi_Radio_State::tx_power is not $tx_power" -l "wm2/wm2_set_radio_tx_power.sh" -ow
 
-if [ $FUT_SKIP_L2 != 'true' ]; then
-    log "wm2/wm2_set_radio_tx_power.sh: Checking tx_power $tx_power at system level - LEVEL2"
-    check_tx_power_at_os_level "$tx_power" "$vif_if_name" "$if_name" &&
-        log "wm2/wm2_set_radio_tx_power.sh: LEVEL2 - check_tx_power_at_os_level - tx_power $tx_power set at system level - Success" ||
-        raise "FAIL: LEVEL2 - check_tx_power_at_os_level - tx_power $tx_power not set at system level" -l "wm2/wm2_set_radio_tx_power.sh" -tc
-fi
+log "wm2/wm2_set_radio_tx_power.sh: Checking tx_power $tx_power at system level - LEVEL2"
+check_tx_power_at_os_level "$tx_power" "$vif_if_name" "$if_name" &&
+    log "wm2/wm2_set_radio_tx_power.sh: LEVEL2 - check_tx_power_at_os_level - tx_power $tx_power set at system level - Success" ||
+    raise "FAIL: LEVEL2 - check_tx_power_at_os_level - tx_power $tx_power not set at system level" -l "wm2/wm2_set_radio_tx_power.sh" -tc
 
 pass

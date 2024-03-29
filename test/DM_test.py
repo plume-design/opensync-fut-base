@@ -29,12 +29,14 @@ def dm_setup():
             device_handler.fut_device_setup(test_suite_name="dm", setup_args=setup_args)
         except Exception as exception:
             raise RuntimeError(f"Unable to perform setup for the {device} device: {exception}")
+    # Set the baseline OpenSync PIDs used for reboot detection
+    pytest.session_baseline_os_pids = pytest.gw.opensync_pid_retrieval(tracked_node_services=pytest.tracked_managers)
 
 
 class TestDm:
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", dm_config.get("dm_verify_awlan_node_params", []))
-    def test_dm_verify_awlan_node_params(self, cfg):
+    def test_dm_verify_awlan_node_params(self, cfg: dict):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -51,7 +53,7 @@ class TestDm:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", dm_config.get("dm_verify_count_reboot_status", []))
-    def test_dm_verify_count_reboot_status(self, cfg):
+    def test_dm_verify_count_reboot_status(self, cfg: dict):
         gw = pytest.gw
 
         with step("Test Case"):
@@ -59,7 +61,7 @@ class TestDm:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", dm_config.get("dm_verify_counter_inc_reboot_status", []))
-    def test_dm_verify_counter_inc_reboot_status(self, cfg):
+    def test_dm_verify_counter_inc_reboot_status(self, cfg: dict, update_baseline_os_pids):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -93,7 +95,7 @@ class TestDm:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", dm_config.get("dm_verify_device_mode_awlan_node", []))
-    def test_dm_verify_device_mode_awlan_node(self, cfg):
+    def test_dm_verify_device_mode_awlan_node(self, cfg: dict):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -111,13 +113,16 @@ class TestDm:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", dm_config.get("dm_verify_enable_node_services", []))
-    def test_dm_verify_enable_node_services(self, cfg):
-        gw = pytest.gw
+    def test_dm_verify_enable_node_services(self, cfg: dict):
+        fut_configurator, gw = pytest.fut_configurator, pytest.gw
 
         with step("Preparation of testcase parameters"):
             # Arguments from test case configuration
             service = cfg.get("service")
             kconfig_val = cfg.get("kconfig_val")
+            wireless_manager_name = gw.get_wireless_manager_name()
+            if service in fut_configurator.wireless_manager_names and service != wireless_manager_name:
+                pytest.skip(f"Service {service} not compatible with {wireless_manager_name}, skipping test case.")
             test_args = gw.get_command_arguments(
                 service,
                 kconfig_val,
@@ -130,13 +135,16 @@ class TestDm:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", dm_config.get("dm_verify_node_services", []))
-    def test_dm_verify_node_services(self, cfg):
-        gw = pytest.gw
+    def test_dm_verify_node_services(self, cfg: dict):
+        fut_configurator, gw = pytest.fut_configurator, pytest.gw
 
         with step("Preparation of testcase parameters"):
             # Arguments from test case configuration
             service = cfg.get("service")
             kconfig_val = cfg.get("kconfig_val")
+            wireless_manager_name = gw.get_wireless_manager_name()
+            if service in fut_configurator.wireless_manager_names and service != wireless_manager_name:
+                pytest.skip(f"Service {service} not compatible with {wireless_manager_name}, skipping test case.")
             test_args = gw.get_command_arguments(
                 service,
                 kconfig_val,
@@ -147,7 +155,7 @@ class TestDm:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", dm_config.get("dm_verify_opensync_version_awlan_node", []))
-    def test_dm_verify_opensync_version_awlan_node(self, cfg):
+    def test_dm_verify_opensync_version_awlan_node(self, cfg: dict):
         gw = pytest.gw
 
         with step("Test Case"):
@@ -155,7 +163,7 @@ class TestDm:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", dm_config.get("dm_verify_reboot_file_exists", []))
-    def test_dm_verify_reboot_file_exists(self, cfg):
+    def test_dm_verify_reboot_file_exists(self, cfg: dict):
         gw = pytest.gw
 
         with step("Test Case"):
@@ -163,7 +171,7 @@ class TestDm:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", dm_config.get("dm_verify_reboot_reason", []))
-    def test_dm_verify_reboot_reason(self, cfg):
+    def test_dm_verify_reboot_reason(self, cfg: dict, update_baseline_os_pids):
         fut_configurator, gw = pytest.fut_configurator, pytest.gw
 
         with step("Preparation of testcase parameters"):

@@ -4,7 +4,7 @@ test_inputs = {
             "fw_name",
         ],
         "inputs": [
-            "openwrt-os-PIRANHA2_QSDK53-ap-fit-4.4.0-63-gd940a2-dev-debug.img",
+            "qcaPIRANHA2_QSDK11_fit-norplusnand-5.6.0-39-gfe60ab-dev-debug.img",
         ],
     },
 }

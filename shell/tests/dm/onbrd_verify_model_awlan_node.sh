@@ -48,4 +48,10 @@ wait_for_function_response 0 "check_ovsdb_entry AWLAN_Node -w model \"'$expected
     log "onbrd/onbrd_verify_model_awlan_node.sh: AWLAN_Node::model is '$expected_model' - Success" ||
     raise "FAIL: AWLAN_Node::model is not '$expected_model'" -l "onbrd/onbrd_verify_model_awlan_node.sh" -tc
 
+model_string=$(get_ovsdb_entry_value AWLAN_Node model -r)
+log "onbrd/onbrd_verify_model_awlan_node.sh: Check the model string for allowed characters."
+check_model_pattern "${model_string}" &&
+    log "onbrd/onbrd_verify_model_awlan_node.sh: AWLAN_Node::model is valid - Success" ||
+    raise "FAIL: AWLAN_Node::model is not valid" -l "onbrd/onbrd_verify_model_awlan_node.sh" -tc
+
 pass

@@ -38,7 +38,7 @@ def parse_arguments():
     parser.add_argument(
         "-r",
         "--ref",
-        required=True,
+        required=False,
         type=str,
         help="Model name for REF",
     )
@@ -75,36 +75,10 @@ def parse_arguments():
         help="Output test configuration for given test name(s)",
     )
     input_args = parser.parse_args()
+    if input_args.dut and not input_args.ref:
+        log.warning(f"Model name for REF not provided, defaulting to DUT: {input_args.dut}")
+        input_args.ref = input_args.dut
     return input_args
-
-
-def load_explicit_testcase_configurations(dut_model, modules):
-    import importlib
-
-    importlib.invalidate_caches()
-    test_case_config = {}
-    if Path(f"config/model/{dut_model}/testcase").is_dir():
-        config_path = Path(f"config/model/{dut_model}/testcase")
-    elif Path(f"internal/config/model/{dut_model}/testcase").is_dir():
-        config_path = Path(f"internal/config/model/{dut_model}/testcase")
-    else:
-        return test_case_config
-    # Define test_case_mod before applying config_path.absolute()
-    test_case_mod = config_path.as_posix().replace("/", ".")
-    config_path = config_path.absolute()
-    inputs_files = [file.stem for file in config_path.iterdir() if "_config.py" in file.name]
-    if modules:
-        inputs_files = [f"{mod}_config" for mod in modules if config_path.joinpath(f"{mod}_config.py").is_file()]
-    inputs_files = sorted(inputs_files)
-    for cfg_file in inputs_files:
-        spec = importlib.util.find_spec(f"{test_case_mod}.{cfg_file}")
-        if spec is None:
-            continue
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        # Shallow-merge new module over existing dictionary
-        test_case_config = {**test_case_config, **module.test_cfg}
-    return test_case_config
 
 
 def write_json_to_file(json_data, filename):
@@ -131,31 +105,6 @@ if __name__ == "__main__":
         log.error(f"Exception caught during test config generation\n{e}")
         sys.exit(1)
 
-    # Now import all the old configs for one particular device model
-    def_test_cfg = load_explicit_testcase_configurations(dut_model=opts.dut, modules=opts.modules)
-
-    def_test_cfg_keys = list(def_test_cfg.keys())
-    gen_test_cfg_keys = list(gen_test_cfg.keys())
-    # Missing configs, to be added manually:
-    def_keys_missing_in_gen = [key for key in def_test_cfg_keys if key not in gen_test_cfg_keys]
-    common_keys = list(set(def_test_cfg_keys) - set(def_keys_missing_in_gen))
-    # Redundant configs, to be removed:
-    gen_keys_missing_in_def = [key for key in gen_test_cfg_keys if key not in def_test_cfg_keys]
-
-    if opts.json:
-        modules_str = f"_{'_'.join(opts.modules)}" if opts.modules else ""
-        print("" if set(def_test_cfg_keys) == set(common_keys) else def_keys_missing_in_gen, end="")
-        write_json_to_file(json_data=gen_test_cfg, filename=f"{opts.json}{modules_str}_gen.json")
-        print("" if not gen_keys_missing_in_def else gen_keys_missing_in_def, end="")
-        write_json_to_file(json_data=def_test_cfg, filename=f"{opts.json}{modules_str}_def.json")
-    else:
-        # Compare values:
-        log.setLevel(0)
-        from unittest import TestCase
-
-        test_case_obj = TestCase()
-        test_case_obj.maxDiff = None
-        try:
-            test_case_obj.assertEqual(gen_test_cfg, def_test_cfg)
-        except Exception as e:
-            print(e)
+    out_filename = f"{opts.dut}_{opts.ref}" if not opts.json else opts.json
+    modules_str = f"_{'_'.join(opts.modules)}" if opts.modules else ""
+    write_json_to_file(json_data=gen_test_cfg, filename=f"{out_filename}{modules_str}_gen.json")

@@ -29,12 +29,14 @@ def cm2_setup():
             device_handler.fut_device_setup(test_suite_name="cm2", setup_args=setup_args)
         except Exception as exception:
             raise RuntimeError(f"Unable to perform setup for the {device} device: {exception}")
+    # Set the baseline OpenSync PIDs used for reboot detection
+    pytest.session_baseline_os_pids = pytest.gw.opensync_pid_retrieval(tracked_node_services=pytest.tracked_managers)
 
 
 class TestCm2:
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", cm2_config.get("cm2_ble_status_cloud_down", []))
-    def test_cm2_ble_status_cloud_down(self, cfg):
+    def test_cm2_ble_status_cloud_down(self, cfg: dict):
         server, gw = pytest.server, pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -95,7 +97,7 @@ class TestCm2:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", cm2_config.get("cm2_ble_status_internet_block", []))
-    def test_cm2_ble_status_internet_block(self, cfg):
+    def test_cm2_ble_status_internet_block(self, cfg: dict):
         server, gw = pytest.server, pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -137,7 +139,7 @@ class TestCm2:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", cm2_config.get("cm2_cloud_down", []))
-    def test_cm2_cloud_down(self, cfg):
+    def test_cm2_cloud_down(self, cfg: dict):
         server, gw = pytest.server, pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -203,7 +205,7 @@ class TestCm2:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", cm2_config.get("cm2_dns_failure", []))
-    def test_cm2_dns_failure(self, cfg):
+    def test_cm2_dns_failure(self, cfg: dict):
         server, gw = pytest.server, pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -240,7 +242,7 @@ class TestCm2:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", cm2_config.get("cm2_internet_lost", []))
-    def test_cm2_internet_lost(self, cfg):
+    def test_cm2_internet_lost(self, cfg: dict):
         server, gw = pytest.server, pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -284,7 +286,7 @@ class TestCm2:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", cm2_config.get("cm2_link_lost", []))
-    def test_cm2_link_lost(self, cfg):
+    def test_cm2_link_lost(self, cfg: dict):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -297,7 +299,7 @@ class TestCm2:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", cm2_config.get("cm2_ssl_check", []))
-    def test_cm2_ssl_check(self, cfg):
+    def test_cm2_ssl_check(self, cfg: dict):
         gw = pytest.gw
 
         with step("Test Case"):

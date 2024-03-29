@@ -33,11 +33,10 @@ test_inputs = {
             "channel",
             "ht_mode",
             "radio_band",
-            "encryption",
         ],
         "inputs": [
-            [44, "HT40", "5g", "WPA2"],
-            [44, "HT40", "5gl", "WPA2"],
+            [44, "HT40", "5g"],
+            [44, "HT40", "5gl"],
         ],
     },
     "fsm_configure_test_dpi_https_sni_request": {
@@ -50,11 +49,10 @@ test_inputs = {
             "channel",
             "ht_mode",
             "radio_band",
-            "encryption",
         ],
         "inputs": [
-            [36, "HT20", "5g", "WPA2"],
-            [36, "HT20", "5gl", "WPA2"],
+            [36, "HT20", "5g"],
+            [36, "HT20", "5gl"],
         ],
     },
     "fsm_configure_test_dpi_http_url_request": {
@@ -67,28 +65,10 @@ test_inputs = {
             "channel",
             "ht_mode",
             "radio_band",
-            "encryption",
         ],
         "inputs": [
-            [44, "HT40", "5g", "WPA2"],
-            [44, "HT40", "5gl", "WPA2"],
-        ],
-    },
-    "fsm_configure_test_dpi_redirect_action": {
-        "default": {
-            "device_mode": "router",
-            "test_client_cmd": "wget www.playboy.com",
-            "expected_action": "blocked",
-        },
-        "args_mapping": [
-            "channel",
-            "ht_mode",
-            "radio_band",
-            "encryption",
-        ],
-        "inputs": [
-            [44, "HT40", "5g", "WPA2"],
-            [44, "HT40", "5gl", "WPA2"],
+            [44, "HT40", "5g"],
+            [44, "HT40", "5gl"],
         ],
     },
 }

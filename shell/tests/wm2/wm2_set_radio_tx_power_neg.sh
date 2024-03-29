@@ -168,19 +168,17 @@ wait_ovsdb_entry Wifi_Radio_State -w if_name "$if_name" -is tx_power "$mismatch_
     raise "FAIL: wait_ovsdb_entry - Wifi_Radio_Config reflected to Wifi_Radio_State::tx_power is $mismatch_tx_power" -l "wm2/wm2_set_radio_tx_power_neg.sh" -ow ||
     log "wm2/wm2_set_radio_tx_power_neg.sh: wait_ovsdb_entry - Failed to reflect Wifi_Radio_Config to Wifi_Radio_State::tx_power is not $mismatch_tx_power - Success"
 
-if [ $FUT_SKIP_L2 != 'true' ]; then
-    # LEVEL2 check. Passes if system reports original tx_power is still set.
-    tx_power_from_os=$(get_tx_power_from_os "$vif_if_name") ||
-        raise "FAIL: Error while fetching tx_power from system" -l "wm2/wm2_set_radio_tx_power_neg.sh" -fc
+# LEVEL2 check. Passes if system reports original tx_power is still set.
+tx_power_from_os=$(get_tx_power_from_os "$vif_if_name") ||
+    raise "FAIL: Error while fetching tx_power from system" -l "wm2/wm2_set_radio_tx_power_neg.sh" -fc
 
-    if [ "$tx_power_from_os" = "" ]; then
-        raise "FAIL: Error while fetching tx_power from system" -l "wm2/wm2_set_radio_tx_power_neg.sh" -fc
+if [ "$tx_power_from_os" = "" ]; then
+    raise "FAIL: Error while fetching tx_power from system" -l "wm2/wm2_set_radio_tx_power_neg.sh" -fc
+else
+    if [ "$tx_power_from_os" != "$mismatch_tx_power" ]; then
+        log "wm2/wm2_set_radio_tx_power_neg.sh: tx_power '$mismatch_tx_power' not applied to system. System reports current tx_power '$tx_power_from_os' - Success"
     else
-        if [ "$tx_power_from_os" != "$mismatch_tx_power" ]; then
-            log "wm2/wm2_set_radio_tx_power_neg.sh: tx_power '$mismatch_tx_power' not applied to system. System reports current tx_power '$tx_power_from_os' - Success"
-        else
-            raise "FAIL: tx_power '$mismatch_tx_power' applied to system. System reports current tx_power '$tx_power_from_os'" -l "wm2/wm2_set_radio_tx_power_neg.sh" -tc
-        fi
+        raise "FAIL: tx_power '$mismatch_tx_power' applied to system. System reports current tx_power '$tx_power_from_os'" -l "wm2/wm2_set_radio_tx_power_neg.sh" -tc
     fi
 fi
 
@@ -194,7 +192,7 @@ wait_ovsdb_entry Wifi_Radio_State -w if_name "$if_name" -is tx_power "$tx_power"
     raise "wait_ovsdb_entry - Failed to reflect Wifi_Radio_Config to Wifi_Radio_State - tx_power $tx_power" -l "wm2/wm2_set_radio_tx_power_neg.sh" -tc
 
 # Check if manager survived.
-manager_bin_file="${OPENSYNC_ROOTDIR}/bin/${FUT_OS_WIRELESS_MGR_LC:?}"
+manager_bin_file="${OPENSYNC_ROOTDIR}/bin/$(get_wireless_manager_name)"
 wait_for_function_response 0 "check_manager_alive $manager_bin_file" &&
     log "wm2/wm2_set_radio_tx_power_neg.sh: Success: WIRELESS MANAGER is running" ||
     raise "FAIL: WIRELESS MANAGER not running/crashed" -l "wm2/wm2_set_radio_tx_power_neg.sh" -tc

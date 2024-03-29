@@ -51,10 +51,8 @@ wait_ovsdb_entry Wifi_Inet_State -w if_name "$wan_if_name" -is inet_addr "$inet_
     log "onbrd/onbrd_verify_wan_ip_address.sh: wait_ovsdb_entry - Wifi_Inet_State '$wan_if_name' inet_addr is equal to '$inet_addr' - Success" ||
     raise "FAIL: wait_ovsdb_entry - Wifi_Inet_State '$wan_if_name' inet_addr is not equal to '$inet_addr'" -l "onbrd/onbrd_verify_wan_ip_address.sh" -tc
 
-if [ $FUT_SKIP_L2 != 'true' ]; then
-    wait_for_function_response 0 "check_wan_ip_l2 $wan_if_name $inet_addr" &&
-        log "onbrd/onbrd_verify_wan_ip_address.sh: LEVEL2 - WAN IP for '$wan_if_name' is equal to '$inet_addr' - Success" ||
-        raise "FAIL: LEVEL2 - WAN IP for '$wan_if_name' is not equal to '$inet_addr'" -l "onbrd/onbrd_verify_wan_ip_address.sh" -tc
-fi
+wait_for_function_response 0 "check_wan_ip_l2 $wan_if_name $inet_addr" &&
+    log "onbrd/onbrd_verify_wan_ip_address.sh: LEVEL2 - WAN IP for '$wan_if_name' is equal to '$inet_addr' - Success" ||
+    raise "FAIL: LEVEL2 - WAN IP for '$wan_if_name' is not equal to '$inet_addr'" -l "onbrd/onbrd_verify_wan_ip_address.sh" -tc
 
 pass

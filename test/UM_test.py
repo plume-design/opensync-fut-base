@@ -45,6 +45,8 @@ def um_setup():
             device_handler.fut_device_setup(test_suite_name="um", setup_args=setup_args)
         except Exception as exception:
             raise RuntimeError(f"Unable to perform setup for the {device} device: {exception}")
+    # Set the baseline OpenSync PIDs used for reboot detection
+    pytest.session_baseline_os_pids = pytest.gw.opensync_pid_retrieval(tracked_node_services=pytest.tracked_managers)
 
 
 class TestUm:
@@ -141,7 +143,7 @@ class TestUm:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", um_config.get("um_corrupt_image", []))
-    def test_um_corrupt_image(self, cfg):
+    def test_um_corrupt_image(self, cfg: dict):
         server, gw = pytest.server, pytest.gw
 
         with step("Create corrupted image and MD5 files"):
@@ -165,7 +167,7 @@ class TestUm:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", um_config.get("um_corrupt_md5_sum", []))
-    def test_um_corrupt_md5_sum(self, cfg):
+    def test_um_corrupt_md5_sum(self, cfg: dict):
         server, gw = pytest.server, pytest.gw
 
         with step("Create corrupted MD5sum file and FW image file"):
@@ -189,7 +191,7 @@ class TestUm:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", um_config.get("um_download_image_while_downloading", []))
-    def test_um_download_image_while_downloading(self, cfg):
+    def test_um_download_image_while_downloading(self, cfg: dict):
         server, gw = pytest.server, pytest.gw
 
         with step("Create duplicate testcase image"):
@@ -218,7 +220,7 @@ class TestUm:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", um_config.get("um_missing_md5_sum", []))
-    def test_um_missing_md5_sum(self, cfg):
+    def test_um_missing_md5_sum(self, cfg: dict):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -240,7 +242,7 @@ class TestUm:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", um_config.get("um_set_firmware_url", []))
-    def test_um_set_firmware_url(self, cfg):
+    def test_um_set_firmware_url(self, cfg: dict):
         gw = pytest.gw
 
         with step("Get UM firmware URL"):
@@ -258,7 +260,7 @@ class TestUm:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", um_config.get("um_set_invalid_firmware_pass", []))
-    def test_um_set_invalid_firmware_pass(self, cfg):
+    def test_um_set_invalid_firmware_pass(self, cfg: dict):
         gw = pytest.gw
 
         with step("Generate invalid FW password"):
@@ -277,7 +279,7 @@ class TestUm:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", um_config.get("um_set_invalid_firmware_url", []))
-    def test_um_set_invalid_firmware_url(self, cfg):
+    def test_um_set_invalid_firmware_url(self, cfg: dict):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -292,7 +294,7 @@ class TestUm:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", um_config.get("um_set_upgrade_dl_timer_end", []))
-    def test_um_set_upgrade_dl_timer_end(self, cfg):
+    def test_um_set_upgrade_dl_timer_end(self, cfg: dict):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -309,7 +311,7 @@ class TestUm:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", um_config.get("um_set_upgrade_timer", []))
-    def test_um_set_upgrade_timer(self, cfg):
+    def test_um_set_upgrade_timer(self, cfg: dict):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -328,7 +330,7 @@ class TestUm:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", um_config.get("um_verify_firmware_url_length", []))
-    def test_um_verify_firmware_url_length(self, cfg):
+    def test_um_verify_firmware_url_length(self, cfg: dict):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):

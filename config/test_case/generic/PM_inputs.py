@@ -3,9 +3,10 @@ test_inputs = {
         "args_mapping": [
             "upload_location",
             "upload_token",
+            "name",
         ],
         "inputs": [
-            ["https://opensync-development.foo.bar/token12345", "foo12345.tgz"],
+            ["https://fut.opensync.io/logpull.tar.gz", "logpull.tar.gz", "lm"],
         ],
     },
     "pm_verify_log_severity": {

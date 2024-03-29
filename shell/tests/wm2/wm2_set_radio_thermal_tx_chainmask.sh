@@ -59,10 +59,6 @@ case "${1}" in
     -h | --help)  usage ; exit 0 ;;
 esac
 
-if [ $FUT_SKIP_L2 == 'true' ]; then
-    raise "Flag to skip LEVEL2 testcases enabled, skipping execution." -l "wm2/wm2_set_radio_thermal_tx_chainmask.sh" -s
-fi
-
 NARGS=30
 [ $# -lt ${NARGS} ] && usage && raise "Requires at least ${NARGS} input argument(s)" -l "wm2/wm2_set_radio_thermal_tx_chainmask.sh" -arg
 
@@ -196,6 +192,5 @@ log "wm2/wm2_set_radio_thermal_tx_chainmask.sh: Checking TX CHAINMASK $value_to_
 check_tx_chainmask_at_os_level "$value_to_check" "$if_name" &&
     log "wm2/wm2_set_radio_thermal_tx_chainmask.sh: LEVEL2 - check_tx_chainmask_at_os_level - TX CHAINMASK $value_to_check set at system level - Success" ||
     raise "FAIL: LEVEL2 - check_tx_chainmask_at_os_level - TX CHAINMASK $value_to_check is not set at system" -l "wm2/wm2_set_radio_thermal_tx_chainmask.sh" -tc
-
 
 pass

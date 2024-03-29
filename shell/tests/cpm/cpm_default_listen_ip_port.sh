@@ -48,7 +48,7 @@ trap '
 fut_info_dump_line
 print_tables Captive_Portal
 echo "Final tinyproxies status:"
-ps -w | grep tinyproxy | grep -v grep
+$(get_process_cmd) | grep tinyproxy | grep -v grep
 echo "listenip and listenport in the config file:"
 grep -rn "Listen " /tmp/tinyproxy
 grep -rn "port " /tmp/tinyproxy

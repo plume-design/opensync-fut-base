@@ -171,19 +171,23 @@ ovsdb_client_command=$(cat <<EOF
         }
     },
     {
-        "op": "update",
+        "op": "mutate",
         "table": "Wifi_Radio_Config",
         "where": [
             ["if_name", "==", "${if_name}"]
         ],
-        "row": {
-            "vif_configs": [
-                "set",
+        "mutations": [
+            [
+                "vif_configs",
+                "insert",
                 [
-                    ["named-uuid", "secondary_vif_config"]
+                    "set",
+                    [
+                        ["named-uuid", "secondary_vif_config"]
+                    ]
                 ]
             ]
-        }
+        ]
     }
 ]
 EOF

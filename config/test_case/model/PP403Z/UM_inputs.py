@@ -4,7 +4,7 @@ test_inputs = {
             "fw_name",
         ],
         "inputs": [
-            "bcmAUGUSTUS_BCM527_nand_fs_image_128_puresqubi_secureboot-4.4.0-63-gd940a2-dev-debug.img",
+            "bcmAUGUSTUS_BCM527_nand_fs_image_128_puresqubi_secureboot-5.4.0-31-g7fc278-dev-debug.img",
         ],
     },
 }

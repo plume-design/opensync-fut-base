@@ -6,4 +6,5 @@ RUN pip3 install \
  pytest-cov=="3.0.0" \
  pytest-dependency=="0.5.1" \
  pytest-ordering=="0.6" \
- pytest-select=="0.1.2"
+ pytest-select=="0.1.2" \
+ retry=="0.9.2 "

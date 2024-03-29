@@ -24,12 +24,14 @@ def cpm_setup():
             device_handler.fut_device_setup(test_suite_name="cpm")
         except Exception as exception:
             raise RuntimeError(f"Unable to perform setup for the {device} device: {exception}")
+    # Set the baseline OpenSync PIDs used for reboot detection
+    pytest.session_baseline_os_pids = pytest.gw.opensync_pid_retrieval(tracked_node_services=pytest.tracked_managers)
 
 
 class TestCpm:
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", cpm_config.get("cpm_default_listen_ip_port", []))
-    def test_cpm_default_listen_ip_port(self, cfg):
+    def test_cpm_default_listen_ip_port(self, cfg: dict):
         gw = pytest.gw
 
         with step("Test Case"):
@@ -37,7 +39,7 @@ class TestCpm:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", cpm_config.get("cpm_delete_while_restarting", []))
-    def test_cpm_delete_while_restarting(self, cfg):
+    def test_cpm_delete_while_restarting(self, cfg: dict):
         gw = pytest.gw
 
         with step("Test Case"):
@@ -45,7 +47,7 @@ class TestCpm:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", cpm_config.get("cpm_restart_crashed", []))
-    def test_cpm_restart_crashed(self, cfg):
+    def test_cpm_restart_crashed(self, cfg: dict):
         gw = pytest.gw
 
         with step("Test Case"):
@@ -53,7 +55,7 @@ class TestCpm:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", cpm_config.get("cpm_same_ip_port", []))
-    def test_cpm_same_ip_port(self, cfg):
+    def test_cpm_same_ip_port(self, cfg: dict):
         gw = pytest.gw
 
         with step("Test Case"):
@@ -61,7 +63,7 @@ class TestCpm:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", cpm_config.get("cpm_spawn_three_update_one", []))
-    def test_cpm_spawn_three_update_one(self, cfg):
+    def test_cpm_spawn_three_update_one(self, cfg: dict):
         gw = pytest.gw
 
         with step("Test Case"):

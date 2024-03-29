@@ -247,7 +247,7 @@ get_actual_chainmask()
     chainmask=${1}
     freq_band=${2}
 
-    if [ "${freq_band}" == "5G" ]; then
+    if [ "${freq_band}" = "5G" ] || [ "${freq_band}" = "5g" ]; then
         actual_chainmask=$((${chainmask} << 4))
         echo "${actual_chainmask}"
     else

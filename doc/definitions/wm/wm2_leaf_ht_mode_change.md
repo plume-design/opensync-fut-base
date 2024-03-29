@@ -11,12 +11,7 @@ mode.\
 Connection between DUT and REF must be established.
 
 **Note:**\
-The roles of DUT and REF in OSRT are temporarily reversed. REF acts as a gateway and DUT acts as a leaf. This
-is done by configuring the OSRT network switch.
-
-**Important:**\
-After the testcase execution is finished, reverse the roles of DUT and REF to original by reconfiguring
-the OSRT network switch.
+Both the DUT and REF must be extenders for this test to be executed correctly.
 
 ## Expected outcome and pass criteria
 

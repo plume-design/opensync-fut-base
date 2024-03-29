@@ -4,7 +4,7 @@ test_inputs = {
             "fw_name",
         ],
         "inputs": [
-            "bcmOCTAVIAN_BCM542_nand_squashfs_update_secureboot-4.2.0-129-gabae5c-dev-debug.img",
+            "bcmOCTAVIAN_BCM542_nand_squashfs_update_secureboot-5.4.0-31-g7fc278-dev-debug.img",
         ],
     },
 }

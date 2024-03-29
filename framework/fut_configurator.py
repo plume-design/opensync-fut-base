@@ -43,6 +43,7 @@ class FutConfigurator(metaclass=Singleton):
             else os.getenv("FUT_CONFIG_FROM_JSON")
         )
         self.fut_version_map = self._load_fut_version_map()
+        self.fut_release_version = self._get_release_version()
         self.fut_test_hostname = "fut.opensync.io"
         self.curl_port_rate_limit = 8000
         self.regulatory_rule = self._load_reg_rule()
@@ -55,6 +56,7 @@ class FutConfigurator(metaclass=Singleton):
             gw_name=self.testbed_cfg["Nodes"][0]["model"].upper().replace("_", "-"),
             leaf_name=self.testbed_cfg["Nodes"][1]["model"].upper().replace("_", "-"),
         )
+        self.wireless_manager_names = ["wm", "owm"]
 
     @staticmethod
     def get_testbed_name():
@@ -67,6 +69,20 @@ class FutConfigurator(metaclass=Singleton):
         testbed_name = subprocess.run(["cat", "/etc/hostname"], stdout=subprocess.PIPE)
 
         return testbed_name.stdout.decode("utf-8").strip()
+
+    def _get_release_version(self):
+        """
+        Return the release version of the FUT sources.
+
+        Returns:
+            version (str): FUT release version.
+        """
+        version_file = Path(self.fut_base_dir).joinpath(".version")
+        if not version_file.is_file():
+            return None
+        with open(version_file, "r") as version_fd:
+            version = version_fd.read().strip()
+        return version
 
     @staticmethod
     def _load_reg_rule():

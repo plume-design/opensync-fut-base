@@ -44,3 +44,8 @@ FUT_DEFAULT_GW_BHAUL_SSID_BROADCAST = "disabled"
 FUT_DEFAULT_GW_BHAUL_SSID_PREFIX = "FUT_BHAUL_SSID_"
 FUT_DEFAULT_LEAF_BHAUL_INTERFACE_TYPE = "backhaul_sta"
 FUT_DEFAULT_LEAF_ONBOARD_TYPE = "gre"
+
+# Unit test specific variables
+unit_test_exec_name = "unit"
+unit_test_resource_dir = "resource/ut"
+unit_test_subdir = "utest"

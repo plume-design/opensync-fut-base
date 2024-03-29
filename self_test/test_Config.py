@@ -88,11 +88,3 @@ class TestValidateConfig:
         expected = ""
         assert actual == expected
         log.info(msg=f"key:{key}, expected:{expected}, actual:{actual}")
-
-    @allure.title("Validate that Config class possesses the correct attributes")
-    def test_config_attribute(self):
-        assert True
-
-    @allure.title("Validate that Config class attributes have correct values")
-    def test_config_attribute_value(self):
-        assert True

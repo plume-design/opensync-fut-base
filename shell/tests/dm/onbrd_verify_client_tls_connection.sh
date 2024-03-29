@@ -47,7 +47,7 @@ log_title "onbrd/onbrd_verify_client_tls_connection.sh: ONBRD test - Verify clie
 log "onbrd/onbrd_verify_client_tls_connection.sh: Setting CM log level to TRACE"
 set_manager_log CM TRACE
 
-log "onbrd/onbrd_verify_client_tls_connection.sh: Saving current state of AWLAN_Node/SSL ovsdb tables for revert after"
+log "onbrd/onbrd_verify_client_tls_connection.sh: Saving current state of AWLAN_Node/SSL ovsdb tables for a later revert"
 # connect_to_fut_cloud() updates only SSL::ca_cert, save original for later use
 ssl_ca_cert_org="$(get_ovsdb_entry_value SSL ca_cert)"
 # connect_to_fut_cloud() updates AWLAN_Node::redirector_addr and Manager::inactivity_probe::min_backoff::max_backoff, save original for later use
@@ -62,6 +62,9 @@ log -deb "   Manager    :: inactivity_probe := ${m_inactivity_probe_org}"
 log -deb "   AWLAN_Node :: min_backoff      := ${m_min_backoff_org}"
 log -deb "   AWLAN_Node :: max_backoff      := ${m_max_backoff_org}"
 log -deb "Device certificate dir = ${cert_dir}"
+
+log "onbrd/onbrd_verify_client_tls_connection.sh: Making a copy of the current ca.pem for a later revert"
+cat "${ssl_ca_cert_org}" > "${cert_dir}/original_ca.pem"
 
 trap '
     fut_info_dump_line
@@ -89,5 +92,8 @@ for interval in $(seq 1 3); do
         log "onbrd/onbrd_verify_client_tls_connection.sh: wait_cloud_state - Connection state is ACTIVE, check num: $interval - Success" ||
         raise "FAIL: wait_cloud_state - Connection state is NOT ACTIVE, check num: $interval, connection should be maintained" -l "onbrd/onbrd_verify_client_tls_connection.sh" -tc
 done
+
+log "onbrd/onbrd_verify_client_tls_connection.sh: Reverting original ca.pem"
+cat "${cert_dir}/original_ca.pem" > "${ssl_ca_cert_org}"
 
 pass

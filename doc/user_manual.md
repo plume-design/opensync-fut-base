@@ -120,8 +120,8 @@ or environment variables. Shell scripts are all part of this repository.
 There are three categories of configuration files used within FUT:
 
 1. **Testbed configuration**: also referred to as a **location file**. These are properties of the physical testbed
-   (CRATOS), such as the testbed IP address, username and password, device models, client types, etc. The user needs to
-   set these correctly once when initially setting up a new physical testbed.
+   (CRATOS), such as the testbed IP address, username and password, device models, client types, etc. You need to set
+   these correctly once when initially setting up a new physical testbed.
 
 1. **Device configuration**: also referred to as **model properties files**. These are model or device-specific
    parameters, such as regulatory domain information, radio interface names, supported bands, model string, etc.
@@ -135,8 +135,8 @@ There are three categories of configuration files used within FUT:
 Configuration files are either YAML files or Python files containing dictionaries. These configuration files are
 directly imported into the runtime environment during test case execution. It is important to maintain the correct
 syntax and structure of the configuration files, while the values of the parameters in these configuration files should
-be adapted to your model. Some platforms and device models are already supported, but the user should provide support
-for their own model before executing test cases.
+be adapted to your model. Some platforms and device models are already supported, but you should provide support for
+your own model before executing test cases.
 
 #### Testbed configuration with location files
 
@@ -147,7 +147,7 @@ able to load the correct device and test case configuration files.
 There is an example location file provided in `config/locations/example.yaml` with all the required and optional fields,
 with commentary on how to modify the values for your use case. If there are any values that do not apply, the keys or
 entire sections may be removed or values simply set to `null`. The example file should be copied, using a name that
-matches the server hostname of your testbed, then edited to suppy the actual values describing the testbed.
+matches the server hostname of your testbed, then edited to supply the actual values describing the testbed.
 
 #### Device configuration with model properties files
 
@@ -202,9 +202,9 @@ container, which is started on your local machine. The machine needs to have acc
 Create and enter the interactive Docker environment. This will build the required Docker image, create an interactive
 container and enter that container.
 
-To finalize the environment setup, the user needs to specify details of the physical testbed by invoking the `pset`
-tool. This tool loads the testbed `location file`. The testbed name is the same as the location file name, without the
-`.yaml` suffix. To load the location file `config/locations/mytestbedname.yaml`, run:
+To finalize the environment setup, you need to specify details of the physical testbed by invoking the `pset` tool. This
+tool loads the testbed `location file`. The testbed name is the same as the location file name, without the `.yaml`
+suffix. To load the location file `config/locations/mytestbedname.yaml`, run:
 
 ```bash
 pset mytestbedname
@@ -241,6 +241,14 @@ pytest test/ --run_test test_some_procedure -v
 pytest test/ --run_test test_my_procedure,test_another_procedure -v
 ```
 
+There is a feature built into the FUT framework that aborts testing altogether if OpenSync process restart is detected
+on the device. By using the following flag, the detection can be made less strict, meaning it only fails one test case
+instead of aborting the entire test run:
+
+```bash
+pytest test/ --disable_strict_process_restart_detection
+```
+
 The test cases need to be listed with the `test_` prefix or `_test` suffix which is required by `pytest` in order to
 collect a python function as a test case. The name must match exactly. To get a list of all available test cases that
 can be used with the above command, run:
@@ -270,7 +278,7 @@ and should be considered as a problem in the framework rather than the subject o
 A test case is marked as `skipped` only when the `pytest.skip()` function is called. The FUT framework does this in
 these cases:
 
-- There is a `skip` key in the test case configuration parameters. The user explicitly requested the skip.
+- There is a `skip` key in the test case configuration parameters. You explicitly requested the skip.
 - There is a `skip condition` during shell test case execution, and a special exit code is propagated to the framework.
   Some required condition that can only be verified during shell script execution has not been met.
 - The test case has a dependency on another failing test case or function within the framework. Usually these are setup
@@ -279,6 +287,22 @@ these cases:
 When an exception is raised instead of an assertion being false, pytest treats this as a framework issue and not a test
 case failure. There is no outcome in this case, and the next test case will be executed. When viewing an Allure test
 report, the test case will be categorized as `broken`.
+
+#### Processing Pytest test results based on reference test runs
+
+You may sometimes want to execute all available tests for one model, but focus only on failures that are not expected
+and ignore those failures that have previously happened on test runs that you deem `reference`. One example where this
+may happen is detecting regressions on newer versions of firmware, while allowing the possibility that some tests fail
+due to known bugs and issues.
+
+The tool `framework/tools/result_post_processing.py` offers to process the results of the current test run by providing
+a reference test run from which to determine the test cases to ignore. The tool offers the option to back up unprocessed
+results from the current test run before processing. After processing, any tests that have a status of `failed` or
+`broken` in both the current and reference test runs are simply removed.
+
+```bash
+./framework/tools/result_post_processing.py --current current/allure-results --reference reference/allure-results --backup
+```
 
 ### Test reports with Allure
 
@@ -343,11 +367,11 @@ integrations, however, a new device model and optionally a new platform needs to
 required to support FUT execution on a new device model:
 
 1. Add a model_properties configuration file `config/model_properties/reference/<my_model>.yaml`
-1. Add pod API support for the device platform `pod_lib.py` and model `<my_model>/pod_lib.py` to the framework in the
+2. Add pod API support for the device platform `pod_lib.py` and model `<my_model>/pod_lib.py` to the framework in the
    `lib_testbed/generic/pod/<my_platform>/` directory.
-1. Add model and platform specific test case configuration generator inputs (optional) in
-   `config/platform/<my_platform>/*_inputs.py` and `config/model/<my_model>/*_inputs.py`.
-1. Add model and platform specific shell library override files (optional) `<my_platform>_platform_override.sh` and
+3. Add model and platform specific test case configuration generator inputs (optional) in
+   `config/test_case/platform/<my_platform>/*_inputs.py` and `config/test_case/model/<my_model>/*_inputs.py`.
+4. Add model and platform specific shell library override files (optional) `<my_platform>_platform_override.sh` and
    `<my_model>_lib_override.sh` in the `shell/lib/override/` directory.
 
 Creating a location file is not on the list, as this is a required step for each new physical testbed regardless of the
@@ -377,7 +401,7 @@ The pre-setup steps can be seen in more detail by inspecting the `fut-base/frame
 
 ## Troubleshooting
 
-After a test case failure, the user may want to investigate the cause of the failure. This may be due to a bug in the
+After a test case failure, you may want to investigate the cause of the failure. This may be due to a bug in the
 OpenSync integration on the device or some other error. The recommended steps in the root cause analysis are:
 
 - Examining the logs and test report
@@ -411,8 +435,8 @@ be done by hand. For example transferring the files to the devices, determining 
 The manual test case execution procedure simply follows the same steps as the framework automation executes. These steps
 are listed in the generated Allure report in the FUT framework.
 
-This provides more granularity in determining where an issue occurs and gives the user the option to prepare all
-previous steps and investigate the failing shell script. Most shell scripts document the usage as code commentary.
+This provides more granularity in determining where an issue occurs and gives you the option to prepare all previous
+steps and investigate the failing shell script. Most shell scripts document the usage as code commentary.
 
 ### Using the Python debugger with the FUT framework
 

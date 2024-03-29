@@ -11,13 +11,15 @@ usage()
 cat << usage_string
 wm2/wm2_setup.sh [-h] arguments
 Description:
-    - Setup device for WM testing
+    - Setup device for Wireless Manager testing
 Arguments:
     -h : show this help message
-    \$@ (radio_if_names) : wait for if_name in Wifi_Radio_State table to be present after setup : (string)(optional)
+    \$1 (wireless_manager_name) : provide the name of the wireless manager : (string)(optional)
+    \$@ (radio_if_names)        : wait for if_name in Wifi_Radio_State table to be present after setup : (string)(optional)
 Script usage example:
     ./wm2/wm2_setup.sh
-    ./wm2/wm2_setup.sh wifi0 wifi1
+    ./wm2/wm2_setup.sh wm
+    ./wm2/wm2_setup.sh owm wifi0 wifi1
 usage_string
 }
 
@@ -54,23 +56,11 @@ empty_ovsdb_table AW_Debug &&
     log -deb "wm2/wm2_setup.sh - AW_Debug table emptied - Success" ||
     raise "FAIL: empty_ovsdb_table AW_Debug - Could not empty AW_Debug table" -l "wm2/wm2_setup.sh" -ds
 
-if check_kconfig_option "CONFIG_MANAGER_OWM" "y"; then
-    if [ "$(get_ovsdb_entry_value Node_Services status -w service owm)" == "enabled" ]; then
-        wireless_manager=owm
-    elif [ "$(get_ovsdb_entry_value Node_Services status -w service wm)" == "enabled" ]; then
-        wireless_manager=wm
-    else
-        raise "FAIL: No OpenSync wireless manager enabled on the device" -l "wm2/wm2_setup.sh" -ds
-    fi
-elif [ "$(get_ovsdb_entry_value Node_Services status -w service wm)" == "enabled" ]; then
-    wireless_manager=wm
-else
-    raise "FAIL: WM disabled on the device" -l "wm2/wm2_setup.sh" -ds
-fi
+wireless_manager=${1:-"$(get_wireless_manager_name)"}
+[ $# -ge 1 ] && shift
 
 log "wm2/wm2_setup.sh - OpenSync wireless manager '${wireless_manager}' is enabled on the device - Success"
-export FUT_OS_WIRELESS_MGR_LC="${wireless_manager}"
-export FUT_OS_WIRELESS_MGR_UC="$(echo ${wireless_manager:?} | awk '{print toupper($0)}')"
+FUT_OS_WIRELESS_MGR_UC="$(echo ${wireless_manager:?} | awk '{print toupper($0)}')"
 
 set_manager_log ${FUT_OS_WIRELESS_MGR_UC:?} TRACE &&
     log -deb "wm2/wm2_setup.sh - Manager log for ${FUT_OS_WIRELESS_MGR_UC:?} set to TRACE - Success" ||

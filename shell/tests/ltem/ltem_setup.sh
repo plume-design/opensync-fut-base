@@ -38,16 +38,21 @@ if_name=${1}
 apn=${2}
 os_persist=${3}
 
-device_init &&
-    log -deb "ltem/ltem_setup.sh - Device initialized - Success" ||
-    raise "FAIL: Could not initialize device: device_init" -l "ltem/ltem_setup.sh" -ds
+disable_watchdog &&
+    log -deb "ltem/ltem_setup.sh - Watchdog disabled - Success" ||
+    raise "FAIL: disable_watchdog - Could not disable watchdog" -l "ltem/ltem_setup.sh" -ds
+
+stop_healthcheck &&
+    log -deb "ltem/ltem_setup.sh - Healthcheck stopped - Success" ||
+    raise "FAIL: stop_healthcheck - Could not stop healthcheck" -l "ltem/ltem_setup.sh" -ds
+
+disable_fatal_state_cm &&
+    log -deb "ltem/ltem_setup.sh - CM fatal state disabled - Success" ||
+    raise "FAIL: disable_fatal_state_cm - Could not disable CM fatal state" -l "ltem/ltem_setup.sh" -ds
 
 start_openswitch &&
     log -deb "ltem/ltem_setup.sh - OpenvSwitch started - Success" ||
     raise "FAIL: Could not start OpenvSwitch: start_openswitch" -l "ltem/ltem_setup.sh" -ds
-
-restart_managers
-log -deb "ltem/ltem_setup.sh: Executed restart_managers, exit code: $?"
 
 empty_ovsdb_table AW_Debug &&
     log -deb "ltem/ltem_setup.sh - AW_Debug table emptied - Success" ||

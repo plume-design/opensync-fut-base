@@ -42,7 +42,7 @@ ebtable_target="${4}"
 ebtable_priority="${5}"
 update_target="${6}"
 dev_mac="11:11:11:11:11:11"
-ebtable_rule="-d \${devices_tag}"
+ebtable_rule='-d ${devices_tag}'
 openflow_tag="devices_tag"
 
 log_title "/nfm/nfm_native_ebtable_template_check.sh: Configuring and validating ebtables template rules"

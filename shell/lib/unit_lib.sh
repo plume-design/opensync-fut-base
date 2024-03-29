@@ -650,23 +650,6 @@ check_id_pattern()
 
 ###############################################################################
 # DESCRIPTION:
-#   Function checks if logpull directory is empty.
-# INPUT PARAMETER(S):
-#   None
-# RETURNS:
-#   0   Directory is not empty
-#   1   Directory is empty
-# USAGE EXAMPLE(S):
-#   check_if_logpull_dir_empty
-###############################################################################
-check_if_logpull_dir_empty()
-{
-    [ "$(ls -A /tmp/logpull/)" ] &&
-        return $?
-}
-
-###############################################################################
-# DESCRIPTION:
 #   Function checks if port is in bridge.
 #   Function uses ovs-vsctl command, different from native Linux bridge.
 # INPUT PARAMETER(S):
@@ -1075,7 +1058,7 @@ check_kconfig_option()
     if ! [ -f "${kconfig_path}" ]; then
         raise "kconfig file is not present on ${kconfig_path}" -l "unit_lib:check_kconfig_option" -ds
     fi
-    cat "${kconfig_path}" | grep "${kconfig_option_name}=${kconfig_option_value}"
+    cat "${kconfig_path}" | grep -q "${kconfig_option_name}=${kconfig_option_value}"
     return $?
 }
 
@@ -1089,7 +1072,7 @@ check_kconfig_option()
 #   0   option present in kconfig file
 #   1   option not present in kconfig file
 # USAGE EXAMPLE(S):
-#   check_kconfig_option "TARGET_PATH_DISABLE_FATAL_STATE"
+#   check_kconfig_option_exists "CONFIG_TARGET_PATH_DISABLE_FATAL_STATE"
 ###############################################################################
 check_kconfig_option_exists()
 {
@@ -1198,6 +1181,29 @@ check_manager_alive()
         log -deb "unit_lib:check_manager_alive - $manager_bin_file PID found"
         return 0
     fi
+}
+
+##################################################################################
+# DESCRIPTION:
+#   Function validates the 'model' field of the AWLAN_Node table and raises an
+#   exception if the pattern contains invalid characters.
+#   Allowed characters: uppercase and lowercase alphanumerics, hyphen, underscore.
+# INPUT PARAMETER(S):
+#   $1  Model string (string, required)
+# RETURNS:
+#   0   Model string is valid
+# USAGE EXAMPLE(S):
+#   check_model_pattern A12-B34_cd5678
+###################################################################################
+check_model_pattern()
+{
+    local NARGS=1
+    [ $# -ne ${NARGS} ] &&
+        raise "unit_lib:check_model_pattern requires ${NARGS} input argument(s), $# given" -arg
+    model_string=${1}
+    echo ${node_id} | grep -E "^[A-Za-z0-9_-]*$" ||
+        raise "FAIL: Model string '${model_string}' contains invalid characters!" -l "unit_lib:check_model_pattern"
+    return 0
 }
 
 ###############################################################################
@@ -1807,7 +1813,7 @@ check_restore_ovsdb_server()
         log -deb "unit_lib:check_restore_ovsdb_server - Executed restart_managers, exit code: $?"
         raise "CRITICAL: ovsdb-server crashed" -l "unit_lib:check_restore_ovsdb_server" -osc
     else
-        log -dev "unit_lib:check_restore_ovsdb_server - ovsdb-server is running"
+        log -deb "unit_lib:check_restore_ovsdb_server - ovsdb-server is running"
     fi
 }
 
@@ -2885,10 +2891,13 @@ create_radio_vif_interface()
 
     func_params=${radio_args//$replace/-u}
     # shellcheck disable=SC2086
-    update_ovsdb_entry Wifi_Radio_Config -w if_name "$if_name" $func_params \
-        -u vif_configs "$vif_configs_set" &&
+    update_ovsdb_entry Wifi_Radio_Config -w if_name "$if_name" $func_params &&
             log -deb "unit_lib:create_radio_vif_interface - Table Wifi_Radio_Config updated - Success" ||
             raise "FAIL: Could not update table Wifi_Radio_Config" -l "unit_lib:create_radio_vif_interface" -oe
+
+    ${OVSH} u Wifi_Radio_Config -w if_name=="$if_name" vif_configs:ins:"$vif_configs_set" &&
+            log -deb "unit_lib:create_radio_vif_interface - Table Wifi_Radio_Config vif_configs updated - Success" ||
+            raise "FAIL: Could not update table Wifi_Radio_Config vif_configs" -l "unit_lib:create_radio_vif_interface" -oe
 
     # shellcheck disable=SC2086
     func_params=${vif_args_w//$replace/-is}
@@ -3199,7 +3208,7 @@ device_init()
 #   connectivity tests to the Cloud and without connection it would perform
 #   device reboot. In FUT environment device has no connection to the Cloud,
 #   so restarts and reboots must be prevented. If device is missing the kconfig
-#   option TARGET_PATH_DISABLE_FATAL_STATE, this function does nothing.
+#   option CONFIG_TARGET_PATH_DISABLE_FATAL_STATE, this function does nothing.
 # INPUT PARAMETER(S):
 #   None.
 # RETURNS:
@@ -3211,12 +3220,12 @@ device_init()
 ###############################################################################
 disable_fatal_state_cm()
 {
-    check_kconfig_option_exists "TARGET_PATH_DISABLE_FATAL_STATE" || return 0
+    check_kconfig_option_exists "CONFIG_TARGET_PATH_DISABLE_FATAL_STATE" || return 0
 
     log -deb "unit_lib:disable_fatal_state_cm - Disabling CM manager restart procedure"
 
     is_tool_on_system dirname || raise "FAIL: Tool dirname required on system" -l "unit_lib:disable_fatal_state_cm" -ds
-    fatal_state_inhibit_path=$(get_kconfig_option_value "TARGET_PATH_DISABLE_FATAL_STATE" | tr -d '"' "'")
+    fatal_state_inhibit_path=$(get_kconfig_option_value "CONFIG_TARGET_PATH_DISABLE_FATAL_STATE" | tr -d '"' "'")
     fatal_state_inhibit_dir=$(dirname "${fatal_state_inhibit_path:?}")
 
     if [ ! -d "${fatal_state_inhibit_dir:?}" ]; then
@@ -3228,6 +3237,15 @@ disable_fatal_state_cm()
         mount -t tmpfs tmpfs "${fatal_state_inhibit_dir:?}"
         touch "${fatal_state_inhibit_path:?}"
     fi
+}
+
+###############################################################################
+# DESCRIPTION:
+#   Function ensures the logpull directory is empty.
+###############################################################################
+empty_logpull_dir()
+{
+    rm -rf /tmp/logpull/*
 }
 
 ###############################################################################
@@ -4253,6 +4271,35 @@ get_wan_uplink_interface_name()
 
 ###############################################################################
 # DESCRIPTION:
+#   Function echoes the name of the wireless manager present on the device.
+# INPUT PARAMETER(S):
+#   None
+# RETURNS:
+#   Wireless manager name
+# USAGE EXAMPLES(S):
+#   var=$(get_wireless_manager_name)
+###############################################################################
+get_wireless_manager_name()
+{
+    if check_kconfig_option "CONFIG_MANAGER_OWM" "y"; then
+        if [ "$(get_ovsdb_entry_value Node_Services status -w service owm)" == "enabled" ]; then
+            wireless_manager=owm
+        elif [ "$(get_ovsdb_entry_value Node_Services status -w service wm)" == "enabled" ]; then
+            wireless_manager=wm
+        else
+            raise "FAIL: No OpenSync wireless manager enabled on the device" -l "unit_lib.sh" -ds
+        fi
+    elif [ "$(get_ovsdb_entry_value Node_Services status -w service wm)" == "enabled" ]; then
+        wireless_manager=wm
+    else
+        raise "FAIL: WM disabled on the device" -l "unit_lib.sh" -ds
+    fi
+
+    echo "${wireless_manager}"
+}
+
+###############################################################################
+# DESCRIPTION:
 #   Function inserts entry to provided table. Raises an exception if
 #   selected entry cannot be inserted.
 #   It can be used with supported option(s):
@@ -4433,7 +4480,7 @@ is_ebtables_rule_configured()
     ebtable_rule="${3}"
     ebtable_target="${4}"
 
-    wait_for_function_response 0 "ebtables -t $table_name -L $chain_name | grep "${ebtable_target}" | grep -e \"$ebtable_rule\" " 10 &&
+    wait_for_function_response 0 "ebtables -t $table_name -L $chain_name | grep "${ebtable_target}" | grep -i -e \"$ebtable_rule\" " 10 &&
         log "nfm_lib/is_ebtables_rule_configured: ebtables rule \"$ebtable_rule\" configured on the device " ||
         raise "FAIL: ebtables rule \"$ebtable_rule\" not configured on the device" -l "nfm_lib/is_ebtables_rule_configured" -tc
 
@@ -4466,11 +4513,27 @@ is_ebtables_rule_removed()
     ebtable_rule="${3}"
     ebtable_target="${4}"
 
-    wait_for_function_response 1 "ebtables -t $table_name -L $chain_name | grep "${ebtable_target}" | grep -e \"$ebtable_rule\" " 10 &&
+    wait_for_function_response 1 "ebtables -t $table_name -L $chain_name | grep "${ebtable_target}" | grep -i -e \"$ebtable_rule\" " 10 &&
         log "nfm_lib/is_ebtables_rule_removed: ebtables rule \"$ebtable_rule\" removed from the device " ||
         raise "FAIL: ebtables rule \"$ebtable_rule\" not removed from the device" -l "nfm_lib/is_ebtables_rule_configured" -tc
 
     return 0
+}
+
+###############################################################################
+# DESCRIPTION:
+#   Function checks if logpull directory is empty.
+# INPUT PARAMETER(S):
+#   None
+# RETURNS:
+#   0   Directory is empty
+#   1   Directory is not empty
+# USAGE EXAMPLE(S):
+#   is_logpull_dir_empty
+###############################################################################
+is_logpull_dir_empty()
+{
+    [ -z "$(ls -A /tmp/logpull/)" ]
 }
 
 ###############################################################################
@@ -5886,15 +5949,16 @@ set_interface_up()
 #   $3  Destination IP address (string, required)
 #   $4  Destination port (string, required)
 #   $5  Protocol (string, required)
+#   $5  OVSDB table (string, required)
 # RETURNS:
 #   0   On success.
 #   See DESCRIPTION
 # USAGE EXAMPLE(S):
-#   set_ip_port_forwarding bhaul-sta-24 8080 10.10.10.123 80 tcp
+#   set_ip_port_forwarding bhaul-sta-24 8080 10.10.10.123 80 tcp Netfilter
 ###############################################################################
 set_ip_port_forwarding()
 {
-    local NARGS=5
+    local NARGS=6
     [ $# -ne ${NARGS} ] &&
         raise "unit_lib:set_ip_port_forwarding requires ${NARGS} input argument(s), $# given" -arg
     src_ifname=$1
@@ -5902,16 +5966,31 @@ set_ip_port_forwarding()
     dst_ipaddr=$3
     dst_port=$4
     protocol=$5
+    pf_table=$6
 
     log -deb "unit_lib:set_ip_port_forwarding - Creating port forward on interface '$src_ifname'"
 
-    insert_ovsdb_entry IP_Port_Forward \
-        -i dst_ipaddr "$dst_ipaddr" \
-        -i dst_port "$dst_port" \
-        -i src_port "$src_port" \
-        -i protocol "$protocol" \
-        -i src_ifname "$src_ifname" ||
-            raise "FAIL: Could not insert entry to IP_Port_Forward table" -l "unit_lib:set_ip_port_forwarding" -oe
+    if [ "$pf_table" = "Netfilter" ]; then
+        insert_ovsdb_entry Netfilter \
+            -i chain "PF_PREROUTING" \
+            -i enable true \
+            -i name "pf.dnat_tcp_$src_ifname" \
+            -i priority 0 \
+            -i protocol "ipv4" \
+            -i rule "-p $protocol -i $src_ifname --dport $src_port --to-destination $dst_ipaddr:$dst_port" \
+            -i status "enabled" \
+            -i table "nat" \
+            -i target "DNAT" ||
+                raise "FAIL: Could not insert entry to Netfilter table" -l "unit_lib:set_ip_port_forwarding" -oe
+    else
+        insert_ovsdb_entry IP_Port_Forward \
+            -i dst_ipaddr "$dst_ipaddr" \
+            -i dst_port "$dst_port" \
+            -i src_port "$src_port" \
+            -i protocol "$protocol" \
+            -i src_ifname "$src_ifname" ||
+                raise "FAIL: Could not insert entry to IP_Port_Forward table" -l "unit_lib:set_ip_port_forwarding" -oe
+    fi
 
     log -deb "unit_lib:set_ip_port_forwarding - Port forward created on interface '$src_ifname' - Success"
 
@@ -6819,9 +6898,13 @@ vif_reset()
         wait_ovsdb_entry_remove Wifi_VIF_State -w if_name $ap_iface ||
             raise "FAIL: wait_ovsdb_entry_remove - Could not reflect Wifi_VIF_Config to Wifi_VIF_State for '$ap_iface'" -l "unit_lib:vif_reset" -oe
         remove_ovsdb_entry Wifi_Inet_Config -w if_name $ap_iface ||
-            raise "FAIL: remove_ovsdb_entry - Could not remove Wifi_Inet_Config entry for '$ap_iface' STA interface" -l "unit_lib:vif_reset" -oe
+            raise "FAIL: remove_ovsdb_entry - Could not remove Wifi_Inet_Config entry for '$ap_iface' AP interface" -l "unit_lib:vif_reset" -oe
         wait_ovsdb_entry_remove Wifi_Inet_Config -w if_name $ap_iface ||
-            raise "FAIL: wait_ovsdb_entry_remove - Could not reflect Wifi_Inet_Config to Wifi_Inet_State for '$ap_iface' STA interface" -l "unit_lib:vif_reset" -oe
+            raise "FAIL: wait_ovsdb_entry_remove - Could not reflect Wifi_Inet_Config to Wifi_Inet_State for '$ap_iface' AP interface" -l "unit_lib:vif_reset" -oe
+        remove_ovsdb_entry Wifi_Inet_Config -w gre_ifname $ap_iface ||
+            raise "FAIL: remove_ovsdb_entry - Could not remove Wifi_Inet_Config entry for '$ap_iface' GRE interface" -l "unit_lib:vif_reset" -oe
+        wait_ovsdb_entry_remove Wifi_Inet_Config -w gre_ifname $ap_iface ||
+            raise "FAIL: wait_ovsdb_entry_remove - Could not reflect Wifi_Inet_Config to Wifi_Inet_State for '$ap_iface' GRE interface" -l "unit_lib:vif_reset" -oe
     done
 
     log -deb "unit_lib:vif_reset- VIF interfaces reset - Success"

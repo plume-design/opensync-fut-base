@@ -32,12 +32,14 @@ def othr_setup():
                 device_handler.fut_device_setup(test_suite_name="dm")
         except Exception as exception:
             RuntimeError(f"Unable to perform setup for the {device} device: {exception}")
+    # Set the baseline OpenSync PIDs used for reboot detection
+    pytest.session_baseline_os_pids = pytest.gw.opensync_pid_retrieval(tracked_node_services=pytest.tracked_managers)
 
 
 class TestOthr:
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", othr_config.get("othr_add_client_freeze", []))
-    def test_othr_add_client_freeze(self, cfg):
+    def test_othr_add_client_freeze(self, cfg: dict, update_baseline_os_pids):
         fut_configurator, gw, w1 = pytest.fut_configurator, pytest.gw, pytest.w1
 
         with step("Preparation of testcase parameters"):
@@ -45,7 +47,7 @@ class TestOthr:
             channel = cfg.get("channel")
             ht_mode = cfg.get("ht_mode")
             radio_band = cfg.get("radio_band")
-            encryption = cfg.get("encryption", "WPA2")
+            encryption = cfg["encryption"]
             wifi_security_type = cfg.get("wifi_security_type", "wpa")
             device_mode = cfg.get("device_mode", "router")
             client_retry = cfg.get("client_retry", 2)
@@ -119,13 +121,12 @@ class TestOthr:
         finally:
             with step("Cleanup"):
                 gw.execute("tests/dm/othr_connect_wifi_client_to_ap_unfreeze")
-                w1.device_api.reboot()
                 gw.execute("tests/dm/othr_setup", setup_args)
                 gw.configure_device_mode(device_mode="router")
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", othr_config.get("othr_connect_wifi_client_multi_psk", []))
-    def test_othr_connect_wifi_client_multi_psk(self, cfg):
+    def test_othr_connect_wifi_client_multi_psk(self, cfg: dict):
         fut_configurator, gw, w1 = pytest.fut_configurator, pytest.gw, pytest.w1
 
         with step("Preparation of testcase parameters"):
@@ -133,7 +134,7 @@ class TestOthr:
             channel = cfg.get("channel")
             ht_mode = cfg.get("ht_mode")
             radio_band = cfg.get("radio_band")
-            encryption = cfg.get("encryption", "WPA2")
+            encryption = cfg["encryption"]
             device_mode = cfg.get("device_mode", "router")
             wifi_security_type = cfg.get("wifi_security_type", "wpa")
             client_retry = cfg.get("client_retry", 2)
@@ -189,7 +190,7 @@ class TestOthr:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", othr_config.get("othr_connect_wifi_client_to_ap", []))
-    def test_othr_connect_wifi_client_to_ap(self, cfg):
+    def test_othr_connect_wifi_client_to_ap(self, cfg: dict):
         fut_configurator, gw, w1 = pytest.fut_configurator, pytest.gw, pytest.w1
 
         with step("Preparation of testcase parameters"):
@@ -197,7 +198,7 @@ class TestOthr:
             channel = cfg.get("channel")
             ht_mode = cfg.get("ht_mode")
             radio_band = cfg.get("radio_band")
-            encryption = cfg.get("encryption", "WPA2")
+            encryption = cfg["encryption"]
             device_mode = cfg.get("device_mode", "router")
             wifi_security_type = cfg.get("wifi_security_type", "wpa")
             client_retry = cfg.get("client_retry", 2)
@@ -248,7 +249,7 @@ class TestOthr:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", othr_config.get("othr_verify_eth_client_connection", []))
-    def test_othr_verify_eth_client_connection(self, cfg):
+    def test_othr_verify_eth_client_connection(self, cfg: dict):
         gw, e2 = pytest.gw, pytest.e2
 
         with step("Preparation of testcase parameters"):
@@ -270,8 +271,7 @@ class TestOthr:
 
         try:
             with step("Client eth-connect"):
-                # This step will fail since lan port is not added into br-home bridge
-                e2.device_api.eth_connect(pod=gw.device_api, skip_exception=True)
+                e2.device_api.eth_connect(pod=gw.device_api, dhclient=False, skip_exception=True)
             with step("Add bridge port"):
                 assert gw.execute("tools/device/add_bridge_port", add_eth_port_to_bridge_args)[0] == ExpectedShellResult
             with step("Client start-dhclient"):
@@ -289,10 +289,11 @@ class TestOthr:
         finally:
             with step("Cleanup"):
                 e2.device_api.eth_disconnect()
+                gw.execute("tools/device/remove_bridge_port", add_eth_port_to_bridge_args)
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", othr_config.get("othr_verify_eth_lan_iface_wifi_master_state", []))
-    def test_othr_verify_eth_lan_iface_wifi_master_state(self, cfg):
+    def test_othr_verify_eth_lan_iface_wifi_master_state(self, cfg: dict):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -314,7 +315,7 @@ class TestOthr:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", othr_config.get("othr_verify_eth_wan_iface_wifi_master_state", []))
-    def test_othr_verify_eth_wan_iface_wifi_master_state(self, cfg):
+    def test_othr_verify_eth_wan_iface_wifi_master_state(self, cfg: dict):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -336,7 +337,7 @@ class TestOthr:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", othr_config.get("othr_verify_ethernet_backhaul", []))
-    def test_othr_verify_ethernet_backhaul(self, cfg):
+    def test_othr_verify_ethernet_backhaul(self, cfg: dict):
         server, gw, l1 = pytest.server, pytest.gw, pytest.l1
 
         with step("Preparation of testcase parameters"):
@@ -377,7 +378,7 @@ class TestOthr:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", othr_config.get("othr_verify_gre_iface_wifi_master_state", []))
-    def test_othr_verify_gre_iface_wifi_master_state(self, cfg):
+    def test_othr_verify_gre_iface_wifi_master_state(self, cfg: dict):
         fut_configurator, gw = pytest.fut_configurator, pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -385,7 +386,7 @@ class TestOthr:
             channel = cfg.get("channel")
             ht_mode = cfg.get("ht_mode")
             radio_band = cfg.get("radio_band")
-            encryption = cfg.get("encryption", "WPA2")
+            encryption = cfg["encryption"]
             wifi_security_type = cfg.get("wifi_security_type", "wpa")
 
             # Constant arguments
@@ -471,7 +472,7 @@ class TestOthr:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", othr_config.get("othr_verify_iperf3_speedtest", []))
-    def test_othr_verify_iperf3_speedtest(self, cfg):
+    def test_othr_verify_iperf3_speedtest(self, cfg: dict):
         server, gw = pytest.server, pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -492,7 +493,7 @@ class TestOthr:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", othr_config.get("othr_verify_lan_bridge_iface_wifi_master_state", []))
-    def test_othr_verify_lan_bridge_iface_wifi_master_state(self, cfg):
+    def test_othr_verify_lan_bridge_iface_wifi_master_state(self, cfg: dict):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -510,7 +511,7 @@ class TestOthr:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", othr_config.get("othr_verify_ookla_speedtest", []))
-    def test_othr_verify_ookla_speedtest(self, cfg):
+    def test_othr_verify_ookla_speedtest(self, cfg: dict):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -526,7 +527,7 @@ class TestOthr:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", othr_config.get("othr_verify_ookla_speedtest_bind_options", []))
-    def test_othr_verify_ookla_speedtest_bind_options(self, cfg):
+    def test_othr_verify_ookla_speedtest_bind_options(self, cfg: dict):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -545,7 +546,7 @@ class TestOthr:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", othr_config.get("othr_verify_ookla_speedtest_bind_reporting", []))
-    def test_othr_verify_ookla_speedtest_bind_reporting(self, cfg):
+    def test_othr_verify_ookla_speedtest_bind_reporting(self, cfg: dict):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -564,7 +565,7 @@ class TestOthr:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", othr_config.get("othr_verify_ookla_speedtest_sdn_endpoint_config", []))
-    def test_othr_verify_ookla_speedtest_sdn_endpoint_config(self, cfg):
+    def test_othr_verify_ookla_speedtest_sdn_endpoint_config(self, cfg: dict):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -584,7 +585,7 @@ class TestOthr:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", othr_config.get("othr_verify_samknows_process", []))
-    def test_othr_verify_samknows_process(self, cfg):
+    def test_othr_verify_samknows_process(self, cfg: dict):
         gw = pytest.gw
 
         try:
@@ -596,25 +597,23 @@ class TestOthr:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", othr_config.get("othr_verify_vif_iface_wifi_master_state", []))
-    def test_othr_verify_vif_iface_wifi_master_state(self, cfg):
+    def test_othr_verify_vif_iface_wifi_master_state(self, cfg: dict):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
             # GW specific arguments
-            supported_channels = gw.capabilities.get_bhaul_sta_ifnames()
-            supported_bands = supported_channels.keys()
+            bhaul_sta_ifnames = gw.capabilities.get_bhaul_sta_ifnames()
 
         with step("Test case"):
-            for band in supported_bands:
-                bhaul_if_name = gw.capabilities.get_bhaul_ap_ifname(freq_band=band)
+            for _band, bhaul_sta_if_name in bhaul_sta_ifnames.items():
                 assert (
-                    gw.execute("tests/dm/othr_verify_vif_iface_wifi_master_state", bhaul_if_name)[0]
+                    gw.execute("tests/dm/othr_verify_vif_iface_wifi_master_state", bhaul_sta_if_name)[0]
                     == ExpectedShellResult
                 )
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", othr_config.get("othr_verify_wan_bridge_iface_wifi_master_state", []))
-    def test_othr_verify_wan_bridge_iface_wifi_master_state(self, cfg):
+    def test_othr_verify_wan_bridge_iface_wifi_master_state(self, cfg: dict):
         gw = pytest.gw
 
         with step("Check device if WANO enabled"):
@@ -637,7 +636,7 @@ class TestOthr:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", othr_config.get("othr_wifi_disabled_after_removing_ap", []))
-    def test_othr_wifi_disabled_after_removing_ap(self, cfg):
+    def test_othr_wifi_disabled_after_removing_ap(self, cfg: dict):
         fut_configurator, gw, w1 = pytest.fut_configurator, pytest.gw, pytest.w1
 
         with step("Preparation of testcase parameters"):
@@ -645,7 +644,7 @@ class TestOthr:
             channel = cfg.get("channel")
             ht_mode = cfg.get("ht_mode")
             radio_band = cfg.get("radio_band")
-            encryption = cfg.get("encryption", "WPA2")
+            encryption = cfg["encryption"]
             device_mode = cfg.get("device_mode", "router")
             wifi_security_type = cfg.get("wifi_security_type", "wpa")
             client_retry = cfg.get("client_retry", 2)
@@ -703,10 +702,8 @@ class TestOthr:
                 assert w1.device_api.connect(ssid=ssid, psk=psk, retry=client_retry, skip_exception=True) == ""
             with step("Testcase"):
                 # Verify GW has no associated clients
-                wifi_associated_clients = gw.device_api.get_wifi_associated_clients()
-                assert any(w1_mac not in associated_clients for associated_clients in wifi_associated_clients)
+                assert not gw.device_api.get_wifi_associated_clients()
         finally:
             with step("Clenaup"):
-                w1.device_api.reboot()
                 gw.execute("tests/dm/othr_cleanup", othr_cleanup_args)
                 gw.configure_device_mode(device_mode="router")

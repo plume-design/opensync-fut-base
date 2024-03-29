@@ -28,7 +28,7 @@ esac
 trap '
 fut_ec=$?
 fut_info_dump_line
-if [ $fut_ec -ne 0 ]; then 
+if [ $fut_ec -ne 0 ]; then
     print_tables Wifi_Associated_Clients
     check_restore_ovsdb_server
 fi
@@ -42,7 +42,7 @@ client_mac=${1}
 
 log_title "tools/device/check_wifi_client_associated.sh: Verify that the client is associated to AP"
 
-check_ovsdb_entry Wifi_Associated_Clients -w mac "$client_mac"
+wait_ovsdb_entry Wifi_Associated_Clients -w mac "$client_mac"
 if [ $? -eq 0 ]; then
     log "tools/device/check_wifi_client_associated.sh: Valid client mac $client_mac is populated in the Wifi_Associated_Clients table - Success"
     exit 0

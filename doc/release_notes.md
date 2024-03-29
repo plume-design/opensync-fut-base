@@ -2,287 +2,309 @@
 
 Welcome to OpenSync Functional Unit Testing (FUT) release notes. See what has changed with the latest release.
 
-## Release FUT-2.0
+## Release FUT-2.2
 
 This [version](../.version) of FUT supports the following OpenSync releases:
 
+- 5.6.0.0
 - 5.4.0.0
 - 5.2.0.0
 
 ### New Features
 
-The 6GHz radio band requires the `WPA3` WiFi security mode. This is now the default value for all test cases.
+FUT test results should have `100%` pass rate for models with FW images that contain no bugs. Any bugs or issues within
+the framework or test cases are either fixed or the test case is removed.
 
-With the change in execution from remote to local, the local and remote docker images are now also separate. A testbed
-server docker image cleanup script was introduced, which is called at the end of every test session and stops the docker
-container on the server, since it is no longer needed.
+FUT now has support for devices using `MediaTek` chips.
 
-Redundant files were removed from the FUT framework:
+A command line tool `result_post_processing.py` was introduced to process test results after the test run is complete.
+The purpose of this tool is to take the provided reference test run (`Pytest`) results or (`Allure`) report and modify
+the current test results (not report) based on the pass of fail status of the reference test run.
 
-- `framework/lib/test_handler.py`
-- `framework/lib/fut_exception.py`
-- `framework/lib/recipe.py`
-- `framework/tools/cfg_sort.py`
-- `framework/tools/get_file_from_device.py`
-- `framework/tools/network_switch.py`
-- `framework/tools/validate_off_chan_survey.py`
-- `config/testbed/config.yaml`
-- `docker/fut_interactive.py`
+A command line tool `allure_parser.py` was introduced to process the (`Allure`) reports of two test runs. The purpose of
+this tool is to ease the comparison of reports when there are many test cases that take a lot of time to compare
+manually.
 
-The `DRY-RUN` feature was removed from the framework. The purpose of this feature was to display the entire test
-procedure in the test report, for development and debugging, even if the test did not finish executing. This is now less
-relevant, since the local execution allows you to add breakpoints into the python code right on your workspace and run
-the code live from your command line or IDE.
+The `fsm_configure_test_dpi_redirect_action` test case was removed. The design is outdated and the test execution is no
+longer reliable on newer versions of OpenSync, making it irrelevant for FUT testing.
 
-A `YAML` configuration file was introduced to assemble device requirements of all test suites. This allows the device
-setup procedure to perform the device setup only for the devices required by the selected test suite or suites.
+FUT test cases are not relying on parsing logs if it is at all possible to perform test steps in another way. This makes
+tests more reliable across all device models and across several OpenSync versions.
 
-Missing test case definition `Markdown` files were added where test cases were already implemented.
+The `wm2_set_radio_tx_power` and `wm2_set_radio_tx_power_neg` test cases were removed from FUT. The underlying features
+are not mandatory and the tests were often flaky on several models.
 
-The `run_raw` device method now has the option to strip the standard output of any newline characters. This allows the
-FUT framework to be executed on devices with newer Linux kernels.
+A GRE tunnel configuration test, named `wm2_verify_gre_tunnel_gw_leaf`, was added to the WM2 test suite.
 
-The `FSM` test suite now more closely follows the test case definitions. The FUT MQTT message parsing tool now allows
-you to filter messages based on device `node ID`.
+The default path to the `upnp_server.py` script on client devices was changed from `/home/plume/upnp` to `/tools/upnp`.
+A fallback procedure that maintains backward compatibility was implemented.
 
-You are no longer required to execute the FUT framework remotely on the testbed server. Execution is now local. This
-makes the `init.sh` script obsolete, and instead `pytest` is invoked directly. The test suite setup is now a fixture to
-ensure automatic execution.
+The `wm2_set_bcn_int` test case was simplified by removing the AP configuration process from the test shell script. The
+AP configuration is now performed by a common method from the `NodeHandler` class and the method is only executed once
+per radio band.
 
-Some test cases from the ONBRD test suite became redundant with the implementation of the test case
-`wm2_create_all_aps_per_radio`. This test verifies the setup of all wireless access points per radio required by
-OpenSync, in order to provide all features. It is no longer necessary to separately test individual interfaces:
+A new mechanism was added to the FUT framework, which tracks the PID of OpenSync managers on the `gw` device. In case of
+any unexpected crashes, restarts or PID changes for any reason, the test case is either failed (non strict execution) or
+the test execution is stopped (strict execution). The OpenSync restart detection is strict by default, but the flag
+`--disable_strict_process_restart_detection` can be added to the test execution command to make it non strict.
 
-- `onbrd_verify_home_vaps_on_home_bridge`
-- `onbrd_verify_home_vaps_on_radios`
-- `onbrd_verify_onbrd_vaps_on_radios`
+The rules for acceptable model strings have been updated. There is a regular expression in effect that checks acceptable
+characters, which include alphanumerical characters hyphen and underscore.
 
-The shell function `disable_fatal_state_cm` was enhanced with reading the `Kconfig` option
-`TARGET_PATH_DISABLE_FATAL_STATE`. This retrieves the actual path to the file which prevents the `CM fatal state` and
-subsequent reboot of the device, instead of relying on a hardcoded path.
+Added the ability to execute OpenSync Unit Tests with the FUT framework.
 
-The test case `test_dm_verify_reboot_reason` is enhanced with the option to test for a `COLD_BOOT` reboot.
+An SSH availability check was added to the FUT setup procedure in order to eliminate errors due to device issues. The
+`wait_for_host_ssh.py` script now accepts devices, for which to perform an SSH check, as an argument.
 
-The `ignore_collect` configuration option is removed from the framework. The previous logic used the test case
-generators to expand the inputs into explicit configurations, and adding the `ignore_collect` option to tests that
-should not be collected by pytest. Now, the `ignore` option in the test case configuration generator inputs simply
-prevents the configuration from being expanded, so pytest has nothing to collect or ignore. This saves one step in the
-complexity of the framework, while preserving the ability to ignore certain default test case configuration input
-values.
+Test reports now contain environment variables and testbed properties like device version and model, and release version
+information.
 
-Support checking for different WiFi managers in FUT test cases. This allows you to test different configurations of
-OpenSync with the same FUT framework.
+The transfer of FUT files to target devices was simplified by making use of the `put_dir()` method from the
+`lib_testbed` common library.
 
-The FUT framework in this version was completely restructured along with the way FUT tests are structured and executed.
-All FUT test suites are now structured as classes, and the setup procedure has been reduced to a single step. The device
-initialization procedure now waits for conditions instead of checking once, eliminating race conditions in some models.
-A global test case timeout of 480 seconds was added to the pytest configuration file to ensure test cases that do not
-terminate correctly are killed by the framework.
+In order to ease debugging in the case of potential issues, default encryption values in the tests themselves and the
+test case input files were removed. The generation of the encryption parameter is now the responsibility of the test
+case configuration generators.
 
-The usage of classes and methods from the common testbed library, like the device API, is now preferred over the unique
-implementation in this framework.
+The `wpa_psks` and `wpa_oftags` field formats were adjusted to more closely follow the format pushed by cloud services.
 
-The FUT python code is made to conform to the Black Python code formatter style guide. A GitHub action is added that
-checks each pull request for compliance with the Black style guide.
+The chain mask value retrieval on QCA platforms was enhanced and made more robust by issuing two different commands and
+inferring the correct value.
 
-The execution of FUT is now done locally instead of requiring the user to remote onto the testbed server and execute FUT
-there. All setup of source code is local, and starting the docker container is now local. The FUT framework ensures that
-SSH proxy commands are used to access the required testbed and the devices within.
-
-FUT now uses location files where the user configures the physical testbed properties.
-
-The test case configuration generator and input directory structure has been refactored to fit within the FUT
-architecture. Generators fit under the framework portion, the inputs fit under configurations, the instructions fit
-under documentation. Tiered structure including generic, model specific and platform-specific configuration files was
-also established to mimic other configuration types and framework or shell features.
-
-The order of test configuration iteration in the `wm2_ht_mode_and_channel_iteration` test case configuration generator
-is changed in order to improve readability of test outputs.
-
-All channels and HT mode test case configuration options are unified for all models.
-
-The FUT documentation is updated to fit the changes in the new version. Redundant documents were removed and merged into
-the main `doc/user_manual.md` file. The content of the user manual was updated to agree with recent improvements and
-changes to FUT. The `README.md` file was made simpler to provide only the needed information at first glance of the
-repository.
-
-The model `MR8300-EXT` changed the `wifi_vendor` configuration in the `model_properties` file from `qca` to `cfg80211`
-to correctly reflect the wireless driver used for the device.
-
-The test case `dm_verify_vendor_name_awlan_node` was removed. The vendor name is now checked as part of the test case
-`dm_verify_awlan_node_params`.
-
-Renamed everything related to the `LM` test cases to `PM`. This change does affect the test case procedures.
-
-The `COMPAT` test suite was replaced with a module that includes the necessary steps for the setup of FUT. These were
-mischaracterized as test cases in the past, they are indeed setup and verification steps for the devices in the testbed.
-
-Replaced the FUT-specific logger with the one developed and maintained in the common testbed library.
-
-Fixed a `FutConfigurator` class issue which prevented it from being instantiated as a singleton.
-
-The FUT GUI was removed. Since the FUT execution is now local, there is no need for this feature.
-
-The `functions.py` file was renamed to `fut_lib.py` and its content minimized.
-
-The `conftest.py` is minimized and now only includes what is necessary to modify the default pytest behavior and does
-not implement device or testbed specific behavior.
-
-The FUT framework server handler class is split up into smaller logical chunks and reworked. A new device handler base
-class was created and dedicated node, client and server handler classes that inherit from it. Any non-device related
-functionality from the former server handler class was moved into other classes or modules.
-
-Default beacon interval configuration values are set at 100, 200 and 400ms.
-
-An `OVSDBConfigurator` class was introduced into the FUT framework to take the roll of loading and storing all
-configuration data related to the physical devices involved, test case parameters, test run related information,
-general rules, etc.
-
-The interface names and their respective VIF radio indices are now directly loaded from the model properties files.
-
-Shell files used in FUT were removed from the vendor OpenSync repositories and put into the repository containing the
-FUT framework.
-
-Shell files used in FUT were removed from the platform OpenSync repositories and put into the repository containing the
-FUT framework.
-
-Shell files used in FUT were removed from the core OpenSync repository and put into the repository containing the FUT
-framework.
-
-Testbed location files had only a subset of all interface types recognized by OpenSync configured until now:
-`backhaul_ap`, `backhaul_sta`, `home_ap`, `onboard_ap`, `uplink_gre`. The following were added to enable more tests to
-be executed: `aux_1_ap`, `aux_2_ap`, `cportal_ap`, `fhaul_ap`.
-
-A new test case `wm2_check_wpa3_with_wpa2_multi_psk` was added that tests the coexistence of a WPA3 and WPA2 access
-point on the same radio.
-
-The testbed server standard output is now added as an attachment to the Allure report.
-
-Transitioned from explicit FUT test case `config.py` files to a generator class that takes much more succinct
-`inputs.py` files and expands them for each model. This enables users much greater clarity in what is executed and
-eases the creation of test case configuration for new models.
-
-Updated `IPQ807X-AP-HK09` test case configurations for stability and reproducibility.
-
-#### Common Test Bed Library
-
-The device upgrade procedure in the common library was stabilized by introducing additional delays to allow the device
-to respond.
-
-The pset tool to determine the testbed in use by docker in the common library now works on case-insensitive file
-systems.
-
-Enhancements were made to regulatory domain (region) logic in the common library. This determines the regulatory
-constraints of the device more reliably and ensures correct test behavior.
-
-An error is logged in the `execute_command` in `util/ssh/parallelssh` in the common library in case the `sshpass` tool
-is missing on your system.
-
-A python decorator called `threaded` was added to `common/util` in the common library. This enables developers to run
-some functions in parallel.
-
-The use of a host name was replaced by the use of an IP address for IPv6 ping-check in the common library. This makes
-IPv6 test cases more reliable.
-
-The common library now has an option to connect windows clients to a wireless access point.
-
-Support for MAP-T and MAP-E VLANs was added to the common library. Together with changes in the testing environment,
-this enables execution of new test cases.
-
-Support for devices using LinuxSDN (Linux Native Bridge) was added to the common library. There is a capability to
-detect the bridge type: is the device using Linux Native Bridge or OVS Bridge.
-
-Environment variables are used to build and run the docker container in the common library. Variables can be overridden
-from a calling script enabling several test frameworks to use the same common testbed library.
-
-An extra Dockerfile can now be passed to dock-run in the common library. This enables several frameworks using the same
-common testbed library to add additional features to the standard docker image.
-
-The docker in the common library now generates and mounts `passwd` and `group` files. This extends the possibilities for
-successful execution from your local system to remote test environments with different credentials as well.
-
-BuildKit is now used for building docker images and adding package caching in the common library. BuildKit allows you to
-mount docker managed temporary volumes during image builds and use them for package manager caches. The volumes persist
-between builds, so the downloaded packages can be reused in the next build, even when a step in Dockerfile changes.
-
-Python pip now always builds wheels for source packages when building a docker container in the common library. This
-makes rebuilds faster, even when the recipe for the docker image changes.
-
-The python interpreter version can now be specified in the common library docker with pyenv.
-
-The following packages were added to the common library docker Pipfile: `Pillow`, `arrow`, `black`, `cassandra-driver`,
-`dateparser`, `jellyfish`, `nslookup`, `packaging`, `qase-pytest`, `simple-salesforce`, `slack-sdk`, `validators`.
-
-The common library API is enhanced with several new methods:
-
-- `pod_lib`: `get_beacon_interval`, `get_client_snr method`, `opensync_version`, `eth_connect`, `eth_disconnect`,
-  `get_parsed_conntrack_entries`, `get_pid_by_cmd`, `get_name`, `get_bhal_24_mac`
-- `base_lib`: `get_wan_port`
-- `client_lib`: `_wait_for_dhcp_lease`
-- `switch_api_generic`: `get_default_port_vlan`
-- `util/common`: `get_module_parameterization_id`
-- `pod/generic/capabilities`: `Capabilities.get_all_supported_radio_channels`
-- `device_api`: `DevicesApiIface`
-
-Packet sniffing utility code for client traffic is now available in the common library.
-
-Client IPs are now retrievable in the common library from point-to-point interfaces.
-
-The `ClientApi.eth_disconnect` in the common library now disables the pod port if it is unused. The old behavior is
-still available with the `disable_unused_ports=False` parameter.
-
-Recover gracefully instead of failing and exiting where configuration options required by the common library are
-missing.
-
-Both `stdout` and `stderr` are now redirected when putting a command in the background in the common library. The
-process put into the background can otherwise remain attached to the SSH session in some versions of the
-`openssh server`.
-
-The `os.path.realpath` was replaced with `pathlib.Path.absolute` in the common library. This respects symlinks and keeps
-the directory structure correct when resolving the symlinks would provide the incorrect path to the files. This makes
-using the common testbed library more robust when implemented in different test frameworks.
-
-The `mqtt/mqtt_client.py` tool in the common library now supports MQTT report pre-processing and decoding of the
-`resDesc` value from the `mDNS` topic.
-
-The MQTT `protobuf` schema in the common library was extended to support additional functionality. This keeps up with
-newer OpenSync versions.
-
-Custom object instantiation in the common library is now done with pytest fixtures.
-
-Pod fixtures in the common library were updated:
-
-- `pods` fixtures now request `gw,l1,l2` simultaneously to provide speed enhancements.
-- The mechanisms to resolve and discover devices are now based on the device index instead of the device name, improving
-  reliability.
-- Class hinting is now simplified, which improves code quality.
-
-The `iperf` and `iperf3` fixtures are now available in `osrt_fixtures` in the common library. This enables new test
-cases.
-
-The Python Black formatting tool was added to ensure unified python code formatting across the entire common testbed
-library. A black configuration file enforces code styling rules.
+A link to the `doc/release_notes.md` document was added to the `README.md` file.
 
 ### Fixed Bugs
 
-The `UM` test suite now executes reliably.
+Loading of the `example.yaml` location file is no longer mandatory when using the `pset` tool. The presence of the
+`miscs` directory when executing FUT tests is also no longer necessary.
 
-The command for getting the pid of a process in `pod_lib` in the common library is now fixed.
+The OpenSync functionality under test of the test case `wm2_verify_sta_send_csa` has changed, requiring a complete
+rework. The test case was rewritten as `wm2_verify_leaf_channel_change`. It no longer relies on log message parsing and
+verifies whether the `leaf` device switched the channel after the `gw` performed a channel change. The packet loss
+during this switch is analyzed. It is not acceptable to lose any packets.
 
-The input arguments of the `rpower` tool in the common library are now fixed. You are now required to provide a list of
-devices to perform the action on for some commands of this tool.
+The `IP_Port_Forward` table was deprecated with OpenSync 5.6. and the `Netfilter` table is now used to specify *IP
+packet filter rules*. To keep backward compatibility, you are able to explicitly request which table is used by the test
+case to achieve port forwarding for example. The `Netfilter` table is used by default.
 
-A possible infinite recursion in the `Logger` class in the common library is now fixed. The problem would sometimes
-exhibit when using testbed tools with the `-D` debug flag.
+The `Dockerfile.server` was updated to use **Python 3.12** to fix compatibility issues.
 
-A delay between bringing up an interface and starting the DHCP client in the `ClientLib.eth_connect` in the common
-library was introduced. This ensures that the interface is fully operational before the client requests a DHCP lease.
+The `kconfig` option used for disabling **CM fatal state** was changed from `TARGET_PATH_DISABLE_FATAL_STATE` to
+`CONFIG_TARGET_PATH_DISABLE_FATAL_STATE`. This change prevents `leaf` device reboots after terminating backhaul
+connections.
 
-Disabling of the client wireless access points is now executed outside the network namespace in the common library.
-Network namespaces are used to simulate individual wired and wireless clients on a single physical device. Disabling the
-access points only works outside the network namespace.
+Unnecessary test configurations for the `wm2_pre_cac_channel_change_validation` test case were removed and the
+formatting of the test arguments was fixed.
 
-System services on the device, controlled by the common library, are now started and stopped in the foreground, in order
-to collect the command output.
+Unnecessary test configurations for the `wm2_pre_cac_ht_mode_change_validation` test case were removed and the
+formatting of the test arguments was fixed.
 
-Fixed the faulty WPA3 compatibility check for PP203X in the FUT override shell script.
+The `wm2_leaf_ht_mode_change` test case procedure now no longer requires the switching of `gw` and `leaf` device roles
+with regards to the network switch.
+
+The AP network configuration parameters were adjusted to take the AP interface type into account. If the interface is a
+*home AP*, a static IP is not assigned to it.
+
+The `nm2_set_upnp_mode.sh` script was reworked to only check if the correct parameters have been applied and avoid any
+additional manipulation of the parameters.
+
+The redundant `nm2_verify_router_mode.sh` script was removed.
+
+The `wm2_set_ht_mode` test case has been simplified. The `gw` AP is now only configured once per radio band and the
+`wm2_set_ht_mode.sh` script only updates the value of the *HT mode* in the `Wifi_Radio_Config` table instead of also
+handling the configuration of the `gw` AP. Usage of class variables in the `WM2` test suite was also fixed.
+
+Fixed the test case `wm2_set_ht_mode_neg` by correctly determining which wireless manager is present on the device.
+There were issues when the `check_kconfig_option()` function was called by other functions due to its `grep` output. The
+`grep` output would get appended to the actual values that the function was supposed to return. This was resolved by
+suppressing the output of `grep` in the function. The retrieval of the wireless manager has been moved to a function in
+`unit_lib.sh`.
+
+Fixed the test case `wm2_set_channel_neg` by correctly determining which wireless manager is present on the device.
+
+The `gw` AP configuration procedure in the `wm2_set_radio_tx_chainmask` test case was moved to a different step. A
+cleanup procedure was added to the shell script that reverts the TX chainmask values back to their default pre-test
+values.
+
+The test case `wm2_set_ssid` now correctly loads all `SSID` parameters from `Python` into `shell`. The issue with
+escaping special characters and whitespace was fixed.
+
+The broken `wm2_leaf_ht_mode_change` test case, which caused failures in subsequent test cases, was removed. All
+topology change test cases were enhanced by allowing the nodes some time to report associated clients instead of
+checking immediately after changing the STA parent.
+
+Adjusted the backhaul network configuration procedure. The `gw` device now waits for the `Wifi_Associated_Clients` table
+to become populated with the `leaf` node MAC address, instead of checking once and failing if empty. This allows for
+some time before association.
+
+The `SSID` creation procedure in the `wm2_wifi_security_mix_on_multiple_aps` test case was changed to ensure that the
+result does not exceed the 32 byte limit.
+
+The client connectivity check in the test case `othr_wifi_disabled_after_removing_ap` was adjusted and an unnecessary
+client reboot in the test case cleanup was removed.
+
+The FUT framework now supports the execution of FUT shell scripts **locally**. The
+`onbrd_verify_dut_client_certificate_file_on_server` test case was reworked to execute locally instead of the testbed
+server.
+
+The test case `othr_verify_eth_client_connection` procedure was fixed so that adding the interface port into the bridge
+is executed at the correct time.
+
+The retrieval of the STA interface names in the `othr_verify_vif_iface_wifi_master_state` test case was corrected.
+
+Test case `pm_trigger_cloud_logpull` procedure is now fixed. An additional test parameter was added to make the
+procedure more robust on all device models.
+
+Fixed the failing test cases `dm_verify_enable_node_services` and `dm_verify_node_services`.
+
+The order of merging values when unpacking dictionaries in `DefaultGen.py` was corrected in order to prevent default
+values from being overwritten. This fixes test cases `wm2_connect_wpa3_client` and `wm2_connect_wpa3_leaf`.
+
+The OpenSync restart procedure in the `LTEM` test suite setup was unnecessary and was removed.
+
+The switch tool no longer fails when using the `all` port specifier with the `info` and `status` commands. The command
+were successful, but the `switch` tool misinterpreted the results and reported an error. This is now fixed and the
+correct exit code `0` is returned if individual commands for all ports succeed.
+
+Testing the `UM` suite on reference boards was disabled since the firmware upgrade procedure is highly vendor specific.
+
+Fixed two errors in the `user_manual.md` regarding file paths in the `Adding support for your own device model` section.
+
+`Allure` reports now include device system logs as attachments to failed test steps, where requested by the framework.
+This increases the ability to debug failures from inspecting the report alone.
+
+A cleanup procedure was added to the `onbrd_verify_client_tls_connection.sh` script. The cleanup procedure restores the
+original `ca.pem` file on the device after the test is finished.
+
+Backhaul AP interfaces are now used as inputs in the `nm2_enable_disable_iface_network` test case.
+
+The `um_set_invalid_firmware_pass` test case was adjusted to work on models that do not distinguish between image check
+and flash write errors.
+
+The `MTU` value used for `nm2_set_mtu` test case is now set to **1500**.
+
+The client reboot in the `othr_add_client_freeze` test cleanup procedure was removed in order to avoid erasing the
+`/tmp` directory on the device.
+
+Incorrect combinations of *channel* and *channel width* were removed from the `wm2_ht_mode_and_channel_iteration` test
+case inputs.
+
+The order of test steps in the `nm2_set_upnp_mode` was changed. This was done in order to ensure that the `gw` is in
+router mode before attempting to retrieve the LAN IP address. The fix for the `nm2_set_upnp_mode` test also required the
+insertion of additional `Netfilter` OVSDB table entries, which reference the `MINIUPNPD` chain in *IP packet filter
+rules*.
+
+The OVSDB table used for channel switch validation in the `wm2_verify_leaf_channel_change` test case was changed from
+`Wifi_Radio_Config` to `Wifi_Radio_State`.
+
+Backhaul connectivity issues on the 6 GHz radio band in the test case `wm2_verify_leaf_channel_change` were fixed by
+lowering TX power on `leaf` devices.
+
+An AP configuration issue was corrected in the test case `wm2_verify_leaf_channel_change`. The existing VIF configs in
+the `Wifi_Radio_Config` table were overridden unnecessarily.
+
+The handling of keyword arguments in the `execute()` method of the `NodeHandler` class was adjusted to avoid issues that
+stem from passing incorrect keyword arguments to the `get_remote_test_command()` method.
+
+The operation in the `ovsdb-client` `transaction()` command was changed from `update()` to `mutate()` in order to avoid
+overriding the existing values in the `vif_configs` field of the `Wifi_Radio_Config` OVSDB table.
+
+The test case `pm_trigger_cloud_logpull` procedure was enhanced to eliminate excessive wait times when the `logpull`
+procedure was not triggered or when system logs did not log this event.
+
+### Common Test Bed Library
+
+Recover a broken SSH connection to a testbed device before retrying a failing command.
+
+Fixed an issue with non-zero exit code of the switch tool for commands with several interfaces.
+
+Fixed the shebang of several testbed tools, a system may have bash in a different location than `/bin/bash`.
+
+Device credentials from the capabilities configuration file are used for remote hosts if unspecified.
+
+Striped the `stdout` string from the device of trailing newlines and spaces.
+
+Improve typing, type hinging and type checking in `Python` code.
+
+The framework cache directory is mounted to `$HOME/.pyenv` to prevent picking up the Python version from the local
+`pyenv` environment instead of the `Docker` interpreter.
+
+Move interface name overrides to separate method. This change enables the usage of the
+`override_version_specific_ifnames` method. The default behavior remains unchanged.
+
+Create parents of the temporary directory in the artifactory reader tool if they do not exist.
+
+Enhanced `Python` error checking by introducing a list of possible radio bands.
+
+Use the directory `.framework_cache` as a temporary directory to simplify cleanup procedures.
+
+Gracefully exit the `rpower` tool when the PDU device is not accessible.
+
+Update the command used to get the process id from the device reliably. Some models do not support flags for the `ps`
+tool.
+
+Update port-forwarding rules between WAN ports.
+
+Use a `CACHE_DIR` for the client tool for storing client firmware images for upgrade purposes.
+
+Force legacy SCP protocol instead of new SFTP when executing `get_file()` and `put_file()` in `parallelssh`.
+
+Record and display `exit code`, `stdout` and `stderr` from all devices, if an action is performed on several at once.
+
+Made the `pset` tool more modular by removing the loading of `example.yaml` file.
+
+Made code resistant to a missing `miscs` directory.
+
+Enhanced `reservelib` to prepend `username` to the owner string. This is beneficial on multi-user systems, where users
+not relying on `Docker` would end up being visible as hostname-only owners, making it impossible to see who owns a
+setup.
+
+Added wildcard matching to the name parameter of the `pod` and `client` testbed tools and added error-handling to
+improve the user experience for these two CLI tools.
+
+Enhanced `device_log_catcher` to log both `stdout` and `stderr` when the remote command fails. This enables better
+debugging ability as before part of the information may have been hidden, depending on the remote command being
+executed.
+
+Added `put_dir()` method to `device_api`.
+
+Added `get_rssi()` method to `pod_api` for `bcm` and `qca` platforms.
+
+Update the `Docker` image and all packages to support and use `Python 3.12`
+
+Added per model version specific interface name overrides. This method will return different interface names than the
+ones retrieved from the configuration files, based on the device version.
+
+Enabled custom destination dir in `download_proper_version()` in the artifactory reader tool.
+
+Enhanced the version string requirement in the artifactory reader tool. The major and minor versions are required, the
+revision and patch versions (3rd and 4th respectively) are optional, so is the build number. The `LATEST` version string
+is also permitted, since this is an `Artifactory` builtin.
+
+Extended common utilities with a function to compare FW versions. This enables you to determine which version is newer.
+
+Enhanced the firmware version comparison function to compare 3-digit version strings and allow `greater than`, `lesser
+than`, and `equal to` checks.
+
+Added the parsing of fractional frequencies output from the `iw` tool. Previous versions of the `iw` tool did not
+contain fractional frequencies, but the tool version on the current version of testbed devices does.
+
+Added method to check `SingleDPI` status of the device from the `Flow_Service_Manager_Config` table.
+
+Enhanced the `switch` tool to accept comma separated lists of parameters.
+
+The firmware upgrade fixture is forced before storing pod versions in the `Allure` environment.
+
+Firmware version reporting is moved to the `allure_environment` plugin, now extracting version information from devices directly.
+
+Deprecated obsolete models `IPQ807X-AP-HK09` and `MR8300-EXT`.
+
+### Limitations
+
+There is a limitation in the current implementation of the regulatory rules `config/rules/regulatory.yaml` in the FUT
+framework. By reading supported channel information from the device capabilities `YAML` files in
+`config/model_properties/*` it is impossible to determine the supported bandwidth for each channel without additional
+logic. This is why the default configuration currently excludes channels
+available for devices that support `UNII-4`. Without `UNII-4` support, the following 7 combinations are not supported by
+the device: channel 165 + HT40/HT80/HT160 and channel 149/153/157/161 + HT160. This limitation is due for improvement in
+the following releases.

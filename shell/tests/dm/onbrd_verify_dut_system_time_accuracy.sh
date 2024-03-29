@@ -36,10 +36,6 @@ case "${1}" in
     -h | --help)  usage ; exit 0 ;;
 esac
 
-if [ $FUT_SKIP_L2 == 'true' ]; then
-    raise "Flag to skip LEVEL2 testcases enabled, skipping execution." -l "onbrd/onbrd_verify_dut_system_time_accuracy.sh" -s
-fi
-
 NARGS=2
 [ $# -lt ${NARGS} ] && usage && raise "Requires at least ${NARGS} input argument(s)" -l "onbrd/onbrd_verify_dut_system_time_accuracy.sh" -arg
 time_ref=$1

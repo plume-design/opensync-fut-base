@@ -4,7 +4,7 @@ import allure
 import pytest
 
 from framework.fut_configurator import FutConfigurator
-from framework.lib.fut_lib import determine_required_devices, step
+from framework.lib.fut_lib import determine_required_devices, execute_locally, step
 from lib_testbed.generic.util.logger import log
 
 
@@ -28,24 +28,26 @@ def onbrd_setup():
             device_handler.fut_device_setup(test_suite_name="dm", setup_args=setup_args)
         except Exception as exception:
             raise RuntimeError(f"Unable to perform setup for the {device} device: {exception}")
+    # Set the baseline OpenSync PIDs used for reboot detection
+    pytest.session_baseline_os_pids = pytest.gw.opensync_pid_retrieval(tracked_node_services=pytest.tracked_managers)
 
 
 class TestOnbrd:
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", onbrd_config.get("onbrd_set_and_verify_bridge_mode", []))
-    def test_onbrd_set_and_verify_bridge_mode(self, cfg):
+    def test_onbrd_set_and_verify_bridge_mode(self, cfg: dict, update_baseline_os_pids):
         gw = pytest.gw
 
         try:
             with step("Test case"):
-                assert gw.configure_device_mode(device_mode="router")
+                assert gw.configure_device_mode(device_mode="bridge")
         finally:
             with step("Restore connection"):
                 assert gw.execute_with_logging("tests/dm/onbrd_setup")[0] == ExpectedShellResult
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", onbrd_config.get("onbrd_verify_client_certificate_files", []))
-    def test_onbrd_verify_client_certificate_files(self, cfg):
+    def test_onbrd_verify_client_certificate_files(self, cfg: dict):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -63,7 +65,7 @@ class TestOnbrd:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", onbrd_config.get("onbrd_verify_client_tls_connection", []))
-    def test_onbrd_verify_client_tls_connection(self, cfg):
+    def test_onbrd_verify_client_tls_connection(self, cfg: dict):
         server, gw = pytest.server, pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -80,7 +82,7 @@ class TestOnbrd:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", onbrd_config.get("onbrd_verify_dhcp_dry_run_success", []))
-    def test_onbrd_verify_dhcp_dry_run_success(self, cfg):
+    def test_onbrd_verify_dhcp_dry_run_success(self, cfg: dict):
         gw = pytest.gw
 
         with step("Check device if WANO enabled"):
@@ -104,7 +106,7 @@ class TestOnbrd:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", onbrd_config.get("onbrd_verify_dut_client_certificate_file_on_server", []))
-    def test_onbrd_verify_dut_client_certificate_file_on_server(self, cfg):
+    def test_onbrd_verify_dut_client_certificate_file_on_server(self, cfg: dict):
         server, gw = pytest.server, pytest.gw
 
         with step("Acquire certificate details"):
@@ -144,10 +146,9 @@ class TestOnbrd:
             common_name_args = server.get_command_arguments(f"{cert_location}/{gw.name}/{cert_file[1]}")
 
         with step("Get common name from certificate"):
-            common_name = server.execute(
-                "tools/server/get_common_name_from_certificate",
+            common_name = execute_locally(
+                "shell/tools/server/get_common_name_from_certificate",
                 common_name_args,
-                as_sudo=True,
             )
             if common_name[0] != ExpectedShellResult or common_name[1] == "" or common_name[1] is None:
                 raise RuntimeError("Failed to retrieve Common Name of certificate")
@@ -156,10 +157,9 @@ class TestOnbrd:
 
         with step("Test case"):
             assert (
-                server.execute(
-                    "tools/server/verify_dut_client_certificate_file_on_server",
+                execute_locally(
+                    "shell/tools/server/verify_dut_client_certificate_file_on_server",
                     cert_verify_args,
-                    as_sudo=True,
                 )[0]
                 == ExpectedShellResult
             )
@@ -172,7 +172,7 @@ class TestOnbrd:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", onbrd_config.get("onbrd_verify_dut_system_time_accuracy", []))
-    def test_onbrd_verify_dut_system_time_accuracy(self, cfg):
+    def test_onbrd_verify_dut_system_time_accuracy(self, cfg: dict):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -190,7 +190,7 @@ class TestOnbrd:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", onbrd_config.get("onbrd_verify_fw_version_awlan_node", []))
-    def test_onbrd_verify_fw_version_awlan_node(self, cfg):
+    def test_onbrd_verify_fw_version_awlan_node(self, cfg: dict):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -209,7 +209,7 @@ class TestOnbrd:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", onbrd_config.get("onbrd_verify_id_awlan_node", []))
-    def test_onbrd_verify_id_awlan_node(self, cfg):
+    def test_onbrd_verify_id_awlan_node(self, cfg: dict):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -225,7 +225,7 @@ class TestOnbrd:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", onbrd_config.get("onbrd_verify_manager_hostname_resolved", []))
-    def test_onbrd_verify_manager_hostname_resolved(self, cfg):
+    def test_onbrd_verify_manager_hostname_resolved(self, cfg: dict, update_baseline_os_pids):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -244,7 +244,7 @@ class TestOnbrd:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", onbrd_config.get("onbrd_verify_model_awlan_node", []))
-    def test_onbrd_verify_model_awlan_node(self, cfg):
+    def test_onbrd_verify_model_awlan_node(self, cfg: dict):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -261,7 +261,7 @@ class TestOnbrd:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", onbrd_config.get("onbrd_verify_model_awlan_node", []))
-    def test_onbrd_verify_number_of_radios(self, cfg):
+    def test_onbrd_verify_number_of_radios(self, cfg: dict):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -278,7 +278,7 @@ class TestOnbrd:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", onbrd_config.get("onbrd_verify_redirector_address_awlan_node", []))
-    def test_onbrd_verify_redirector_address_awlan_node(self, cfg):
+    def test_onbrd_verify_redirector_address_awlan_node(self, cfg: dict):
         gw = pytest.gw
 
         with step("Test case"):
@@ -288,7 +288,7 @@ class TestOnbrd:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", onbrd_config.get("onbrd_verify_router_mode", []))
-    def test_onbrd_verify_router_mode(self, cfg):
+    def test_onbrd_verify_router_mode(self, cfg: dict, update_baseline_os_pids):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -332,7 +332,7 @@ class TestOnbrd:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", onbrd_config.get("onbrd_verify_wan_iface_mac_addr", []))
-    def test_onbrd_verify_wan_iface_mac_addr(self, cfg):
+    def test_onbrd_verify_wan_iface_mac_addr(self, cfg: dict):
         gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
@@ -356,7 +356,7 @@ class TestOnbrd:
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", onbrd_config.get("onbrd_verify_wan_ip_address", []))
-    def test_onbrd_verify_wan_ip_address(self, cfg):
+    def test_onbrd_verify_wan_ip_address(self, cfg: dict):
         server, gw = pytest.server, pytest.gw
 
         with step("Preparation of testcase parameters"):

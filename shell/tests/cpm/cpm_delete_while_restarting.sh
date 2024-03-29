@@ -51,7 +51,7 @@ validate_delete()
     uuid_1=$(get_ovsdb_entry_value Captive_Portal _uuid -w name "default")
     tp_count=$(pidof tinyproxy | wc -w)
     if [ "$tp_count" = "1" ]; then
-        tp_pid=$(ps -w | grep tinyproxy | grep -v grep | awk '{print $1}')
+        tp_pid=$($(get_process_cmd) | grep tinyproxy | grep -v grep | awk '{print $1}')
         tp_uuid_1=$(cat /proc/"$tp_pid"/cmdline | grep -Eo "$uuid_1")
         if [ "$tp_uuid_1" = "$uuid_1" ]; then
             tp_config_count=$(ls -l /tmp/tinyproxy | wc -l)
@@ -67,7 +67,7 @@ trap '
 fut_info_dump_line
 print_tables Captive_Portal
 echo "Final tinyproxies status:"
-ps -w | grep tinyproxy | grep -v grep
+$(get_process_cmd) | grep tinyproxy | grep -v grep
 echo "Final tinyproxies config files status:"
 ls -l /tmp/tinyproxy
 check_restore_ovsdb_server
@@ -105,7 +105,7 @@ insert_ovsdb_entry Captive_Portal \
     raise "FAIL: Failed to insert second Captive_Portal entry" -l "cpm/cpm_delete_while_restarting.sh" -oee
 
 log "tinyproxy status before deleting an entry:"
-ps -w | grep tinyproxy | grep -v grep
+$(get_process_cmd) | grep tinyproxy | grep -v grep
 ls -l /tmp/tinyproxy
 
 # deleting
@@ -116,7 +116,7 @@ remove_ovsdb_entry Captive_Portal -w name "group" &&
     raise "FAIL: IUnable to remove Captive_Portal entry"  -l "cpm/cpm_delete_while_restarting.sh" -tc
 
 log "tinyproxy status after deleting an entry:"
-ps -w | grep tinyproxy | grep -v grep
+$(get_process_cmd) | grep tinyproxy | grep -v grep
 ls -l /tmp/tinyproxy
 
 validate_delete &&

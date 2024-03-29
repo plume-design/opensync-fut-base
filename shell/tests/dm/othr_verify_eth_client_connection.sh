@@ -43,9 +43,9 @@ client_mac=${2}
 
 n_ping=3
 
-log "othr/othr_verify_eth_client_connection.sh: Checking if has_L2==true and had_L3==false for ${eth_if_name} in Connection_Manager_Uplink table"
+log "othr/othr_verify_eth_client_connection.sh: Checking if has_L2==true and has_L3==false for ${eth_if_name} in Connection_Manager_Uplink table"
 check_ovsdb_entry Connection_Manager_Uplink -w if_name "${eth_if_name}" -w has_L2 true -w has_L3 false &&
-    log "othr/othr_verify_eth_client_connection.sh: has_L2==true and had_L3==false for ${eth_if_name} - Success" ||
+    log "othr/othr_verify_eth_client_connection.sh: has_L2==true and has_L3==false for ${eth_if_name} - Success" ||
     raise "FAIL: Connection_Manager_Uplink table entry for ${eth_if_name} is not correct" -l "othr/othr_verify_eth_client_connection.sh" -tc
 
 log "othr/othr_verify_eth_client_connection.sh: Checking if Client MAC address is present in DHCP_leased_IP"

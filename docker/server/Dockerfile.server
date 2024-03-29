@@ -1,4 +1,4 @@
-FROM python:3.10
+FROM python:3.12
 
 RUN mkdir -p /usr/share/man/man1
 
@@ -17,18 +17,22 @@ RUN apt-get autoremove -y
 
 COPY ./data/etc/nginx/sites-available/default.template /etc/nginx/sites-available/default.template
 
-RUN echo "root:root" | chpasswd root
+RUN echo "root:root" | chpasswd
 RUN usermod -aG sudo root
 RUN adduser plume -u 1000
-RUN echo "plume:plume" | chpasswd plume
+RUN echo "plume:plume" | chpasswd
 RUN usermod -aG sudo plume
 RUN echo "plume  ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+RUN adduser osync -u 1001
+RUN echo "osync:osync123" | chpasswd
+RUN usermod -aG sudo osync
+RUN echo "osync  ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
 RUN python3 -m pip install \
- allure-pytest \
- flask \
- flask-cors \
- paho-mqtt \
- protobuf \
- pyyaml \
- requests
+ allure-pytest==2.* \
+ flask==3.* \
+ flask-cors==4.* \
+ paho-mqtt==1.* \
+ protobuf==4.* \
+ pyyaml==6.* \
+ requests==2.*

@@ -31,6 +31,7 @@ It is recommended to read the documentation and review release notes of the late
 * [User manual](./doc/user_manual.md): Overall information about FUT is available in this document.
 * [Repository and directory structure](./doc/repository_structure.md): Requirements for other repositories in the
   directory structure in order to use FUT.
+* [Release notes](./doc/release_notes.md): Information about FUT features for the current and past releases.
 * [Test case definitions](./doc/definitions/): These files are the source of truth and a high-level text definition of
   test cases on which implementation details are based.
 * [Test case configuration generators and inputs](./doc/test_case_configuration_generators_and_inputs.md): documentation

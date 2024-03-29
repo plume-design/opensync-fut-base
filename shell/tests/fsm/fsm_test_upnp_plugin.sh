@@ -14,7 +14,13 @@ create_inet_file="tools/device/create_inet_interface.sh"
 add_bridge_port_file="tools/device/add_bridge_port.sh"
 configure_lan_bridge_for_wan_connectivity_file="tools/device/configure_lan_bridge_for_wan_connectivity.sh"
 client_connect_file="tools/client/connect_to_wpa.sh"
-client_upnp_server_file="/home/plume/upnp/upnp_server.py"
+client_upnp_server_file="/tools/upnp/upnp_server.py"
+
+# Fallback to the "/home/plume/" directory in case of missing file
+if [ ! -e "$client_upnp_server_file" ]; then
+    client_upnp_server_file="/home/plume/upnp/upnp_server.py"
+fi
+
 usage() {
     cat << usage_string
 fsm/fsm_test_upnp_plugin.sh [-h] arguments

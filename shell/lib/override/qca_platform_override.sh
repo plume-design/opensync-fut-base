@@ -140,17 +140,15 @@ check_tx_chainmask_at_os_level()
     tx_chainmask=$1
     if_name=$2
 
+    get_txchainmask_cmd="cfg80211tool $if_name get_txchainmask | grep -F get_txchainmask:$tx_chainmask"
+    get_txchainsoft_cmd="cfg80211tool $if_name get_txchainsoft | grep -F get_txchainsoft:$tx_chainmask"
+
     log "qca_platform_override:check_tx_chainmask_at_os_level - Checking Radio TX Chainmask for interface '$if_name' at OS - LEVEL2"
-    wait_for_function_response 0 "iwpriv $if_name get_txchainsoft | grep -F get_txchainsoft:$tx_chainmask"
+    wait_for_function_response 0 "$get_txchainmask_cmd || $get_txchainsoft_cmd"
     if [ $? = 0 ]; then
         log -deb "qca_platform_override:check_tx_chainmask_at_os_level - Tx Chainmask '$tx_chainmask' is set at OS - LEVEL2 - Success"
     else
-        wait_for_function_response 0 "iwpriv $if_name get_txchainmask | grep -F get_txchainmask:$tx_chainmask"
-        if [ $? = 0 ]; then
-            log -deb "qca_platform_override:check_tx_chainmask_at_os_level - Tx Chainmask '$tx_chainmask' is set at OS - LEVEL2 - Success"
-        else
-            raise "FAIL: Tx Chainmask '$tx_chainmask' is not set at OS - LEVEL2" -l "qca_platform_override:check_tx_chainmask_at_os_level" -tc
-        fi
+        raise "FAIL: Tx Chainmask '$tx_chainmask' is not set at OS - LEVEL2" -l "qca_platform_override:check_tx_chainmask_at_os_level" -tc
     fi
 
     return 0
@@ -177,7 +175,7 @@ check_beacon_interval_at_os_level()
     vif_if_name=$2
 
     log "qca_platform_override:check_beacon_interval_at_os_level - Checking Beacon interval at OS - LEVEL2"
-    wait_for_function_response 0 "iwpriv $vif_if_name get_bintval | grep -F get_bintval:$bcn_int" &&
+    wait_for_function_response 0 "cfg80211tool $vif_if_name get_bintval | grep -F get_bintval:$bcn_int" &&
         log -deb "qca_platform_override:check_beacon_interval_at_os_level - Beacon interval '$bcn_int' for '$vif_if_name' is set at OS - LEVEL2 - Success" ||
         raise "FAIL: Beacon interval '$bcn_int' for '$vif_if_name' is not set at OS - LEVEL2" -l "qca_platform_override:check_beacon_interval_at_os_level" -tc
 

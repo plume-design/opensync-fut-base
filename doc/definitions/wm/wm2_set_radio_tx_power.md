@@ -18,4 +18,4 @@ tested radio interface is applied to the system - LEVEL2.
 
 ## Implementation status
 
-Implemented
+Not Implemented

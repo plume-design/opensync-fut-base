@@ -22,9 +22,20 @@ test_inputs = {
         ],
     },
     "nm2_enable_disable_iface_network": {
+        "args_mapping": [
+            "channel",
+            "ht_mode",
+            "radio_band",
+            "if_name",
+            "if_type",
+        ],
         "inputs": [
             "FutGen|eth-interfaces",
-            "FutGen|vif-phy-interfaces",
+            [6, "HT40", "24g", "FutGen|vif-bhaul-ap-by-band-and-type"],
+            [44, "HT40", "5g", "FutGen|vif-bhaul-ap-by-band-and-type"],
+            [44, "HT40", "5gl", "FutGen|vif-bhaul-ap-by-band-and-type"],
+            [157, "HT40", "5gu", "FutGen|vif-bhaul-ap-by-band-and-type"],
+            [5, "HT40", "6g", "FutGen|vif-bhaul-ap-by-band-and-type"],
         ],
     },
     "nm2_ovsdb_configure_interface_dhcpd": {
@@ -56,6 +67,7 @@ test_inputs = {
             "dst_port": "80",
             "protocol": "tcp",
             "src_port": "8080",
+            "pf_table": "Netfilter",
         },
         "args_mapping": [
             "src_ifname",
@@ -178,7 +190,7 @@ test_inputs = {
     },
     "nm2_set_mtu": {
         "default": {
-            "mtu": 2000,
+            "mtu": 1500,
         },
         "inputs": [
             "FutGen|eth-interfaces",
