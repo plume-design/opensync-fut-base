@@ -38,10 +38,10 @@ log_title "dm/dm_verify_reboot_file_exists.sh: DM test - Verify reboot file '$re
 
 [ -e "$reboot_file_path" ] &&
     log "dm/dm_verify_reboot_file_exists.sh: reboot file exists in $reboot_file_path - Success" ||
-    raise "FAIL: reboot file is missing - $reboot_file_path" -l "dm/dm_verify_reboot_file_exists.sh" -tc
+    raise "reboot file is missing - $reboot_file_path" -l "dm/dm_verify_reboot_file_exists.sh" -tc
 [ -s "$reboot_file_path" ] &&
     log "dm/dm_verify_reboot_file_exists.sh: reboot file is not empty - $reboot_file_path - Success" ||
-    raise "FAIL: reboot file is empty - $reboot_file_path" -l "dm/dm_verify_reboot_file_exists.sh" -tc
+    raise "reboot file is empty - $reboot_file_path" -l "dm/dm_verify_reboot_file_exists.sh" -tc
 
 cat $reboot_file_path | grep -q "REBOOT"
 if [ $? = 0 ]; then
@@ -49,7 +49,7 @@ if [ $? = 0 ]; then
     reason=$(cat $reboot_file_path | awk '{print $2}')
     log "dm/dm_verify_reboot_file_exists.sh: Found reason: $reason"
 else
-    raise "FAIL: Could not find REBOOT string in file $reboot_file_path" -l "dm/dm_verify_reboot_file_exists.sh" -tc
+    raise "Could not find REBOOT string in file $reboot_file_path" -l "dm/dm_verify_reboot_file_exists.sh" -tc
 fi
 
 pass

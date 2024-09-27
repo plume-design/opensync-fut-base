@@ -53,13 +53,14 @@ one_sec=1000
 test_step=${1}
 
 trap '
-fut_info_dump_line
-print_tables Manager Connection_Manager_Uplink
-print_tables AW_Bluetooth_Config
-check_restore_management_access || true
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    print_tables Manager Connection_Manager_Uplink
+    print_tables AW_Bluetooth_Config
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 log_title "cm2/cm2_ble_status_cloud_down.sh: CM2 test - Observe BLE Status payload - Cloud failure - $test_step"
 
@@ -75,7 +76,7 @@ if [ "$test_step" = "${step_1_name}" ]; then
         log "cm2/cm2_ble_status_cloud_down.sh: Checking AW_Bluetooth_Config::payload for $bit:00:00:00:00:00"
         wait_ovsdb_entry AW_Bluetooth_Config -is payload "$bit:00:00:00:00:00" &&
             log "cm2/cm2_ble_status_cloud_down.sh: wait_ovsdb_entry - AW_Bluetooth_Config::payload changed to $bit:00:00:00:00:00 - Success" ||
-            raise "FAIL: AW_Bluetooth_Config::payload failed to change to $bit:00:00:00:00:00" -l "cm2/cm2_ble_status_cloud_down.sh" -tc
+            raise "AW_Bluetooth_Config::payload failed to change to $bit:00:00:00:00:00" -l "cm2/cm2_ble_status_cloud_down.sh" -tc
     done
     # Restoring Manager::inactivity_probe
     update_ovsdb_entry Manager -u inactivity_probe "$inactivity_probe_store"
@@ -85,10 +86,10 @@ elif [ "$test_step" = "${step_2_name}" ]; then
         log "cm2/cm2_ble_status_cloud_down.sh: Checking AW_Bluetooth_Config::payload for $bit:00:00:00:00:00"
         wait_ovsdb_entry AW_Bluetooth_Config -is payload "$bit:00:00:00:00:00" &&
             log "cm2/cm2_ble_status_cloud_down.sh: wait_ovsdb_entry - AW_Bluetooth_Config::payload changed to $bit:00:00:00:00:00 - Success" ||
-            raise "FAIL: AW_Bluetooth_Config::payload failed to change to $bit:00:00:00:00:00" -l "cm2/cm2_ble_status_cloud_down.sh" -tc
+            raise "AW_Bluetooth_Config::payload failed to change to $bit:00:00:00:00:00" -l "cm2/cm2_ble_status_cloud_down.sh" -tc
     done
 else
-    raise "FAIL: Wrong test type option" -l "cm2/cm2_ble_status_cloud_down.sh" -arg
+    raise "Wrong test type option" -l "cm2/cm2_ble_status_cloud_down.sh" -arg
 fi
 
 pass

@@ -26,7 +26,10 @@ TestLtem:
 TestNfm:
   nodes:
     - gw
-  clients: null
+    - l1
+  clients:
+    - w1
+    - w2
 TestNm2:
   nodes:
     - gw
@@ -56,6 +59,10 @@ TestSm:
     - gw
     - l1
   clients: null
+TestTpsm:
+  nodes:
+    - gw
+  clients: null
 TestUm:
   nodes:
     - gw
@@ -75,3 +82,7 @@ TestWm2:
     - l2
   clients:
     - w1
+TestWpd:
+  nodes:
+    - gw
+  clients: null

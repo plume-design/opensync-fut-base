@@ -18,16 +18,13 @@ def onbrd_setup():
     test_class_name = ["TestOnbrd"]
     nodes, clients = determine_required_devices(test_class_name)
     log.info(f"Required devices for ONBRD: {nodes + clients}")
-    for device in nodes:
-        if not hasattr(pytest, device):
-            raise RuntimeError(f"{device.upper()} handler is not set up correctly.")
-        try:
-            device_handler = getattr(pytest, device)
-            phy_radio_ifnames = device_handler.capabilities.get_phy_radio_ifnames(return_type=list)
-            setup_args = device_handler.get_command_arguments(*phy_radio_ifnames)
-            device_handler.fut_device_setup(test_suite_name="dm", setup_args=setup_args)
-        except Exception as exception:
-            raise RuntimeError(f"Unable to perform setup for the {device} device: {exception}")
+    for node in nodes:
+        if not hasattr(pytest, node):
+            raise RuntimeError(f"{node.upper()} handler is not set up correctly.")
+        node_handler = getattr(pytest, node)
+        phy_radio_ifnames = node_handler.capabilities.get_phy_radio_ifnames(return_type=list)
+        setup_args = node_handler.get_command_arguments(*phy_radio_ifnames)
+        node_handler.fut_device_setup(test_suite_name="dm", setup_args=setup_args)
     # Set the baseline OpenSync PIDs used for reboot detection
     pytest.session_baseline_os_pids = pytest.gw.opensync_pid_retrieval(tracked_node_services=pytest.tracked_managers)
 
@@ -43,7 +40,7 @@ class TestOnbrd:
                 assert gw.configure_device_mode(device_mode="bridge")
         finally:
             with step("Restore connection"):
-                assert gw.execute_with_logging("tests/dm/onbrd_setup")[0] == ExpectedShellResult
+                gw.configure_device_mode(device_mode="router")
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", onbrd_config.get("onbrd_verify_client_certificate_files", []))
@@ -68,13 +65,7 @@ class TestOnbrd:
     def test_onbrd_verify_client_tls_connection(self, cfg: dict):
         server, gw = pytest.server, pytest.gw
 
-        with step("Preparation of testcase parameters"):
-            # Arguments from test case configuration
-            tls_ver = cfg.get("tls_ver")
-
         with step("Cloud preparation"):
-            assert server.start_cloud()
-            assert server.change_fut_cloud_tls_ver(tls_ver)
             assert server.restart_cloud()
 
         with step("Test case"):
@@ -86,9 +77,7 @@ class TestOnbrd:
         gw = pytest.gw
 
         with step("Check device if WANO enabled"):
-            check_kconfig_wano_args = gw.get_command_arguments("CONFIG_MANAGER_WANO", "y")
-            check_kconfig_wano_ec = gw.execute("tools/device/check_kconfig_option", check_kconfig_wano_args)[0]
-            if check_kconfig_wano_ec == 0:
+            if "WANO" in gw.get_kconfig_managers():
                 pytest.skip("Testcase not applicable to WANO enabled devices")
 
         with step("Preparation of testcase parameters"):
@@ -299,10 +288,7 @@ class TestOnbrd:
 
             # GW specific arguments
             device_type = gw.capabilities.get_device_type()
-            wan_handling_args = gw.get_command_arguments("CONFIG_MANAGER_WANO", "y")
-            has_wano = gw.execute("tools/device/check_kconfig_option", wan_handling_args)[0] == ExpectedShellResult
-
-            if has_wano or device_type == "residential_gateway":
+            if "WANO" in gw.get_kconfig_managers() or device_type == "residential_gateway":
                 wan_if_name = gw.capabilities.get_primary_wan_iface()
             else:
                 wan_if_name = gw.capabilities.get_wan_bridge_ifname()
@@ -341,12 +327,8 @@ class TestOnbrd:
                 wan_if_name,
             )
 
-        with step("Check if WANO is enabled on device"):
-            wan_handling_args = gw.get_command_arguments("CONFIG_MANAGER_WANO", "y")
-            has_wano = gw.execute("tools/device/check_kconfig_option", wan_handling_args)[0] == ExpectedShellResult
-
         with step("Test case"):
-            if has_wano:
+            if "WANO" in gw.get_kconfig_managers():
                 assert gw.execute_with_logging("tests/dm/onbrd_verify_wan_iface_mac_addr")[0] == ExpectedShellResult
             else:
                 assert (
@@ -357,18 +339,17 @@ class TestOnbrd:
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", onbrd_config.get("onbrd_verify_wan_ip_address", []))
     def test_onbrd_verify_wan_ip_address(self, cfg: dict):
-        server, gw = pytest.server, pytest.gw
+        gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
-            gw_wan_inet_addr = server.wan_ip_dict.get("gw")
+            gw_wan_iface = gw.capabilities.get_primary_wan_iface()
+            gw_wan_inet_addr = gw.device_api.get_ips(iface=gw_wan_iface)["ipv4"]
 
             if "if_name" in cfg:
                 if_name = cfg.get("if_name")
             else:
                 device_type = gw.capabilities.get_device_type()
-                wan_handling_args = gw.get_command_arguments("CONFIG_MANAGER_WANO", "y")
-                has_wano = gw.execute("tools/device/check_kconfig_option", wan_handling_args)[0] == ExpectedShellResult
-                if has_wano or device_type == "residential_gateway":
+                if "WANO" in gw.get_kconfig_managers() or device_type == "residential_gateway":
                     if_name = gw.capabilities.get_primary_wan_iface()
                 else:
                     if_name = gw.capabilities.get_wan_bridge_ifname()

@@ -42,13 +42,14 @@ parent_ifname=$1
 vlan_id=$2
 
 trap '
+    fut_ec=$?
+    trap - EXIT INT
     fut_info_dump_line
     print_tables Wifi_Inet_Config Wifi_Inet_State
     delete_inet_interface "$if_name"
-    check_restore_management_access || true
-    check_restore_ovsdb_server
     fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    exit $fut_ec
+' EXIT INT TERM
 
 # Construct if_name from parent_ifname and vlan_id (example: eth0.100).
 if_name="$parent_ifname.$vlan_id"
@@ -67,21 +68,21 @@ create_inet_entry \
     -vlan_id "$vlan_id" \
     -parent_ifname "$parent_ifname" &&
         log "nm2/nm2_vlan_interface.sh: Interface $if_name created - Success" ||
-        raise "FAIL: Failed to create $if_name interface" -l "nm2/nm2_vlan_interface.sh" -ds
+        raise "Failed to create $if_name interface" -l "nm2/nm2_vlan_interface.sh" -ds
 
 log "nm2/nm2_vlan_interface.sh: Check is interface $if_name up - LEVEL2"
 wait_for_function_response 0 "check_eth_interface_state_is_up $if_name" &&
     log "nm2/nm2_vlan_interface.sh: wait_for_function_response - Interface $if_name is UP - Success" ||
-    raise "FAIL: wait_for_function_response - Interface $if_name is DOWN" -l "nm2/nm2_vlan_interface.sh" -ds
+    raise "wait_for_function_response - Interface $if_name is DOWN" -l "nm2/nm2_vlan_interface.sh" -ds
 
 log "nm2/nm2_vlan_interface.sh: Check if VLAN interface $if_name exists at OS level - LEVEL2"
 check_vlan_iface "$parent_ifname" "$vlan_id" &&
     log "nm2/nm2_vlan_interface.sh: VLAN interface $if_name exists at OS level - Success" ||
-    raise "FAIL: VLAN interface $if_name does not exist at OS level" -l "nm2/nm2_vlan_interface.sh" -tc
+    raise "VLAN interface $if_name does not exist at OS level" -l "nm2/nm2_vlan_interface.sh" -tc
 
 log "nm2/nm2_vlan_interface.sh: Remove VLAN interface"
 delete_inet_interface "$if_name" &&
     log "nm2/nm2_vlan_interface.sh: VLAN interface $if_name removed from device - Success" ||
-    raise "FAIL: VLAN interface $if_name not removed from device" -l "nm2/nm2_vlan_interface.sh" -tc
+    raise "VLAN interface $if_name not removed from device" -l "nm2/nm2_vlan_interface.sh" -tc
 
 pass

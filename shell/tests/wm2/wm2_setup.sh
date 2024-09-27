@@ -24,14 +24,15 @@ usage_string
 }
 
 trap '
-fut_ec=$?
-if [ $fut_ec -ne 0 ]; then
-    fut_info_dump_line
-    print_tables Wifi_Radio_Config Wifi_Radio_State Wifi_VIF_Config Wifi_VIF_State
-    fut_info_dump_line
-fi
-exit $fut_ec
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    if [ $fut_ec -ne 0 ]; then
+        fut_info_dump_line
+        print_tables Wifi_Radio_Config Wifi_Radio_State Wifi_VIF_Config Wifi_VIF_State
+        fut_info_dump_line
+    fi
+    exit $fut_ec
+' EXIT INT TERM
 
 case "${1}" in
     -h | --help)  usage ; exit 0 ;;
@@ -39,22 +40,11 @@ esac
 
 device_init &&
     log -deb "wm2/wm2_setup.sh - Device initialized - Success" ||
-    raise "FAIL: device_init - Could not initialize device" -l "wm2/wm2_setup.sh" -ds
-
-start_openswitch &&
-    log -deb "wm2/wm2_setup.sh - OpenvSwitch started - Success" ||
-    raise "FAIL: start_openswitch - Could not start OpenvSwitch" -l "wm2/wm2_setup.sh" -ds
-
-start_wireless_driver &&
-    log -deb "wm2/wm2_setup.sh - Wireless driver started - Success" ||
-    raise "FAIL: start_wireless_driver - Could not start wireless driver" -l "wm2/wm2_setup.sh" -ds
-
-restart_managers
-log -deb "wm2/wm2_setup.sh - Executed restart_managers, exit code: $?"
+    raise "device_init - Could not initialize device" -l "wm2/wm2_setup.sh" -ds
 
 empty_ovsdb_table AW_Debug &&
     log -deb "wm2/wm2_setup.sh - AW_Debug table emptied - Success" ||
-    raise "FAIL: empty_ovsdb_table AW_Debug - Could not empty AW_Debug table" -l "wm2/wm2_setup.sh" -ds
+    raise "empty_ovsdb_table AW_Debug - Could not empty AW_Debug table" -l "wm2/wm2_setup.sh" -ds
 
 wireless_manager=${1:-"$(get_wireless_manager_name)"}
 [ $# -ge 1 ] && shift
@@ -64,15 +54,15 @@ FUT_OS_WIRELESS_MGR_UC="$(echo ${wireless_manager:?} | awk '{print toupper($0)}'
 
 set_manager_log ${FUT_OS_WIRELESS_MGR_UC:?} TRACE &&
     log -deb "wm2/wm2_setup.sh - Manager log for ${FUT_OS_WIRELESS_MGR_UC:?} set to TRACE - Success" ||
-    raise "FAIL: set_manager_log ${FUT_OS_WIRELESS_MGR_UC:?} TRACE - Could not set manager log severity" -l "wm2/wm2_setup.sh" -ds
+    raise "set_manager_log ${FUT_OS_WIRELESS_MGR_UC:?} TRACE - Could not set manager log severity" -l "wm2/wm2_setup.sh" -ds
 
 vif_reset &&
     log -deb "wm2/wm2_setup.sh - vif_reset - Success" ||
-    raise "FAIL: vif_reset - Could not reset VIFs" -l "wm2/wm2_setup.sh" -ow
+    raise "vif_reset - Could not reset VIFs" -l "wm2/wm2_setup.sh" -fc
 
 for if_name in "$@"
 do
     wait_ovsdb_entry Wifi_Radio_State -w if_name "$if_name" -is if_name "$if_name" &&
         log -deb "wm2/wm2_setup.sh - Wifi_Radio_State::if_name '$if_name' present - Success" ||
-        raise "FAIL: Wifi_Radio_State::if_name for '$if_name' does not exist" -l "wm2/wm2_setup.sh" -ds
+        raise "Wifi_Radio_State::if_name for '$if_name' does not exist" -l "wm2/wm2_setup.sh" -ds
 done

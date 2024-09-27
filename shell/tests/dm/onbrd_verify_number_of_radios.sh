@@ -32,11 +32,13 @@ case "${1}" in
 esac
 
 trap '
-fut_info_dump_line
-print_tables Wifi_Radio_State
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    print_tables Wifi_Radio_State
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 NARGS=1
 [ $# -ne ${NARGS} ] && usage && raise "Requires exactly ${NARGS} input argument(s)" -l "onbrd/onbrd_verify_number_of_radios.sh" -arg
@@ -47,6 +49,6 @@ log_title "onbrd/onbrd_verify_number_of_radios.sh: ONBRD test - Verify number of
 log "onbrd/onbrd_verify_number_of_radios.sh: Verify number of radios, waiting for '${num_of_radios}'"
 wait_for_function_response 0 "check_number_of_radios $num_of_radios" &&
     log "onbrd/onbrd_verify_number_of_radios.sh: Number of radios is $num_of_radios - Success" ||
-    raise "FAIL: Number of radios is not $num_of_radios" -l "onbrd/onbrd_verify_number_of_radios.sh" -tc
+    raise "Number of radios is not $num_of_radios" -l "onbrd/onbrd_verify_number_of_radios.sh" -tc
 
 pass

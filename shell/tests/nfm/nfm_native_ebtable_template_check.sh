@@ -57,50 +57,45 @@ insert_ovsdb_entry Netfilter -i name "${netfilter_table_name}" \
     -i target "${ebtable_target}" \
     -i priority "${ebtable_priority}" &&
         log "/nfm/nfm_native_ebtable_template_check.sh: Configuring Netfilter table (name:${netfilter_table_name}, rule:"${ebtable_rule}", target:"${ebtable_target}") - Success" ||
-        raise "FAIL: Failed to configuring Netfilter table (name: ${netfilter_table_name}, rule:"${ebtable_rule}", target:"${ebtable_target}")" -l "/nfm/nfm_native_ebtable_template_check.sh" -tc
+        raise "Failed to configuring Netfilter table (name: ${netfilter_table_name}, rule:"${ebtable_rule}", target:"${ebtable_target}")" -l "/nfm/nfm_native_ebtable_template_check.sh" -tc
 
 log "/nfm/nfm_native_ebtable_template_check.sh: Configuring OpenFlow Tag (name:${openflow_tag})"
 insert_ovsdb_entry Openflow_Tag \
     -i name "${openflow_tag}" \
     -i cloud_value "${dev_mac}" &&
         log "/nfm/nfm_native_ebtable_template_check.sh: Configuring OpenFlow Tag (name:${openflow_tag}) - Success" ||
-        raise "FAIL: insert_ovsdb_entry unable to insert ${openflow_tag} in Openflow_Tag" -l "/nfm/nfm_native_ebtable_template_check.sh" -tc
+        raise "insert_ovsdb_entry unable to insert ${openflow_tag} in Openflow_Tag" -l "/nfm/nfm_native_ebtable_template_check.sh" -tc
 
 ebtable_rule="-d ${dev_mac}"
 log "/nfm/nfm_native_ebtable_template_check.sh: Checking ebtables rule is configured on the device"
 is_ebtables_rule_configured "${table_name}" "${chain_name}" "${ebtable_rule}" "${ebtable_target}" &&
     log "/nfm/nfm_native_ebtable_template_check.sh: ebtables rule is configured on the device - Success" ||
-    raise "FAIL: ebtables rule is not configured on the device" -l "/nfm/nfm_native_ebtable_template_check.sh" -tc
+    raise "ebtables rule is not configured on the device" -l "/nfm/nfm_native_ebtable_template_check.sh" -tc
 
 #updating the target value for the added rule in Netfilter Table
 log "/nfm/nfm_native_ebtable_template_check.sh: Updating Netfilter table from target:"${ebtable_target}" to "${update_target}""
 update_ovsdb_entry Netfilter -w name "${netfilter_table_name}" -u target "${update_target}" &&
     log "/nfm/nfm_native_ebtable_template_check.sh: Updating Netfilter table from target:"${ebtable_target}" to "${update_target}" - Success" ||
-    raise "FAIL: Failed updating Netfilter table from target:"${ebtable_target}" to "${update_target}"" -l "/nfm/nfm_native_ebtable_template_check.sh" -tc
+    raise "Failed updating Netfilter table from target:"${ebtable_target}" to "${update_target}"" -l "/nfm/nfm_native_ebtable_template_check.sh" -tc
 
 log "/nfm/nfm_native_ebtable_template_check.sh: Checking ebtables rule is configured on the device"
 is_ebtables_rule_configured "${table_name}" "${chain_name}" "${ebtable_rule}" "${update_target}" &&
     log "/nfm/nfm_native_ebtable_template_check.sh: Checking ebtables rule is configured on the device - Success" ||
-    raise "FAIL: ebtables rule is not configured on the device" -l "/nfm/nfm_native_ebtable_template_check.sh" -tc
+    raise "ebtables rule is not configured on the device" -l "/nfm/nfm_native_ebtable_template_check.sh" -tc
 
 log "/nfm/nfm_native_ebtable_template_check.sh: Deleting Netfilter table entry (name:${netfilter_table_name})"
 remove_ovsdb_entry Netfilter -w name "${netfilter_table_name}" &&
     log "/nfm/nfm_native_ebtable_template_check.sh: Deleting Netfilter table entry (name:${netfilter_table_name}) - Success" ||
-    raise "FAIL: Failed deleting Netfilter table entry (name:${netfilter_table_name})" -l "/nfm/nfm_native_ebtable_template_check.sh" -tc
+    raise "Failed deleting Netfilter table entry (name:${netfilter_table_name})" -l "/nfm/nfm_native_ebtable_template_check.sh" -tc
 
 log "/nfm/nfm_native_ebtable_template_check.sh: Checking ebtables rule is removed from the device"
 is_ebtables_rule_removed "${table_name}" "${chain_name}" "${ebtable_rule}" "${update_target}" &&
     log "/nfm/nfm_native_ebtable_template_check.sh: Checking ebtables rule is removed from the device - Success" ||
-    raise "FAIL: Failed, ebtables rule is not removed from the device" -l "/nfm/nfm_native_ebtable_template_check.sh" -tc
+    raise "Failed, ebtables rule is not removed from the device" -l "/nfm/nfm_native_ebtable_template_check.sh" -tc
 
 log "/nfm/nfm_native_ebtable_template_check.sh: Deleting OpenFlow Tag (name:${openflow_tag})"
 remove_ovsdb_entry Openflow_Tag -w name "${openflow_tag}" &&
     log "/nfm/nfm_native_ebtable_template_check.sh: Deleting OpenFlow Tag (name:${openflow_tag}) - Success" ||
-    raise "FAIL: Failed deleting OpenFlow Tag (name: ${openflow_tag}" -l "/nfm/nfm_native_ebtable_template_check.sh" -tc
-
-# Check if manager survived.
-check_manager_alive "${OPENSYNC_ROOTDIR}/bin/nfm" &&
-    log "/nfm/nfm_native_ebtable_template_check.sh: NFM is running - Success" ||
-    raise "FAIL: NFM not running/crashed" -l "/nfm/nfm_native_ebtable_template_check.sh" -tc
+    raise "Failed deleting OpenFlow Tag (name: ${openflow_tag}" -l "/nfm/nfm_native_ebtable_template_check.sh" -tc
 
 pass

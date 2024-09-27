@@ -39,12 +39,14 @@ case "${1}" in
 esac
 
 trap '
-fut_info_dump_line
-get_radio_mac_from_system "$wan_if_name"
-print_tables Connection_Manager_Uplink Wifi_Inet_State
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    get_radio_mac_from_system "$wan_if_name"
+    print_tables Connection_Manager_Uplink Wifi_Inet_State
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 log_title "onbrd/onbrd_verify_wan_iface_mac_addr.sh: ONBRD test - Verify if WAN interface in Wifi_Inet_State has MAC address matching the system"
 
@@ -57,7 +59,7 @@ if [ $# -eq 0 ]; then
         if [ -n "$wan_if_name" ]; then
             break
         elif [ "$i" -eq $get_wan_ifname_max_retries ]; then
-            raise "FAIL: Could not auto-determine WAN interface from Connection_Manager_Uplink" -l "onbrd/onbrd_verify_wan_iface_mac_addr.sh" -tc
+            raise "Could not auto-determine WAN interface from Connection_Manager_Uplink" -l "onbrd/onbrd_verify_wan_iface_mac_addr.sh" -tc
         fi
 
         log "onbrd/onbrd_verify_wan_iface_mac_addr.sh: Could not auto-determine WAN interface from Connection_Manager_Uplink, retrying in 3 seconds"
@@ -73,12 +75,12 @@ fi
 # shellcheck disable=SC2060
 mac_address=$(get_radio_mac_from_system "$wan_if_name" | tr [A-Z] [a-z])
 if [ -z "$mac_address" ]; then
-    raise "FAIL: Could not determine MAC for WAN interface '$wan_if_name' from system" -l "onbrd/onbrd_verify_wan_iface_mac_addr.sh" -tc
+    raise "Could not determine MAC for WAN interface '$wan_if_name' from system" -l "onbrd/onbrd_verify_wan_iface_mac_addr.sh" -tc
 fi
 
 log "onbrd/onbrd_verify_wan_iface_mac_addr.sh: Verify used WAN interface '$wan_if_name' MAC address equals '$mac_address'"
 wait_ovsdb_entry Wifi_Inet_State -w if_name "$wan_if_name" -is hwaddr "$mac_address" &&
     log "onbrd/onbrd_verify_wan_iface_mac_addr.sh: wait_ovsdb_entry - Wifi_Inet_State '$wan_if_name' hwaddr is equal to '$mac_address' - Success" ||
-    raise "FAIL: wait_ovsdb_entry - Wifi_Inet_State '$wan_if_name' hwaddr is NOT equal to '$mac_address'" -l "onbrd/onbrd_verify_wan_iface_mac_addr.sh" -tc
+    raise "wait_ovsdb_entry - Wifi_Inet_State '$wan_if_name' hwaddr is NOT equal to '$mac_address'" -l "onbrd/onbrd_verify_wan_iface_mac_addr.sh" -tc
 
 pass

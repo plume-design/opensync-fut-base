@@ -6,14 +6,6 @@ debian_server:
   recommended: '3.0.25'
   legacy: '3.0.25'
   public: '3.1.10'
-linux_client:
-  recommended: '1.2.29'
-  legacy: '1.2.28'
-  public: null
-rpi_client:
-  recommended: '2.0-194'
-  legacy: 'v2.0-178'
-  public: 'v2.1-10'
 rpi_server:
   recommended: '2.0-195'
   legacy: 'v2.0-187'

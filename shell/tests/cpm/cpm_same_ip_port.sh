@@ -66,15 +66,17 @@ validate_1_up_2_gone()
 }
 
 trap '
-fut_info_dump_line
-print_tables Captive_Portal
-echo "Final tinyproxies status:"
-$(get_process_cmd) | grep tinyproxy | grep -v grep
-echo "Final tinyproxies config files status:"
-ls -l /tmp/tinyproxy
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    print_tables Captive_Portal
+    echo "Final tinyproxies status:"
+    $(get_process_cmd) | grep tinyproxy | grep -v grep
+    echo "Final tinyproxies config files status:"
+    ls -l /tmp/tinyproxy
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 log_title "cpm/cpm_same_ip_port.sh: CPM test - Verify default listen ip and port"
 
@@ -83,7 +85,7 @@ init_cpm_test
 # make sure there are no zombie config files
 rm -f /tmp/tinyproxy/tinyproxy.*.conf
     log "cpm/cpm_same_ip_port.sh: Removed tinyproxy configuration file - Success" ||
-    raise "FAIL: Unable to remove tinyproxy configuration file" -l "cpm/cpm_same_ip_port.sh" -tc
+    raise "Unable to remove tinyproxy configuration file" -l "cpm/cpm_same_ip_port.sh" -tc
 
 insert_ovsdb_entry Captive_Portal \
 -i additional_headers '["map",[["X-LocationID","100000000000000000000001"],["X-PodID","1000000001"],["X-PodMac","aa:bb:cc:dd:ee:ff"],["X-SSID","FUT_ssid_guest"]]]' \
@@ -92,7 +94,7 @@ insert_ovsdb_entry Captive_Portal \
 -i proxy_method "reverse" \
 -i uam_url "https://captiveportal1" &&
     log "cpm/cpm_same_ip_port.sh: First Captive_Portal entry inserted - Success" ||
-    raise "FAIL: Failed to insert first Captive_Portal entry" -l "cpm/cpm_same_ip_port.sh" -tc
+    raise "Failed to insert first Captive_Portal entry" -l "cpm/cpm_same_ip_port.sh" -tc
 
 # debounce timer 1 second plus one additional second
 sleep 2
@@ -104,14 +106,14 @@ insert_ovsdb_entry Captive_Portal \
 -i proxy_method "reverse" \
 -i uam_url "https://captiveportal2" &&
     log "cpm/cpm_same_ip_port.sh: Second Captive_Portal entry inserted - Success" ||
-    raise "FAIL: Failed to insert second Captive_Portal entry" -l "cpm/cpm_same_ip_port.sh" -tc
+    raise "Failed to insert second Captive_Portal entry" -l "cpm/cpm_same_ip_port.sh" -tc
 
 # for restarting 10 times debounce timer plus some add-on
 sleep 15
 
 validate_1_up_2_gone &&
     log "cpm/cpm_same_ip_port.sh: Found the first tinyproxy still running and the second abandoned - Success" ||
-    raise "FAIL: Incorrect validation result of the two tinyproxies using the same ip and port"  -l "cpm/cpm_same_ip_port.sh" -tc
+    raise "Incorrect validation result of the two tinyproxies using the same ip and port"  -l "cpm/cpm_same_ip_port.sh" -tc
 
 print_tables Captive_Portal
 

@@ -10,6 +10,7 @@ fut/.files
 fut_cmd.sh
 fut_set_env.sh
 fut_tr.tar
+kconfig
 mqtt_messages.json
 qase-report/
 qaseio.lock

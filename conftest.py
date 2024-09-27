@@ -55,15 +55,15 @@ def pytest_collection_modifyitems(config, items):
     def _get_item_config(item):
         try:
             tcc = item._request.node.callspec.params
-            if isinstance(tcc, Enum):
-                return {}
-            if "cfg" in tcc:
-                if isinstance(tcc["cfg"], Enum):
-                    return {}
-                return tcc["cfg"]
-            return tcc
-        except Exception:
+        except AttributeError:
             return {}
+        if isinstance(tcc, Enum):
+            return {}
+        if "cfg" not in tcc:
+            return tcc
+        if isinstance(tcc["cfg"], Enum):
+            return {}
+        return tcc["cfg"]
 
     tests_to_run, class_mapping = [], []
 
@@ -94,13 +94,9 @@ def setup(request):
     try:
         log.debug("Entered FUT setup fixture.")
         test_suites = request.config.test_suites
-        scrubbed_test_suites = []
-        for test_suite in test_suites:
-            # Remove "Internal" suffix if it exists
-            scrubbed_test_suites.append(test_suite.replace("Internal", ""))
-        required_nodes, required_clients = determine_required_devices(scrubbed_test_suites)
+        required_nodes, required_clients = determine_required_devices(test_suites)
         fut_setup.pre_test_device_setup(node_devices=required_nodes, client_devices=required_clients)
-    except Exception as exception:
+    except RuntimeError as exception:
         raise RuntimeError(f"Failed to perform FUT setup: {exception}")
 
 
@@ -189,5 +185,7 @@ def pytest_sessionfinish():
         server = pytest.server
         log.info("Performing docker container cleanup on the server device")
         assert server.execute("server_docker_cleanup", suffix=".py", folder="docker/server")[0] == 0
+    except AttributeError as exception:
+        log.debug(f"Unable to perform docker container cleanup on the server device: {exception}")
     except Exception as exception:
         log.warning(f"Unable to perform docker container cleanup on the server device: {exception}")

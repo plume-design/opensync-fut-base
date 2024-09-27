@@ -49,100 +49,102 @@ internal_netmask="255.255.255.0"
 dhcpd='["map",[["dhcp_option","3,'${internal_inet_addr}';6,'${internal_inet_addr}'"],["force","false"],["lease_time","12h"],["start","'${dhcp_start_pool}'"],["stop","'${dhcp_end_pool}'"]]]'
 
 trap '
-fut_info_dump_line
-check_pid_udhcp $wan_iface
-print_tables Wifi_Inet_State
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    check_pid_udhcp $wan_iface
+    print_tables Wifi_Inet_State
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 log_title "onbrd/onbrd_verify_router_mode.sh: ONBRD test - Verify router mode settings applied"
 log "onbrd/onbrd_verify_router_mode.sh: Remove port '$wan_iface' from bridge '${lan_bridge}' if exists"
-remove_bridge_port "${lan_bridge}" "${wan_iface}" &&
+remove_port_from_bridge "${lan_bridge}" "${wan_iface}" &&
     log "onbrd/onbrd_verify_router_mode.sh: Port '${wan_iface}' removed from bridge '${lan_bridge}' or port did not exist!"
 
 # WAN bridge section
 log "onbrd/onbrd_verify_router_mode.sh: Check if interface '$wan_iface' is UP"
 wait_for_function_response 0 "check_eth_interface_state_is_up $wan_iface" &&
     log "onbrd/onbrd_verify_router_mode.sh: Interface '$wan_iface' is UP - Success" ||
-    raise "FAIL: Interface '$wan_iface' is DOWN, should be UP" -l "onbrd/onbrd_verify_router_mode.sh" -ds
+    raise "Interface '$wan_iface' is DOWN, should be UP" -l "onbrd/onbrd_verify_router_mode.sh" -ds
 
 # Check if DHCP client is running on WAN bridge
 log "onbrd/onbrd_verify_router_mode.sh: Check if DHCP client is running on WAN bridge - '$wan_iface'"
 wait_for_function_response 0 "check_pid_udhcp $wan_iface" &&
     log "onbrd/onbrd_verify_router_mode.sh: check_pid_udhcp '$wan_iface' - PID found, DHCP client running - Success" ||
-    raise "FAIL: check_pid_udhcp '$wan_iface' - PID not found, DHCP client is not running" -l "onbrd/onbrd_verify_router_mode.sh" -tc
+    raise "check_pid_udhcp '$wan_iface' - PID not found, DHCP client is not running" -l "onbrd/onbrd_verify_router_mode.sh" -tc
 
 log "onbrd/onbrd_verify_router_mode.sh: Setting Wifi_Inet_Config::NAT to true on '$wan_iface'"
 update_ovsdb_entry Wifi_Inet_Config -w if_name "$wan_iface" -u NAT true &&
     log "onbrd/onbrd_verify_router_mode.sh: update_ovsdb_entry - Wifi_Inet_Config::NAT is 'true' - Success" ||
-    raise "FAIL: update_ovsdb_entry - Failed to update Wifi_Inet_Config::NAT is not 'true'" -l "onbrd/onbrd_verify_router_mode.sh" -oe
+    raise "update_ovsdb_entry - Failed to update Wifi_Inet_Config::NAT is not 'true'" -l "onbrd/onbrd_verify_router_mode.sh" -fc
 
 wait_ovsdb_entry Wifi_Inet_State -w if_name "$wan_iface" -is NAT true &&
     log "onbrd/onbrd_verify_router_mode.sh: wait_ovsdb_entry - Wifi_Inet_Config reflected to Wifi_Inet_State::NAT is 'true' - Success" ||
-    raise "FAIL: wait_ovsdb_entry - Failed to reflect Wifi_Inet_Config to Wifi_Inet_State::NAT is not 'true'" -l "onbrd/onbrd_verify_router_mode.sh" -tc
+    raise "wait_ovsdb_entry - Failed to reflect Wifi_Inet_Config to Wifi_Inet_State::NAT is not 'true'" -l "onbrd/onbrd_verify_router_mode.sh" -tc
 
 log "onbrd/onbrd_verify_router_mode.sh: Setting Wifi_Inet_Config::upnp_mode to '$external_upnp_mode' on '$wan_iface'"
 update_ovsdb_entry Wifi_Inet_Config -w if_name "$wan_iface" -u upnp_mode $external_upnp_mode &&
     log "onbrd/onbrd_verify_router_mode.sh: update_ovsdb_entry - Wifi_Inet_Config::upnp_mode is '$external_upnp_mode' - Success" ||
-    raise "FAIL: update_ovsdb_entry - Failed to update Wifi_Inet_Config::upnp_mode is not '$external_upnp_mode'" -l "onbrd/onbrd_verify_router_mode.sh" -oe
+    raise "update_ovsdb_entry - Failed to update Wifi_Inet_Config::upnp_mode is not '$external_upnp_mode'" -l "onbrd/onbrd_verify_router_mode.sh" -fc
 
 wait_ovsdb_entry Wifi_Inet_State -w if_name "$wan_iface" -is upnp_mode $external_upnp_mode &&
     log "onbrd/onbrd_verify_router_mode.sh: wait_ovsdb_entry - Wifi_Inet_Config reflected to Wifi_Inet_State::upnp_mode is '$external_upnp_mode' - Success" ||
-    raise "FAIL: wait_ovsdb_entry - Failed to reflect Wifi_Inet_Config to Wifi_Inet_State::upnp_mode is not '$external_upnp_mode'" -l "onbrd/onbrd_verify_router_mode.sh" -tc
+    raise "wait_ovsdb_entry - Failed to reflect Wifi_Inet_Config to Wifi_Inet_State::upnp_mode is not '$external_upnp_mode'" -l "onbrd/onbrd_verify_router_mode.sh" -tc
 
 # LAN bridge section
 log "onbrd/onbrd_verify_router_mode.sh: Setting Wifi_Inet_Config::network and Wifi_Inet_Config::enabled to TRUE on $lan_bridge"
 update_ovsdb_entry Wifi_Inet_Config -w if_name "$lan_bridge" -u network true -u enabled true &&
     log "onbrd/onbrd_verify_router_mode.sh: update_ovsdb_entry - Wifi_Inet_Config::network and Wifi_Inet_Config::enabled updated - Success" ||
-    raise "FAIL: update_ovsdb_entry - Failed to update Wifi_Inet_Config::network and Wifi_Inet_Config::enabled" -l "onbrd/onbrd_verify_router_mode.sh" -oe
+    raise "update_ovsdb_entry - Failed to update Wifi_Inet_Config::network and Wifi_Inet_Config::enabled" -l "onbrd/onbrd_verify_router_mode.sh" -fc
 
 wait_ovsdb_entry Wifi_Inet_State -w if_name "$lan_bridge" -is network true -is enabled true &&
     log "onbrd/onbrd_verify_router_mode.sh: wait_ovsdb_entry - Wifi_Inet_State::network and Wifi_Inet_State::enabled set TRUE - Success" ||
-    raise "FAIL: wait_ovsdb_entry - Failed to update Wifi_Inet_State::network and Wifi_Inet_State::enabled" -l "onbrd/onbrd_verify_router_mode.sh" -tc
+    raise "wait_ovsdb_entry - Failed to update Wifi_Inet_State::network and Wifi_Inet_State::enabled" -l "onbrd/onbrd_verify_router_mode.sh" -tc
 
 log "onbrd/onbrd_verify_router_mode.sh: Setting DHCP range on $lan_bridge to '$dhcp_start_pool' '$dhcp_end_pool'"
 update_ovsdb_entry Wifi_Inet_Config -w if_name "$lan_bridge" -u dhcpd '${dhcpd}' &&
     log "onbrd/onbrd_verify_router_mode.sh: update_ovsdb_entry - Wifi_Inet_Config::dhcpd is updated - Success" ||
-    raise "FAIL: update_ovsdb_entry - Failed to update Wifi_Inet_Config::dhcpd" -l "onbrd/onbrd_verify_router_mode.sh" -oe
+    raise "update_ovsdb_entry - Failed to update Wifi_Inet_Config::dhcpd" -l "onbrd/onbrd_verify_router_mode.sh" -fc
 
 wait_ovsdb_entry Wifi_Inet_State -w if_name "$lan_bridge" -is dhcpd '${dhcpd}' &&
     log "onbrd/onbrd_verify_router_mode.sh: wait_ovsdb_entry - Wifi_Inet_Config reflected to Wifi_Inet_State::dhcpd is updated - Success" ||
-    raise "FAIL: wait_ovsdb_entry - Failed to reflect Wifi_Inet_Config to Wifi_Inet_State::dhcpd" -l "onbrd/onbrd_verify_router_mode.sh" -tc
+    raise "wait_ovsdb_entry - Failed to reflect Wifi_Inet_Config to Wifi_Inet_State::dhcpd" -l "onbrd/onbrd_verify_router_mode.sh" -tc
 
 log "onbrd/onbrd_verify_router_mode.sh: Setting Wifi_Inet_Config::NAT to false"
 update_ovsdb_entry Wifi_Inet_Config -w if_name "$lan_bridge" -u NAT false &&
     log "onbrd/onbrd_verify_router_mode.sh: update_ovsdb_entry - Wifi_Inet_Config::NAT is 'false' - Success" ||
-    raise "FAIL: update_ovsdb_entry - Failed to update Wifi_Inet_Config::NAT is not 'false'" -l "onbrd/onbrd_verify_router_mode.sh" -oe
+    raise "update_ovsdb_entry - Failed to update Wifi_Inet_Config::NAT is not 'false'" -l "onbrd/onbrd_verify_router_mode.sh" -fc
 
 wait_ovsdb_entry Wifi_Inet_State -w if_name "$lan_bridge" -is NAT false &&
     log "onbrd/onbrd_verify_router_mode.sh: wait_ovsdb_entry - Wifi_Inet_Config reflected to Wifi_Inet_State::NAT is 'false' - Success" ||
-    raise "FAIL: wait_ovsdb_entry - Failed to reflect Wifi_Inet_Config to Wifi_Inet_State::NAT is not 'false'" -l "onbrd/onbrd_verify_router_mode.sh" -tc
+    raise "wait_ovsdb_entry - Failed to reflect Wifi_Inet_Config to Wifi_Inet_State::NAT is not 'false'" -l "onbrd/onbrd_verify_router_mode.sh" -tc
 
 log "onbrd/onbrd_verify_router_mode.sh: Setting Wifi_Inet_Config::upnp_mode to '$internal_upnp_mode' on '$lan_bridge'"
 update_ovsdb_entry Wifi_Inet_Config -w if_name "$lan_bridge" -u upnp_mode $internal_upnp_mode &&
     log "onbrd/onbrd_verify_router_mode.sh: update_ovsdb_entry - Wifi_Inet_Config::upnp_mode is '$internal_upnp_mode' - Success" ||
-    raise "FAIL: update_ovsdb_entry - Failed to update Wifi_Inet_Config::upnp_mode is not '$internal_upnp_mode'" -l "onbrd/onbrd_verify_router_mode.sh" -oe
+    raise "update_ovsdb_entry - Failed to update Wifi_Inet_Config::upnp_mode is not '$internal_upnp_mode'" -l "onbrd/onbrd_verify_router_mode.sh" -fc
 
 wait_ovsdb_entry Wifi_Inet_State -w if_name "$lan_bridge" -is upnp_mode $internal_upnp_mode &&
     log "onbrd/onbrd_verify_router_mode.sh: wait_ovsdb_entry - Wifi_Inet_Config reflected to Wifi_Inet_State::upnp_mode is '$internal_upnp_mode' - Success" ||
-    raise "FAIL: wait_ovsdb_entry - Failed to reflect Wifi_Inet_Config to Wifi_Inet_State::upnp_mode is not '$internal_upnp_mode'" -l "onbrd/onbrd_verify_router_mode.sh" -tc
+    raise "wait_ovsdb_entry - Failed to reflect Wifi_Inet_Config to Wifi_Inet_State::upnp_mode is not '$internal_upnp_mode'" -l "onbrd/onbrd_verify_router_mode.sh" -tc
 
 update_ovsdb_entry Wifi_Inet_Config -w if_name "$lan_bridge" -u ip_assign_scheme static &&
     log "onbrd/onbrd_verify_router_mode.sh: update_ovsdb_entry - Wifi_Inet_Config::ip_assign_scheme is 'static' - Success" ||
-    raise "FAIL: update_ovsdb_entry - Failed to update Wifi_Inet_Config::ip_assign_scheme is not 'static'" -l "onbrd/onbrd_verify_router_mode.sh" -oe
+    raise "update_ovsdb_entry - Failed to update Wifi_Inet_Config::ip_assign_scheme is not 'static'" -l "onbrd/onbrd_verify_router_mode.sh" -fc
 
 wait_ovsdb_entry Wifi_Inet_State -w if_name "$lan_bridge" -is ip_assign_scheme static &&
     log "onbrd/onbrd_verify_router_mode.sh: wait_ovsdb_entry - Wifi_Inet_Config reflected to Wifi_Inet_State::ip_assign_scheme is 'static' - Success" ||
-    raise "FAIL: wait_ovsdb_entry - Failed to reflect Wifi_Inet_Config to Wifi_Inet_State::ip_assign_scheme is not 'static'" -l "onbrd/onbrd_verify_router_mode.sh" -tc
+    raise "wait_ovsdb_entry - Failed to reflect Wifi_Inet_Config to Wifi_Inet_State::ip_assign_scheme is not 'static'" -l "onbrd/onbrd_verify_router_mode.sh" -tc
 
 update_ovsdb_entry Wifi_Inet_Config -w if_name "$lan_bridge" -u inet_addr ${internal_inet_addr} -u netmask ${internal_netmask} &&
     log "onbrd/onbrd_verify_router_mode.sh: update_ovsdb_entry - Wifi_Inet_Config::inet_addr and Wifi_Inet_Config::netmask updated - Success" ||
-    raise "FAIL: update_ovsdb_entry - Failed to update Wifi_Inet_Config::inet_addr and Wifi_Inet_Config::netmask'" -l "onbrd/onbrd_verify_router_mode.sh" -oe
+    raise "update_ovsdb_entry - Failed to update Wifi_Inet_Config::inet_addr and Wifi_Inet_Config::netmask'" -l "onbrd/onbrd_verify_router_mode.sh" -fc
 
 wait_ovsdb_entry Wifi_Inet_State -w if_name "$lan_bridge" -is inet_addr ${internal_inet_addr} -is netmask ${internal_netmask} &&
     log "onbrd/onbrd_verify_router_mode.sh: wait_ovsdb_entry - Wifi_Inet_Config reflected to Wifi_Inet_State::inet_addr and Wifi_Inet_State::netmask' - Success" ||
-    raise "FAIL: wait_ovsdb_entry - Failed to reflect Wifi_Inet_Config to Wifi_Inet_State::inet_addr and Wifi_Inet_State::netmask'" -l "onbrd/onbrd_verify_router_mode.sh" -tc
+    raise "wait_ovsdb_entry - Failed to reflect Wifi_Inet_Config to Wifi_Inet_State::inet_addr and Wifi_Inet_State::netmask'" -l "onbrd/onbrd_verify_router_mode.sh" -tc
 
 print_tables Wifi_Inet_Config Wifi_Inet_State
 

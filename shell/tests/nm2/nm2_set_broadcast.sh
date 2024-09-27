@@ -40,13 +40,14 @@ if_type=$2
 broadcast=$3
 
 trap '
+    fut_ec=$?
+    trap - EXIT INT
     fut_info_dump_line
     print_tables Wifi_Inet_Config Wifi_Inet_State
     reset_inet_entry $if_name || true
-    check_restore_management_access || true
-    check_restore_ovsdb_server
     fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    exit $fut_ec
+' EXIT INT TERM
 
 log_title "nm2/nm2_set_broadcast.sh: NM2 test - Testing table Wifi_Inet_Config field broadcast"
 
@@ -60,12 +61,12 @@ create_inet_entry \
     -netmask "255.255.255.0" \
     -if_type "$if_type" &&
         log "nm2/nm2_set_broadcast.sh: Interface $if_name created - Success" ||
-        raise "FAIL: Failed to create $if_name interface" -l "nm2/nm2_set_broadcast.sh" -ds
+        raise "Failed to create $if_name interface" -l "nm2/nm2_set_broadcast.sh" -ds
 
 log "nm2/nm2_set_broadcast.sh: Setting BROADCAST for $if_name to $broadcast"
 update_ovsdb_entry Wifi_Inet_Config -w if_name "$if_name" -u broadcast "$broadcast" &&
     log "nm2/nm2_set_broadcast.sh: update_ovsdb_entry - Wifi_Inet_Config::broadcast is '$broadcast' - Success" ||
-    raise "FAIL: update_ovsdb_entry - Wifi_Inet_Config::broadcast is not '$broadcast'" -l "nm2/nm2_set_broadcast.sh" -oe
+    raise "update_ovsdb_entry - Wifi_Inet_Config::broadcast is not '$broadcast'" -l "nm2/nm2_set_broadcast.sh" -fc
 
 wait_ovsdb_entry Wifi_Inet_State -w if_name "$if_name" -is broadcast "$broadcast" &&
     log "nm2/nm2_set_broadcast.sh: wait_ovsdb_entry - Wifi_Inet_Config reflected to Wifi_Inet_State::broadcast is '$broadcast' - Success" ||
@@ -74,24 +75,24 @@ wait_ovsdb_entry Wifi_Inet_State -w if_name "$if_name" -is broadcast "$broadcast
 log "nm2/nm2_set_broadcast.sh: Check if BROADCAST was properly applied to $if_name - LEVEL2"
 wait_for_function_response 0 "check_interface_broadcast_set_on_system $if_name | grep -q \"$broadcast\"" &&
     log "nm2/nm2_set_broadcast.sh: LEVEL2 - BROADCAST applied to ifconfig - broadcast is $broadcast - Success" ||
-    raise "FAIL: LEVEL2 - Failed to apply BROADCAST to ifconfig - broadcast is not $broadcast" -l "nm2/nm2_set_broadcast.sh" -tc
+    raise "LEVEL2 - Failed to apply BROADCAST to ifconfig - broadcast is not $broadcast" -l "nm2/nm2_set_broadcast.sh" -tc
 
 log "nm2/nm2_set_broadcast.sh: Removing broadcast from Wifi_Inet_Config for $if_name"
 update_ovsdb_entry Wifi_Inet_Config -w if_name "$if_name" \
     -u broadcast 0.0.0.0 \
     -u ip_assign_scheme none &&
         log "nm2/nm2_set_broadcast.sh: update_ovsdb_entry - Wifi_Inet_Config::broadcast is '0.0.0.0' - Success" ||
-        raise "FAIL: update_ovsdb_entry - Wifi_Inet_Config::broadcast is not '0.0.0.0'" -l "nm2/nm2_set_broadcast.sh" -oe
+        raise "update_ovsdb_entry - Wifi_Inet_Config::broadcast is not '0.0.0.0'" -l "nm2/nm2_set_broadcast.sh" -fc
 
 wait_ovsdb_entry Wifi_Inet_State -w if_name "$if_name" \
     -is broadcast 0.0.0.0 \
     -is ip_assign_scheme none &&
         log "nm2/nm2_set_broadcast.sh: wait_ovsdb_entry - Wifi_Inet_Config reflected to Wifi_Inet_State::broadcast is '0.0.0.0' - Success" ||
-        raise "FAIL: wait_ovsdb_entry - Failed to reflect Wifi_Inet_Config to Wifi_Inet_State::broadcast is not '0.0.0.0'" -l "nm2/nm2_set_broadcast.sh" -tc
+        raise "wait_ovsdb_entry - Failed to reflect Wifi_Inet_Config to Wifi_Inet_State::broadcast is not '0.0.0.0'" -l "nm2/nm2_set_broadcast.sh" -tc
 
 log "nm2/nm2_set_broadcast.sh: Checking if BROADCAST was properly removed for $if_name - LEVEL2"
 wait_for_function_response 1 "check_interface_broadcast_set_on_system $if_name | grep -q \"$broadcast\"" &&
     log "nm2/nm2_set_broadcast.sh: LEVEL2 - BROADCAST removed from ifconfig for interface $if_name - Success" ||
-    raise "FAIL: LEVEL2 - Failed to remove BROADCAST from ifconfig for interface $if_name" -l "nm2/nm2_set_broadcast.sh" -tc
+    raise "LEVEL2 - Failed to remove BROADCAST from ifconfig for interface $if_name" -l "nm2/nm2_set_broadcast.sh" -tc
 
 pass

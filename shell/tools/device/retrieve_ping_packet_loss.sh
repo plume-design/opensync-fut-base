@@ -31,7 +31,7 @@ ping_log_file=${1}
 # Search for any non-zero packet loss in the PING log file
 
 grep -E "([1-9][0-9]{0,2})% packet loss" "$ping_log_file" &&
-    raise "FAIL: Packet loss detected" -l "tools/device/retrieve_ping_packet_loss.sh" -oe
+    raise "Packet loss detected" -l "tools/device/retrieve_ping_packet_loss.sh" -fc
 
 log "tools/device/retrieve_ping_packet_loss.sh: No packet loss detected - Success"
 

@@ -43,41 +43,43 @@ fw_path=$1
 fw_url=$2
 
 trap '
+    fut_ec=$?
+    trap - EXIT INT
     fut_info_dump_line
     print_tables AWLAN_Node
     reset_um_triggers $fw_path || true
-    check_restore_ovsdb_server
     fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    exit $fut_ec
+' EXIT INT TERM
 
 log_title "um/um_corrupt_image.sh: UM test - Corrupt FW image"
 
 log "um/um_corrupt_image.sh: Setting firmware_url to $fw_url"
 update_ovsdb_entry AWLAN_Node -u firmware_url "$fw_url" &&
     log "um/um_corrupt_image.sh: update_ovsdb_entry - AWLAN_Node::firmware_url is $fw_url - Success" ||
-    raise "FAIL: update_ovsdb_entry - AWLAN_Node::firmware_url is not $fw_url" -l "um/um_corrupt_image.sh" -oe
+    raise "update_ovsdb_entry - AWLAN_Node::firmware_url is not $fw_url" -l "um/um_corrupt_image.sh" -fc
 
 fw_start_code=$(get_um_code "UPG_STS_FW_DL_START")
 log "um/um_corrupt_image.sh: Waiting for FW download to start"
 wait_ovsdb_entry AWLAN_Node -is upgrade_status "$fw_start_code" &&
     log "um/um_corrupt_image.sh: wait_ovsdb_entry - AWLAN_Node::upgrade_status is $fw_start_code - Success" ||
-    raise "FAIL: wait_ovsdb_entry - AWLAN_Node::upgrade_status is not $fw_start_code" -l "um/um_corrupt_image.sh" -tc
+    raise "wait_ovsdb_entry - AWLAN_Node::upgrade_status is not $fw_start_code" -l "um/um_corrupt_image.sh" -tc
 
 fw_stop_code=$(get_um_code "UPG_STS_FW_DL_END")
 log "um/um_corrupt_image.sh: Waiting for FW download to finish"
 wait_ovsdb_entry AWLAN_Node -is upgrade_status "$fw_stop_code" &&
     log "um/um_corrupt_image.sh: wait_ovsdb_entry - AWLAN_Node::upgrade_status is $fw_stop_code - Success" ||
-    raise "FAIL: wait_ovsdb_entry - AWLAN_Node::upgrade_status is not $fw_stop_code" -l "um/um_corrupt_image.sh" -tc
+    raise "wait_ovsdb_entry - AWLAN_Node::upgrade_status is not $fw_stop_code" -l "um/um_corrupt_image.sh" -tc
 
 log "um/um_corrupt_image.sh: Setting AWLAN_Node upgrade_timer to 1 - Starting upgrade in 1 sec"
 update_ovsdb_entry AWLAN_Node -u upgrade_timer 1 &&
     log "um/um_corrupt_image.sh: update_ovsdb_entry - AWLAN_Node::upgrade_timer is 1 - Success" ||
-    raise "FAIL: update_ovsdb_entry - AWLAN_Node::upgrade_timer is not 1" -l "um/um_corrupt_image.sh" -oe
+    raise "update_ovsdb_entry - AWLAN_Node::upgrade_timer is not 1" -l "um/um_corrupt_image.sh" -fc
 
 fw_fail_code=$(get_um_code "UPG_ERR_FL_WRITE")
 log "um/um_corrupt_image.sh: Waiting for AWLAN_Node::upgrade_status to become UPG_ERR_FL_WRITE ($fw_fail_code)"
 wait_ovsdb_entry AWLAN_Node -is upgrade_status "$fw_fail_code" &&
     log "um/um_corrupt_image.sh: wait_ovsdb_entry - AWLAN_Node::upgrade_status is $fw_fail_code - Success" ||
-    raise "FAIL: wait_ovsdb_entry - AWLAN_Node::upgrade_status is not $fw_fail_code" -l "um/um_corrupt_image.sh" -tc
+    raise "wait_ovsdb_entry - AWLAN_Node::upgrade_status is not $fw_fail_code" -l "um/um_corrupt_image.sh" -tc
 
 pass

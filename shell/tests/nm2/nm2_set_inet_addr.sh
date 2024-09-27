@@ -40,13 +40,14 @@ if_type=$2
 inet_addr=$3
 
 trap '
+    fut_ec=$?
+    trap - EXIT INT
     fut_info_dump_line
     print_tables Wifi_Inet_Config Wifi_Inet_State
     reset_inet_entry $if_name || true
-    check_restore_management_access || true
-    check_restore_ovsdb_server
     fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    exit $fut_ec
+' EXIT INT TERM
 
 log_title "nm2/nm2_set_inet_addr.sh: NM2 test - Testing table Wifi_Inet_Config field inet_addr"
 
@@ -60,34 +61,34 @@ create_inet_entry \
     -if_type "$if_type" \
     -inet_addr "$inet_addr" &&
         log "nm2/nm2_set_inet_addr.sh: Interface $if_name created - Success" ||
-        raise "FAIL: Failed to create $if_name interface" -l "nm2/nm2_set_inet_addr.sh" -ds
+        raise "Failed to create $if_name interface" -l "nm2/nm2_set_inet_addr.sh" -ds
 
 log "nm2/nm2_set_inet_addr.sh: Setting Wifi_Inet_Config::inet_addr to $inet_addr"
 update_ovsdb_entry Wifi_Inet_Config -w if_name "$if_name" -u inet_addr "$inet_addr" &&
     log "nm2/nm2_set_inet_addr.sh: update_ovsdb_entry - Wifi_Inet_Config::inet_addr is $inet_addr - Success" ||
-    raise "FAIL: update_ovsdb_entry - Failed to update Wifi_Inet_Config::inet_addr is not $inet_addr" -l "nm2/nm2_set_inet_addr.sh" -oe
+    raise "update_ovsdb_entry - Failed to update Wifi_Inet_Config::inet_addr is not $inet_addr" -l "nm2/nm2_set_inet_addr.sh" -fc
 
 wait_ovsdb_entry Wifi_Inet_State -w if_name "$if_name" -is inet_addr "$inet_addr" &&
     log "nm2/nm2_set_inet_addr.sh: wait_ovsdb_entry - Wifi_Inet_Config reflected to Wifi_Inet_State::inet_addr is $inet_addr - Success" ||
-    raise "FAIL: wait_ovsdb_entry - Failed to reflect Wifi_Inet_Config to Wifi_Inet_State::inet_addr is not $inet_addr" -l "nm2/nm2_set_inet_addr.sh" -tc
+    raise "wait_ovsdb_entry - Failed to reflect Wifi_Inet_Config to Wifi_Inet_State::inet_addr is not $inet_addr" -l "nm2/nm2_set_inet_addr.sh" -tc
 
 log "nm2/nm2_set_inet_addr.sh: Checking if INET_ADDR was properly applied to $if_name - LEVEL2"
 wait_for_function_response 0 "check_interface_ip_address_set_on_system $if_name | grep -q \"$inet_addr\"" &&
     log "nm2/nm2_set_inet_addr.sh: INET_ADDR applied to ifconfig - interface $if_name" ||
-    raise "FAIL: Failed to apply INET_ADDR to ifconfig - interface $if_name" -l "nm2/nm2_set_inet_addr.sh" -tc
+    raise "Failed to apply INET_ADDR to ifconfig - interface $if_name" -l "nm2/nm2_set_inet_addr.sh" -tc
 
 log "nm2/nm2_set_inet_addr.sh: Removing INET_ADDR for $if_name"
 update_ovsdb_entry Wifi_Inet_Config -w if_name "$if_name" -u inet_addr "[\"set\",[]]" &&
     log "nm2/nm2_set_inet_addr.sh: update_ovsdb_entry - Wifi_Inet_Config::inet_addr is [\"set\",[]] - Success" ||
-    raise "FAIL: update_ovsdb_entry - Failed to update Wifi_Inet_Config::inet_addr is not [\"set\",[]]" -l "nm2/nm2_set_inet_addr.sh" -oe
+    raise "update_ovsdb_entry - Failed to update Wifi_Inet_Config::inet_addr is not [\"set\",[]]" -l "nm2/nm2_set_inet_addr.sh" -fc
 
 wait_ovsdb_entry Wifi_Inet_State -w if_name "$if_name" -is inet_addr "0.0.0.0" &&
     log "nm2/nm2_set_inet_addr.sh: wait_ovsdb_entry - Wifi_Inet_Config reflected to Wifi_Inet_State::inet_addr is '0.0.0.0' - Success" ||
-    raise "FAIL: wait_ovsdb_entry - Failed to reflect Wifi_Inet_Config to Wifi_Inet_State::inet_addr is not '0.0.0.0'" -l "nm2/nm2_set_inet_addr.sh" -tc
+    raise "wait_ovsdb_entry - Failed to reflect Wifi_Inet_Config to Wifi_Inet_State::inet_addr is not '0.0.0.0'" -l "nm2/nm2_set_inet_addr.sh" -tc
 
 log "nm2/nm2_set_inet_addr.sh: Checking if INET_ADDR was properly removed for $if_name - LEVEL2"
 wait_for_function_response 1 "check_interface_ip_address_set_on_system $if_name | grep -q \"$inet_addr\"" &&
     log "nm2/nm2_set_inet_addr.sh: INET_ADDR removed from ifconfig for interface $if_name - Success" ||
-    raise "FAIL: Failed to remove INET_ADDR from ifconfig for interface $if_name" -l "nm2/nm2_set_inet_addr.sh" -tc
+    raise "Failed to remove INET_ADDR from ifconfig for interface $if_name" -l "nm2/nm2_set_inet_addr.sh" -tc
 
 pass

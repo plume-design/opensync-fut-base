@@ -23,13 +23,13 @@ usage_string
 }
 
 trap '
-fut_ec=$?
-fut_info_dump_line
-print_tables Wifi_VIF_Config Wifi_VIF_State || true
-check_restore_ovsdb_server
-fut_info_dump_line
-exit $fut_ec
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    print_tables Wifi_VIF_Config Wifi_VIF_State || true
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 
 NARGS=1

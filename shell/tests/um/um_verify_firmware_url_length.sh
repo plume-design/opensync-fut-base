@@ -38,18 +38,20 @@ fw_path=$1
 fw_url=$2
 
 trap '
+    fut_ec=$?
+    trap - EXIT INT
     fut_info_dump_line
     print_tables AWLAN_Node
     reset_um_triggers $fw_path || true
-    check_restore_ovsdb_server
     fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    exit $fut_ec
+' EXIT INT TERM
 
 log_title "um/um_verify_firmware_url_length.sh: UM test - Verify FW - firmware_url"
 
 log "um/um_verify_firmware_url_length.sh: Setting firmware_url to $fw_url with max acceptable length"
 update_ovsdb_entry AWLAN_Node -u firmware_url "$fw_url" &&
     log "um/um_verify_firmware_url_length.sh: update_ovsdb_entry - AWLAN_Node::firmware_url is $fw_url - Success" ||
-    raise "FAIL: update_ovsdb_entry - AWLAN_Node::firmware_url is not $fw_url" -l "um/um_verify_firmware_url_length.sh" -tc
+    raise "update_ovsdb_entry - AWLAN_Node::firmware_url is not $fw_url" -l "um/um_verify_firmware_url_length.sh" -tc
 
 pass

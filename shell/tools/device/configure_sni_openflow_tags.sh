@@ -28,11 +28,10 @@ case "${1}" in
 esac
 
 trap '
-fut_info_dump_line
-print_tables Openflow_Tag
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_info_dump_line
+    print_tables Openflow_Tag
+    fut_info_dump_line
+' EXIT INT TERM
 
 NARGS=3
 [ $# -ne ${NARGS} ] && usage && raise "Requires exactly ${NARGS} input argument(s)" -l "tools/device/configure_sni_openflow_tags.sh" -arg
@@ -44,24 +43,24 @@ insert_ovsdb_entry Openflow_Tag \
     -i name all_gateways \
     -i cloud_value ["set",["$mac_gw","$mac_rpi_server"]] &&
         log "configure_sni_openflow_tags.sh: 'all_gateways' inserted to Openflow_Tag - Success" ||
-        raise "FAIL: Failed to insert 'all_gateways' to Openflow_Tag" -l "configure_sni_openflow_tags.sh" -oe
+        raise "Failed to insert 'all_gateways' to Openflow_Tag" -l "configure_sni_openflow_tags.sh" -fc
 
 insert_ovsdb_entry Openflow_Tag \
     -i name dpi-devices \
     -i cloud_value ["set",["$mac_client"]] &&
         log "configure_sni_openflow_tags.sh: 'dpi-devices' inserted to Openflow_Tag - Success" ||
-        raise "FAIL: Failed to insert 'dpi-devices' to Openflow_Tag" -l "configure_sni_openflow_tags.sh" -oe
+        raise "Failed to insert 'dpi-devices' to Openflow_Tag" -l "configure_sni_openflow_tags.sh" -fc
 
 insert_ovsdb_entry Openflow_Tag \
     -i name gateways \
     -i cloud_value ["set",["$mac_rpi_server"]] &&
         log "configure_sni_openflow_tags.sh: 'gateways' inserted to Openflow_Tag - Success" ||
-        raise "FAIL: Failed to insert 'gateways' to Openflow_Tag" -l "configure_sni_openflow_tags.sh" -oe
+        raise "Failed to insert 'gateways' to Openflow_Tag" -l "configure_sni_openflow_tags.sh" -fc
 
 insert_ovsdb_entry Openflow_Tag \
     -i name walleye_sni_attrs \
     -i cloud_value '["set",["http.host","http.url","tls.sni"]]' &&
         log "configure_sni_openflow_tags.sh: 'walleye_sni_attrs' inserted to Openflow_Tag - Success" ||
-        raise "FAIL: Failed to insert 'walleye_sni_attrs' to Openflow_Tag" -l "configure_sni_openflow_tags.sh" -oe
+        raise "Failed to insert 'walleye_sni_attrs' to Openflow_Tag" -l "configure_sni_openflow_tags.sh" -fc
 
 pass

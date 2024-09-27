@@ -29,11 +29,13 @@ esac
 # gatekeeper_get_verdict(): verdict for 'http://fut.opensync.io/gatekeeper/test/block' is blocked
 
 trap '
-fut_info_dump_line
-print_tables Wifi_Associated_Clients
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    print_tables Wifi_Associated_Clients
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 NARGS=2
 [ $# -lt ${NARGS} ] && usage && raise "Requires at least ${NARGS} input argument(s)" -arg
@@ -47,4 +49,4 @@ fsm_message_regex="$LOGREAD |
  grep 'is ${expected_verdict}'"
 wait_for_function_response 0 "${fsm_message_regex}" 5 &&
     log "fsm/fsm_test_gatekeeper_verdict.sh: FSM gatekeeper verdict message found in logs - Success" ||
-    raise "FAIL: Failed to find FSM gatekeeper verdict message in logs, regex used: ${fsm_message_regex} " -l "fsm/fsm_test_gatekeeper_verdict.sh" -tc
+    raise "Failed to find FSM gatekeeper verdict message in logs, regex used: ${fsm_message_regex} " -l "fsm/fsm_test_gatekeeper_verdict.sh" -tc

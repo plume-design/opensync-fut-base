@@ -58,7 +58,7 @@ def parse_arguments():
     return input_args
 
 
-def signal_handler(sig, frame):
+def signal_handler(sig, frame) -> None:
     """Handle the signal.
 
     Args:
@@ -68,25 +68,25 @@ def signal_handler(sig, frame):
     sys.exit(0)
 
 
-def setup_fut_configurator():
+def setup_fut_configurator() -> None:
     log.info("Setting up FUT configurator")
     try:
         with step("FUT configurator initialization"):
             pytest.fut_configurator = FutConfigurator()
-    except Exception:
-        raise RuntimeError(traceback.format_exc())
+    except Exception as exception:
+        raise RuntimeError(traceback.format_exc()) from exception
 
 
-def setup_server_handler():
+def setup_server_handler() -> None:
     log.info("Setting up server handler")
     try:
         with step("Server handler initialization"):
             pytest.server = ServerHandler(name="host")
-    except Exception:
-        raise RuntimeError(traceback.format_exc())
+    except Exception as exception:
+        raise RuntimeError(traceback.format_exc()) from exception
 
 
-def setup_node_handlers(nodes=ALL_NODES_TUPLE):
+def setup_node_handlers(nodes: tuple = ALL_NODES_TUPLE) -> None:
     log.info("Setting up node handlers")
     try:
         for node in nodes:
@@ -96,38 +96,41 @@ def setup_node_handlers(nodes=ALL_NODES_TUPLE):
                 continue
             with step(f"{node.upper()} handler initialization"):
                 setattr(pytest, node, NodeHandler(name=node))
-    except Exception:
-        raise RuntimeError(traceback.format_exc())
+    except Exception as exception:
+        raise RuntimeError(traceback.format_exc()) from exception
 
 
-def setup_client_handlers(clients=ALL_CLIENTS_TUPLE):
+def setup_client_handlers(clients: tuple = ALL_CLIENTS_TUPLE) -> None:
     log.info("Setting up client handlers")
     try:
         for client in clients:
             log.debug(f"Setting up {client} handler")
             with step(f"{client.upper()} handler initialization"):
                 setattr(pytest, client, DeviceHandler(name=client))
-    except Exception:
-        raise RuntimeError(traceback.format_exc())
+    except Exception as exception:
+        raise RuntimeError(traceback.format_exc()) from exception
 
 
-def setup_server_device():
+def setup_server_device() -> None:
     log.info("Performing server device setup")
     server = pytest.server
     server.clear_folder(server.fut_dir)
     try:
         with step("Server device setup"):
-            server.file_transfer(folders=["docker", "framework", "resource", "lib_testbed", "shell"], as_sudo=False)
+            server.file_transfer(
+                folders=["docker", "framework", "resource", "lib_testbed", "shell", "config"],
+                as_sudo=False,
+            )
             assert server.execute("server_add_response_policy_zone", suffix=".sh", folder="docker/server")[0] == 0
             # Start FUT services in dedicated docker container
             assert server.execute("dock-run", suffix=".server", folder="docker/server")[0] == 0
             # Add docker container ID as an attribute for later use
             pytest.server_docker = server.get_docker_container_id()
-    except Exception:
-        raise RuntimeError(traceback.format_exc())
+    except Exception as exception:
+        raise RuntimeError(traceback.format_exc()) from exception
 
 
-def setup_node_device(node, *args):
+def setup_node_device(node, *args) -> None:
     assert node in ALL_NODES_TUPLE
     try:
         with step(f"{node.upper()} device setup"):
@@ -139,9 +142,7 @@ def setup_node_device(node, *args):
                 f"test -e {fut_dir} || mkdir -p {fut_dir} && df -TP {fut_dir} | tail -1 | awk -F' ' '{{print $NF}}'",
             )
             assert mount_point_ec == 0
-            assert (
-                node_handler.device_api.run_raw(f"mount && mount | grep -E 'on {mount_point_std_out} .*noexec'")[0] == 1
-            )
+            assert node_handler.device_api.run_raw(f"mount | (! grep -E 'on {mount_point_std_out} .*noexec')")[0] == 0
 
             # Transfer FUT files
             node_handler.file_transfer(folders=["shell"])
@@ -159,24 +160,29 @@ def setup_node_device(node, *args):
             if node != "gw":
                 # Prevent node from rebooting
                 assert node_handler.execute("tools/device/device_init", skip_logging=True)[0] == 0
-    except Exception:
-        raise RuntimeError(traceback.format_exc())
+
+            kconfig_managers = node_handler.get_kconfig_managers()
+            log.debug(f"Managers in kconfig file: {kconfig_managers}")
+            services_and_statuses = node_handler.get_node_services_and_status()
+            log.debug(f"Device services: {services_and_statuses}")
+    except Exception as exception:
+        raise RuntimeError(traceback.format_exc()) from exception
 
 
-def setup_client_device(client, *args):
+def setup_client_device(client, *args) -> None:
     assert client in ALL_CLIENTS_TUPLE
     try:
         with step(f"{client.upper()} device setup"):
             client_handler = getattr(pytest, client)
             client_handler.file_transfer(folders=["shell"])
-    except Exception:
-        raise RuntimeError(traceback.format_exc())
+    except Exception as exception:
+        raise RuntimeError(traceback.format_exc()) from exception
 
 
-def pre_test_device_setup(node_devices=ALL_NODES_TUPLE, client_devices=ALL_CLIENTS_TUPLE):
+def pre_test_device_setup(node_devices: tuple = ALL_NODES_TUPLE, client_devices: tuple = ALL_CLIENTS_TUPLE) -> None:
     try:
-        threads = []
-        setup_device_map = []
+        threads: list = []
+        setup_device_map: list = []
         log.info(f"Performing setup for the following devices: {node_devices + client_devices}")
 
         setup_fut_configurator()
@@ -194,8 +200,8 @@ def pre_test_device_setup(node_devices=ALL_NODES_TUPLE, client_devices=ALL_CLIEN
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
             )
-            stdout, stderr = stream.communicate()
-            stdout = stdout.decode("utf-8").strip()
+            stdout_bytes, _ = stream.communicate()
+            stdout = stdout_bytes.decode("utf-8").strip()
             exit_code = stream.returncode
             log.info(stdout)
             assert exit_code == 0
@@ -221,8 +227,8 @@ def pre_test_device_setup(node_devices=ALL_NODES_TUPLE, client_devices=ALL_CLIEN
         for thread in threads:
             thread.join()
 
-    except Exception:
-        raise RuntimeError(traceback.format_exc())
+    except Exception as exception:
+        raise RuntimeError(traceback.format_exc()) from exception
 
 
 if __name__ == "__main__":

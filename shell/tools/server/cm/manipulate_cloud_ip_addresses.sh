@@ -43,9 +43,9 @@ for ip in $ip_list
 do
     manipulate_cloud_controller_traffic $ip $type &&
         log "cm/manipulate_cloud_ip_addresses.sh: IP address '$ip' ${type}-ed - Success" ||
-        raise "FAIL: failed to $type IP $ip" -l "cm/manipulate_cloud_ip_addresses.sh" -tc
+        raise "failed to $type IP $ip" -l "cm/manipulate_cloud_ip_addresses.sh" -tc
 done
 
 manipulate_cloud_controller_traffic $controller_ip $type &&
     log "cm/manipulate_cloud_ip_addresses.sh: IP address '$controller_ip' ${type}-ed - Success" ||
-    raise "FAIL: failed to $type IP $controller_ip" -l "cm/manipulate_cloud_ip_addresses.sh" -tc
+    raise "failed to $type IP $controller_ip" -l "cm/manipulate_cloud_ip_addresses.sh" -tc

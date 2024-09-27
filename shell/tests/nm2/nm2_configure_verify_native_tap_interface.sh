@@ -42,13 +42,15 @@ if_name=$1
 if_type=$2
 
 trap '
+    fut_ec=$?
+    trap - EXIT INT
     fut_info_dump_line
     print_tables Wifi_Inet_Config Wifi_Inet_State
     reset_inet_entry $if_name || true
     run_setup_if_crashed nm || true
-    check_restore_management_access || true
     fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    exit $fut_ec
+' EXIT INT TERM
 
 log_title "$tc_name: Testing Interface creation - $if_name type $if_type"
 
@@ -67,37 +69,30 @@ insert_ovsdb_entry Wifi_Inet_Config \
     -i ip_assign_scheme none \
     -i no_flood true &&
         log "$tc_name: creating Wifi_Inet_Config entry for $if_name - Success" ||
-        raise "FAIL: creating Wifi_Inet_Config entry for $if_name" -l "$tc_name" -oe
+        raise "creating Wifi_Inet_Config entry for $if_name" -l "$tc_name" -fc
 
 log "$tc_name: validating if interface $if_name is present in Wifi_Inet_State table"
 # Interface must be present in Wifi_Inet_State table.
 wait_ovsdb_entry Wifi_Inet_State -w if_name "$if_name" -is if_type "$if_type" &&
     log "$tc_name: validating if interface $if_name is present Wifi_Inet_State table - Success" ||
-    raise "FAIL: validating interface present, $if_name not present" -l "$tc_name" -ow
+    raise "validating interface present, $if_name not present" -l "$tc_name" -fc
 
 log "$tc_name: validating if interface $if_name is configured on the device"
 wait_for_function_response 0 "check_interface_exists $if_name" &&
     log "$tc_name: validating if interface $if_name is configured on the device - Success" ||
-    raise "FAIL: LEVEL2 - interface $if_name is not configured on the device" -l "$tc_name" -tc
-
-# Check if manager survived.
-log "$tc_name: checking if nm is running"
-manager_pid_file="${OPENSYNC_ROOTDIR}/bin/nm"
-wait_for_function_response 0 "check_manager_alive $manager_pid_file" &&
-    log "$tc_name: checking if nm is running - Success" ||
-    raise "FAIL: nm is not running" -l "$tc_name" -tc
+    raise "LEVEL2 - interface $if_name is not configured on the device" -l "$tc_name" -tc
 
 log "$tc_name: removing interface $if_name"
 delete_inet_interface "$if_name" &&
     log "$tc_name: removing interface $if_name - Success" ||
-    raise "FAIL:  removing interface $if_name failed" -l "$tc_name" -tc
+    raise " removing interface $if_name failed" -l "$tc_name" -tc
 
 log "$tc_name: checking if $if_name is removed from the device"
 check_interface_exists "$if_name"
 # returns 0 if the interface exists
 if [ "$?" -eq 0 ]; then
     log "$tc_name: Failed to remove $if_name from the device - Fail"
-    raise "FAIL: Interface $if_name of type $if_type exists on system, but should NOT" -l "$tc_name" -tc
+    raise "Interface $if_name of type $if_type exists on system, but should NOT" -l "$tc_name" -tc
 fi
 
 pass

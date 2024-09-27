@@ -35,9 +35,8 @@ NARGS=3
 trap '
     fut_info_dump_line
     print_tables Wifi_Radio_Config Wifi_Radio_State
-    check_restore_ovsdb_server
     fut_info_dump_line
-' EXIT SIGINT SIGTERM
+' EXIT INT TERM
 
 ht_mode=${1}
 vif_if_name=${2}
@@ -46,6 +45,6 @@ channel=${3}
 log "tools/device/check_ht_mode_at_os_level.sh: Checking ht_mode at system level - LEVEL2"
 check_ht_mode_at_os_level "$ht_mode" "$vif_if_name" "$channel" &&
     log "tools/device/check_ht_mode_at_os_level.sh: LEVEL2 - check_ht_mode_at_os_level - ht_mode $ht_mode set at system level - Success" ||
-    raise "FAIL: LEVEL2 - check_ht_mode_at_os_level - ht_mode  $ht_mode not set at system level" -l "tools/device/check_ht_mode_at_os_level.sh" -tc
+    raise "LEVEL2 - check_ht_mode_at_os_level - ht_mode  $ht_mode not set at system level" -l "tools/device/check_ht_mode_at_os_level.sh" -tc
 
 pass

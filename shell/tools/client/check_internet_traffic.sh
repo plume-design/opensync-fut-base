@@ -51,11 +51,11 @@ log "tools/client/check_internet_traffic.sh: Verify if internet traffic is ${tra
 res=$(${wlan_namespace_cmd} -c "ping -c${n_ping} ${internet_check_ip}")
 if [ $? -eq 0 ]; then
     if [ "$traffic_state" == "block" ]; then
-        raise "FAIL: Internet traffic is not blocked" -l "tools/client/check_internet_traffic.sh" -tc
+        raise "Internet traffic is not blocked" -l "tools/client/check_internet_traffic.sh" -tc
     fi
 else
     if [ "$traffic_state" == "unblock" ]; then
-        raise "FAIL: Internet traffic is not unblocked" -l "tools/client/check_internet_traffic.sh" -tc
+        raise "Internet traffic is not unblocked" -l "tools/client/check_internet_traffic.sh" -tc
     fi
 fi
 

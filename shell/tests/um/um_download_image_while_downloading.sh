@@ -68,12 +68,14 @@ fw_url_2=$3
 fw_dl_timer=$4
 
 trap '
+    fut_ec=$?
+    trap - EXIT INT
     fut_info_dump_line
     print_tables AWLAN_Node
     reset_um_triggers $fw_path || true
-    check_restore_ovsdb_server
     fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    exit $fut_ec
+' EXIT INT TERM
 
 log_title "um/um_download_image_while_downloading.sh: UM test - Download FW - upgrade_dl_timer - $fw_dl_timer seconds"
 
@@ -82,7 +84,7 @@ update_ovsdb_entry AWLAN_Node \
     -u upgrade_dl_timer "$fw_dl_timer" \
     -u firmware_url "$fw_url" &&
         log "um/um_download_image_while_downloading.sh: update_ovsdb_entry - Success to update" ||
-        raise "update_ovsdb_entry - Failed to update" -l "um/um_download_image_while_downloading.sh" -oe
+        raise "update_ovsdb_entry - Failed to update" -l "um/um_download_image_while_downloading.sh" -fc
 
 start_time=$(date -D "%H:%M:%S"  +"%Y.%m.%d-%H:%M:%S")
 
@@ -90,7 +92,7 @@ log "um/um_download_image_while_downloading.sh: Waiting for FW download to start
 dl_start_code=$(get_um_code "UPG_STS_FW_DL_START")
 wait_ovsdb_entry AWLAN_Node -is upgrade_status "$dl_start_code" &&
     log "um/um_download_image_while_downloading.sh: wait_ovsdb_entry - AWLAN_Node::upgrade_status is $dl_start_code - Success" ||
-    raise "FAIL: wait_ovsdb_entry - AWLAN_Node::upgrade_status is not $dl_start_code" -l "um/um_download_image_while_downloading.sh" -tc
+    raise "wait_ovsdb_entry - AWLAN_Node::upgrade_status is not $dl_start_code" -l "um/um_download_image_while_downloading.sh" -tc
 log "um/um_download_image_while_downloading.sh: Download of 1st FW image started and in progress!"
 
 # Download of first image started...
@@ -100,7 +102,7 @@ update_ovsdb_entry AWLAN_Node \
     -u upgrade_dl_timer "$fw_dl_timer" \
     -u firmware_url "$fw_url_2" &&
         log "um/um_download_image_while_downloading.sh: update_ovsdb_entry - AWLAN_Node table updated - Success" ||
-        raise "FAIL: update_ovsdb_entry - AWLAN_Node table not updated" -l "um/um_download_image_while_downloading.sh" -oe
+        raise "update_ovsdb_entry - AWLAN_Node table not updated" -l "um/um_download_image_while_downloading.sh" -fc
 
 log "um/um_download_image_while_downloading.sh: Waiting for FW download to finish"
 dl_end_code=$(get_um_code "UPG_STS_FW_DL_END")

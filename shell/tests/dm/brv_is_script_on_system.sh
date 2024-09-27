@@ -42,7 +42,7 @@ rc=$?
 if [ $rc = 0 ]; then
     log "brv/brv_is_script_on_system.sh: script '${script_path}' found on device - Success"
 else
-    raise "FAIL: Script '${script_path}' could not be found on device" -l "brv/brv_is_script_on_system.sh" -tc
+    raise "Script '${script_path}' could not be found on device" -l "brv/brv_is_script_on_system.sh" -tc
 fi
 
 pass

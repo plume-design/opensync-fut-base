@@ -21,30 +21,28 @@ def um_setup():
     test_class_name = ["TestUm"]
     nodes, clients = determine_required_devices(test_class_name)
     log.info(f"Required devices for UM: {nodes + clients}")
-    try:
-        server = pytest.server
-        um_fw_name = um_config["um_image"][0]["fw_name"]
-        um_fw_md5_path = f"{server.fut_base_dir}/resource/um/{um_fw_name}.md5"
-        um_fw_path_local = f"{server.fut_base_dir}/resource/um/{um_fw_name}"
-        um_fw_path_remote = f"{server.fut_dir}/resource/um/{um_fw_name}"
-        if not Path(um_fw_path_local).is_file():
-            pytest.skip(f"UM test FW image is missing in {um_fw_path_local}. Skipping UM test cases.")
-        if not Path(um_fw_md5_path).is_file():
-            # The um_fw_name should have been transferred during server setup
-            assert server.execute("tools/server/um/create_md5_file", um_fw_path_remote)[0] == ExpectedShellResult
-    except Exception as exception:
-        raise RuntimeError(f"Unable to perform setup for the server device: {exception}")
-    for device in nodes:
-        if not hasattr(pytest, device):
-            raise RuntimeError(f"{device.upper()} handler is not set up correctly.")
-        try:
-            device_handler = getattr(pytest, device)
-            primary_wan_iface = device_handler.capabilities.get_primary_wan_iface()
-            fw_download_path = device_handler.capabilities.get_fw_download_path()
-            setup_args = device_handler.get_command_arguments(fw_download_path, primary_wan_iface)
-            device_handler.fut_device_setup(test_suite_name="um", setup_args=setup_args)
-        except Exception as exception:
-            raise RuntimeError(f"Unable to perform setup for the {device} device: {exception}")
+    server = pytest.server
+    um_fw_name = um_config["um_image"][0]["fw_name"]
+    um_fw_md5_path = f"{server.fut_base_dir}/resource/um/{um_fw_name}.md5"
+    um_fw_path_local = f"{server.fut_base_dir}/resource/um/{um_fw_name}"
+    um_fw_path_remote = f"{server.fut_dir}/resource/um/{um_fw_name}"
+    if not Path(um_fw_path_local).is_file():
+        pytest.skip(f"UM test FW image is missing in {um_fw_path_local}. Skipping UM test cases.")
+    if not Path(um_fw_md5_path).is_file():
+        # The um_fw_name should have been transferred during server setup
+        assert server.execute("tools/server/um/create_md5_file", um_fw_path_remote)[0] == ExpectedShellResult
+    for node in nodes:
+        if not hasattr(pytest, node):
+            raise RuntimeError(f"{node.upper()} handler is not set up correctly.")
+        node_handler = getattr(pytest, node)
+        if "UM" not in node_handler.get_kconfig_managers():
+            pytest.skip("UM not present on device")
+        fw_download_path = node_handler.capabilities.get_fw_download_path()
+        setup_args = node_handler.get_command_arguments(fw_download_path)
+        node_handler.fut_device_setup(test_suite_name="um", setup_args=setup_args)
+        service_status = node_handler.get_node_services_and_status()
+        if service_status["um"]["status"] != "enabled":
+            pytest.skip("UM not enabled on device")
     # Set the baseline OpenSync PIDs used for reboot detection
     pytest.session_baseline_os_pids = pytest.gw.opensync_pid_retrieval(tracked_node_services=pytest.tracked_managers)
 
@@ -88,7 +86,7 @@ class TestUm:
             prefix (str, optional): prefix to FW image file name. Defaults to "".
 
         Raises:
-            RuntimeError: If the duplicated image cannot be created.
+            OSError: If the duplicated image cannot be created.
 
         Returns:
             bool: Returns True if FW image file is created, False otherwise.
@@ -98,13 +96,9 @@ class TestUm:
         # Set file names for original iamge and for duplicated image
         um_fw_path = f"{server.fut_dir}/resource/um/{um_fw_name}"
         um_fw_prefix_path = f"{server.fut_dir}/resource/um/{prefix}{um_fw_name}"
-        try:
-            res = server.device_api.run_raw(f"cp -r {um_fw_path} {um_fw_prefix_path}")
-            if res[0] != 0:
-                raise RuntimeError(f"Error creating duplicated image.\n{res[1]}\n{res[2]}")
-        except Exception as exception:
-            log.info(f"Encountered an exception while creating a duplicated image: {exception}")
-            return False
+        res = server.device_api.run_raw(f"cp -r {um_fw_path} {um_fw_prefix_path}")
+        if res[0] != 0:
+            raise OSError(f"Unable to duplicate image.\n{res[1]}\n{res[2]}")
         return True
 
     @staticmethod

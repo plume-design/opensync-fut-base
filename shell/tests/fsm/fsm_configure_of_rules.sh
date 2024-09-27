@@ -34,11 +34,13 @@ case "${1}" in
 esac
 
 trap '
-fut_info_dump_line
-print_tables Openflow_Config Openflow_State
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    print_tables Openflow_Config Openflow_State
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 NARGS=4
 [ $# -lt ${NARGS} ] && usage && raise "Requires exactly ${NARGS} input argument(s)" -arg
@@ -66,18 +68,18 @@ insert_ovsdb_entry Openflow_Config \
     -i rule "$of_req_rule" \
     -i token "$token" &&
         log "fsm/fsm_configure_of_rules.sh: Openflow rule inserted - Success" ||
-        raise "FAIL: Failed to insert Openflow rule" -l "fsm/fsm_configure_of_rules.sh" -oe
+        raise "Failed to insert Openflow rule" -l "fsm/fsm_configure_of_rules.sh" -fc
 
 # Check if rule is applied
 log "fsm/fsm_configure_of_rules.sh: Checking if rule is set for $of_req_rule"
 wait_ovsdb_entry Openflow_State -w token "$token" -is success true &&
     log "fsm/fsm_configure_of_rules.sh: wait_ovsdb_entry - Rule is set - Openflow_State::success is 'true' - Success" ||
-    raise "FAIL: wait_ovsdb_entry - Failed to set rule - Openflow_State::success for '$token' is not 'true'" -l "fsm/fsm_configure_of_rules.sh" -tc
+    raise "wait_ovsdb_entry - Failed to set rule - Openflow_State::success for '$token' is not 'true'" -l "fsm/fsm_configure_of_rules.sh" -tc
 
 # Removing entry
 remove_ovsdb_entry Openflow_Config -w bridge "${lan_bridge_if}" &&
     log "fsm/fsm_configure_of_rules.sh: remove_ovsdb_entry - Removed entry for ${lan_bridge_if} from Openflow_Config - Success" ||
-    raise "FAIL: remove_ovsdb_entry - Failed to remove entry for ${lan_bridge_if} from Openflow_Config" -l "fsm/fsm_configure_of_rules.sh" -oe
+    raise "remove_ovsdb_entry - Failed to remove entry for ${lan_bridge_if} from Openflow_Config" -l "fsm/fsm_configure_of_rules.sh" -fc
 
 empty_ovsdb_table Openflow_Config
 empty_ovsdb_table Openflow_State

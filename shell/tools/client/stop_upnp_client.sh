@@ -35,10 +35,20 @@ wlan_namespace=${1}
 port=${2}
 wlan_namespace_cmd="ip netns exec ${wlan_namespace} bash"
 
+trap '
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    [ -e /tmp/miniupnpd/mupnp_wan.leases ] && cat /tmp/miniupnpd/mupnp_wan.leases
+    ps aux | grep iperf3 || true
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
+
 log_title "tools/client/stop_upnp_client.sh: Run UPnP client on the device"
 
 if [[ "$EUID" -ne 0 ]]; then
-    raise "FAIL: Please run this function as root - sudo" -l "tools/client/stop_upnp_client.sh"
+    raise "Please run this function as root - sudo" -l "tools/client/stop_upnp_client.sh"
 fi
 
 log "tools/client/stop_upnp_client.sh: Stoping UPnPC on client host"

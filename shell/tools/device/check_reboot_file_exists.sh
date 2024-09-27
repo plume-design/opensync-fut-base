@@ -31,15 +31,15 @@ case "${1}" in
 esac
 
 trap '
-fut_ec=$?
-fut_info_dump_line
-if [ $fut_ec -ne 0 ]; then 
-    print_tables Reboot_Status
-    check_restore_ovsdb_server
-fi
-fut_info_dump_line
-exit $fut_ec
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    if [ $fut_ec -ne 0 ]; then
+        print_tables Reboot_Status
+    fi
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 check_kconfig_option "CONFIG_OSP_REBOOT_PSTORE" "y" ||
     raise "CONFIG_OSP_REBOOT_PSTORE != y - Testcase not applicable REBOOT PERSISTENT STORAGE not supported" -l "tools/device/check_reboot_file_exists.sh" -s

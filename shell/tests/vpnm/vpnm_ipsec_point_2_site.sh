@@ -37,15 +37,9 @@ esac
 NARGS=0
 [ $# -ne ${NARGS} ] && usage && raise "Requires exactly ${NARGS} input argument(s)" -l "vpnm/vpnm_ipsec_point_2_site.sh" -arg
 
-trap '
-fut_info_dump_line
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
-
 check_ovsdb_table_exist VPN_Tunnel &&
     log "vpnm/vpnm_ipsec_point_2_site.sh: VPN_Tunnel table exists in ovsdb - Success" ||
-    raise "FAIL: VPN_Tunnel table does not exist in ovsdb" -l "vpnm/vpnm_ipsec_point_2_site.sh" -s
+    raise "VPN_Tunnel table does not exist in ovsdb" -l "vpnm/vpnm_ipsec_point_2_site.sh" -s
 
 empty_ovsdb_table VPN_Tunnel
 empty_ovsdb_table IPSec_Config
@@ -58,7 +52,7 @@ insert_ovsdb_entry VPN_Tunnel \
     -i enable true \
     -i healthcheck_enable false &&
         log "vpnm/vpnm_ipsec_point_2_site.sh: insert_ovsdb_entry - VPN_Tunnel - Success" ||
-        raise "FAIL: insert_ovsdb_entry - VPN_Tunnel" -l "vpnm/vpnm_ipsec_point_2_site.sh" -oe
+        raise "insert_ovsdb_entry - VPN_Tunnel" -l "vpnm/vpnm_ipsec_point_2_site.sh" -fc
 
 log "vpnm/vpnm_ipsec_point_2_site.sh: Inserting an IPSec_Config row..."
 insert_ovsdb_entry IPSec_Config \
@@ -73,7 +67,7 @@ insert_ovsdb_entry IPSec_Config \
     -i psk "road-warrior-node" \
     -i key_exchange "ikev2" &&
         log "vpnm/vpnm_ipsec_point_2_site.sh: insert_ovsdb_entry - IPSec_Config - Success" ||
-        raise "FAIL: insert_ovsdb_entry - IPSec_Config" -l "vpnm/vpnm_ipsec_point_2_site.sh" -oe
+        raise "insert_ovsdb_entry - IPSec_Config" -l "vpnm/vpnm_ipsec_point_2_site.sh" -fc
 
 log "vpnm/vpnm_ipsec_point_2_site.sh: Checking if a point to site IPSec VPN tunnel has been established"
 
@@ -81,18 +75,18 @@ wait_ovsdb_entry VPN_Tunnel \
     -w name "primary" \
     -is tunnel_status "up" &&
         log "vpnm/vpnm_ipsec_point_2_site.sh: IPSec VPN tunnel established - Success" ||
-        raise "FAIL: IPSec p2s VPN tunnel failed to establish" -l "vpnm/vpnm_ipsec_point_2_site.sh" -oe
+        raise "IPSec p2s VPN tunnel failed to establish" -l "vpnm/vpnm_ipsec_point_2_site.sh" -fc
 
 wait_for_function_response 'notempty' "get_ovsdb_entry_value IPSec_State local_subnets -w tunnel_name primary" &&
     log "vpnm/vpnm_ipsec_point_2_site.sh: IPSec p2s: local subnets set in IPSec_State - Success" ||
-    raise "FAIL: IPSec p2s: local subnets not set in IPSec_State" -l "vpnm/vpnm_ipsec_point_2_site.sh" -oe
+    raise "IPSec p2s: local subnets not set in IPSec_State" -l "vpnm/vpnm_ipsec_point_2_site.sh" -fc
 
 wait_for_function_response 'notempty' "get_ovsdb_entry_value IPSec_State remote_subnets -w tunnel_name primary" &&
     log "vpnm/vpnm_ipsec_point_2_site.sh: IPSec p2s: remote subnets set in IPSec_State - Success" ||
-    raise "FAIL: IPSec p2s: remote subnets not set in IPSec_State" -l "vpnm/vpnm_ipsec_point_2_site.sh" -oe
+    raise "IPSec p2s: remote subnets not set in IPSec_State" -l "vpnm/vpnm_ipsec_point_2_site.sh" -fc
 
 wait_for_function_response 'notempty' "get_ovsdb_entry_value IPSec_State local_virt_ip -w tunnel_name primary" &&
     log "vpnm/vpnm_ipsec_point_2_site.sh: IPSec ps2: virtual IP assigned and set in IPSec_State - Success" ||
-    raise "FAIL: IPSec p2s virtual IP NOT set in IPSec_State" -l "vpnm/vpnm_ipsec_point_2_site.sh" -oe
+    raise "IPSec p2s virtual IP NOT set in IPSec_State" -l "vpnm/vpnm_ipsec_point_2_site.sh" -fc
 
 pass

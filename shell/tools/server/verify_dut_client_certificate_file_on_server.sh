@@ -46,18 +46,18 @@ cert_file="${FUT_TOPDIR}/${client_cert}"
 ca_file="${FUT_TOPDIR}/${ca_cert}"
 
 trap '
-fut_info_dump_line
-print_certificate_details $cert_file
-print_certificate_details $plume_ca_path
-print_certificate_details $ca_file
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_info_dump_line
+    print_certificate_details $cert_file
+    print_certificate_details $plume_ca_path
+    print_certificate_details $ca_file
+    fut_info_dump_line
+' EXIT INT TERM
 
 # TEST EXECUTION:
 log "tools/server/verify_dut_client_certificate_file_on_server.sh: Validating client certificate '$cert_file'..."
 
 verify_client_certificate_file ${client_cert} ${ca_cert} ${plume_ca_file} &&
     log "tools/server/verify_dut_client_certificate_file_on_server.sh: Validated client certificate - Success" ||
-    raise "FAIL: Client certificate verification failed" -l "tools/server/verify_dut_client_certificate_file_on_server.sh" -tc
+    raise "Client certificate verification failed" -l "tools/server/verify_dut_client_certificate_file_on_server.sh" -tc
 
 pass

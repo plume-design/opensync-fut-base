@@ -6,6 +6,7 @@ import pytest
 
 from framework.fut_configurator import FutConfigurator
 from framework.lib.fut_lib import determine_required_devices, step
+from lib_testbed.generic.util.common import compare_fw_versions
 from lib_testbed.generic.util.logger import log
 
 
@@ -19,19 +20,18 @@ def fsm_setup():
     test_class_name = ["TestFsm"]
     nodes, clients = determine_required_devices(test_class_name)
     log.info(f"Required devices for FSM: {nodes + clients}")
-    for device in nodes:
-        if not hasattr(pytest, device):
-            raise RuntimeError(f"{device.upper()} handler is not set up correctly.")
-        try:
-            device_handler = getattr(pytest, device)
-            if device_handler.device_type == "node":
-                phy_radio_ifnames = device_handler.capabilities.get_phy_radio_ifnames(return_type=list)
-                setup_args = device_handler.get_command_arguments(*phy_radio_ifnames)
-                device_handler.fut_device_setup(test_suite_name="fsm", setup_args=setup_args)
-            else:
-                device_handler.fut_device_setup(test_suite_name="fsm")
-        except Exception as exception:
-            RuntimeError(f"Unable to perform setup for the {device} device: {exception}")
+    for node in nodes:
+        if not hasattr(pytest, node):
+            raise RuntimeError(f"{node.upper()} handler is not set up correctly.")
+        node_handler = getattr(pytest, node)
+        if "FSM" not in node_handler.get_kconfig_managers():
+            pytest.skip("FSM not present on device")
+        phy_radio_ifnames = node_handler.capabilities.get_phy_radio_ifnames(return_type=list)
+        setup_args = node_handler.get_command_arguments(*phy_radio_ifnames)
+        node_handler.fut_device_setup(test_suite_name="fsm", setup_args=setup_args)
+        service_status = node_handler.get_node_services_and_status()
+        if service_status["fsm"]["status"] != "enabled":
+            pytest.skip("FSM not enabled on device")
     # Set the baseline OpenSync PIDs used for reboot detection
     pytest.session_baseline_os_pids = pytest.gw.opensync_pid_retrieval(tracked_node_services=pytest.tracked_managers)
 
@@ -39,7 +39,7 @@ def fsm_setup():
 class TestFsm:
     @staticmethod
     def fsm_content_filtering_test_procedure(cfg, validation_parameters):
-        fut_configurator, server, gw, w1 = pytest.fut_configurator, pytest.server, pytest.gw, pytest.w1
+        server, gw, w1 = pytest.server, pytest.gw, pytest.w1
 
         with step("Preparation of testcase parameters"):
             # Arguments from test case configuration
@@ -47,12 +47,10 @@ class TestFsm:
             ht_mode = cfg.get("ht_mode")
             radio_band = cfg.get("radio_band")
             encryption = cfg["encryption"]
-            wifi_security_type = cfg.get("wifi_security_type", "wpa")
             client_retry = cfg.get("client_retry", 3)
             test_client_cmd = cfg.get("test_client_cmd")
 
             # Constant arguments
-            ssid, psk = fut_configurator.base_ssid, fut_configurator.base_psk
             mqtt_hostname = server.mqtt_hostname
             mqtt_port = server.mqtt_port
             location_id = "1000"
@@ -74,19 +72,18 @@ class TestFsm:
             w1_mac = w1.device_api.get_mac(ifname=w1.device_config.get("wlan_if_name"))
             assert w1_mac is not None and w1_mac != ""
 
-            # GW AP arguments
-            gw_ap_vif_args = {
-                "channel": channel,
-                "ht_mode": ht_mode,
-                "radio_band": radio_band,
-                "wpa_psk": psk,
-                "wifi_security_type": wifi_security_type,
-                "encryption": encryption,
-                "ssid": ssid,
-                "interface_type": "home_ap",
-                "reset_vif": True,
-            }
-            gw.ap_args = gw_ap_vif_args
+            # GW interface creation
+            gw.create_interface_object(
+                channel=channel,
+                ht_mode=ht_mode,
+                radio_band=radio_band,
+                encryption=encryption,
+                interface_role="home_ap",
+            )
+
+            # Retrieve AP SSID and PSK values
+            ssid = gw.interfaces["home_ap"].ssid_raw
+            psk = gw.interfaces["home_ap"].psk_raw
 
             openflow_rules_args = gw.get_command_arguments(
                 lan_bridge_if_name,
@@ -127,16 +124,14 @@ class TestFsm:
                 assert gw.check_wan_connectivity()
             with step("Put GW into router mode"):
                 assert gw.configure_device_mode(device_mode="router")
-            with step("Configure Home AP interface"):
-                assert gw.configure_radio_vif_and_network()
+            with step("GW AP creation"):
+                assert gw.interfaces["home_ap"].configure_interface() == ExpectedShellResult
             with step("Determine GW MAC"):
                 gw_mac = "".join(gw.device_api.iface.get_vif_mac(gw_ap_if_name))
             with step("Client connection"):
-                security_args = gw.configure_wifi_security(return_as_dict=True)
                 w1.device_api.connect(
                     ssid=ssid,
                     psk=psk,
-                    key_mgmt=security_args["key_mgmt_mapping"],
                     retry=client_retry,
                 )
             with step("Verify client connection"):
@@ -175,6 +170,7 @@ class TestFsm:
             with step("Restart OpenSync"):
                 assert gw.execute("tools/device/restart_opensync")[0] == ExpectedShellResult
             with step("Cleanup"):
+                gw.interfaces["home_ap"].vif_reset()
                 gw.execute("tools/device/remove_tap_interfaces", tap_interface_args)
                 gw.execute("tests/fsm/fsm_cleanup", fsm_cleanup_args)
 
@@ -198,7 +194,7 @@ class TestFsm:
                 lan_bridge_if_name,
                 tap_name_postfix,
                 handler,
-                fsm_plugin_path,
+                fsm_plugin_path.as_posix(),
             )
 
         with step("Test Case"):
@@ -231,6 +227,15 @@ class TestFsm:
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", fsm_config.get("fsm_configure_test_dpi_http_request", []))
     def test_fsm_configure_test_dpi_http_request(self, cfg: dict, update_baseline_os_pids):
+        gw = pytest.gw
+        required_opensync_version = "5.6.0.0"
+        opensync_version = gw.get_opensync_version()
+
+        if not compare_fw_versions(opensync_version, required_opensync_version, "<="):
+            pytest.skip(
+                f"Insufficient OpenSync version:{opensync_version}. Required {required_opensync_version} or lower.",
+            )
+
         expected_action = cfg.get("expected_action")
         test_client_cmd = cfg.get("test_client_cmd")
         validation_parameters = {
@@ -242,6 +247,15 @@ class TestFsm:
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", fsm_config.get("fsm_configure_test_dpi_https_sni_request", []))
     def test_fsm_configure_test_dpi_https_sni_request(self, cfg: dict, update_baseline_os_pids):
+        gw = pytest.gw
+        required_opensync_version = "5.6.0.0"
+        opensync_version = gw.get_opensync_version()
+
+        if not compare_fw_versions(opensync_version, required_opensync_version, "<="):
+            pytest.skip(
+                f"Insufficient OpenSync version:{opensync_version}. Required {required_opensync_version} or lower.",
+            )
+
         expected_action = cfg.get("expected_action")
         test_client_cmd = cfg.get("test_client_cmd")
         netloc = urlparse(test_client_cmd.split()[1]).netloc
@@ -254,6 +268,15 @@ class TestFsm:
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", fsm_config.get("fsm_configure_test_dpi_http_url_request", []))
     def test_fsm_configure_test_dpi_http_url_request(self, cfg: dict, update_baseline_os_pids):
+        gw = pytest.gw
+        required_opensync_version = "5.6.0.0"
+        opensync_version = gw.get_opensync_version()
+
+        if not compare_fw_versions(opensync_version, required_opensync_version, "<="):
+            pytest.skip(
+                f"Insufficient OpenSync version:{opensync_version}. Required {required_opensync_version} or lower.",
+            )
+
         expected_action = cfg.get("expected_action")
         test_client_cmd = cfg.get("test_client_cmd")
         validation_parameters = {

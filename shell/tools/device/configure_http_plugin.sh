@@ -31,12 +31,11 @@ case "${1}" in
 esac
 
 trap '
-fut_info_dump_line
-print_tables Wifi_Associated_Clients Openflow_Config
-print_tables Flow_Service_Manager_Config FSM_Policy
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_info_dump_line
+    print_tables Wifi_Associated_Clients Openflow_Config
+    print_tables Flow_Service_Manager_Config FSM_Policy
+    fut_info_dump_line
+' EXIT INT TERM
 
 NARGS=4
 [ $# -ne ${NARGS} ] && usage && raise "Requires exactly ${NARGS} input argument(s)" -arg
@@ -70,7 +69,7 @@ insert_ovsdb_entry Openflow_Config \
     -i bridge "${lan_bridge_if_name}" \
     -i action "normal,output:${of_port}" &&
         log "tools/device/configure_http_plugin.sh: Ingress rule inserted - Success" ||
-        raise "FAIL: Failed to insert_ovsdb_entry" -l "tools/device/configure_http_plugin.sh" -oe
+        raise "Failed to insert_ovsdb_entry" -l "tools/device/configure_http_plugin.sh" -fc
 
 insert_ovsdb_entry Flow_Service_Manager_Config \
     -i if_name "${tap_http_if}" \
@@ -79,4 +78,4 @@ insert_ovsdb_entry Flow_Service_Manager_Config \
     -i plugin "${fsm_plugin}" \
     -i other_config '["map",[["mqtt_v","'"${mqtt_topic}"'"],["dso_init","http_plugin_init"]]]' &&
         log "tools/device/configure_http_plugin.sh: Flow_Service_Manager_Config entry added - Success" ||
-        raise "FAIL: Failed to insert Flow_Service_Manager_Config entry" -l "tools/device/configure_http_plugin.sh" -oe
+        raise "Failed to insert Flow_Service_Manager_Config entry" -l "tools/device/configure_http_plugin.sh" -fc

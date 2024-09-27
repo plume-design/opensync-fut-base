@@ -27,27 +27,20 @@ esac
 
 device_init &&
     log -deb "dm/onbrd_setup.sh - Device initialized - Success" ||
-    raise "FAIL: device_init - Could not initialize device" -l "dm/onbrd_setup.sh" -ds
-
-start_openswitch &&
-    log -deb "dm/onbrd_setup.sh - OpenvSwitch started - Success" ||
-    raise "FAIL: start_openswitch - Could not start OpenvSwitch" -l "dm/onbrd_setup.sh" -ds
-
-restart_managers
-log -deb "dm/onbrd_setup.sh: Executed restart_managers, exit code: $?"
+    raise "device_init - Could not initialize device" -l "dm/onbrd_setup.sh" -ds
 
 empty_ovsdb_table AW_Debug &&
     log -deb "dm/othr_setup.sh - AW_Debug table emptied - Success" ||
-    raise "FAIL: empty_ovsdb_table AW_Debug - Could not empty AW_Debug table" -l "dm/othr_setup.sh" -ds
+    raise "empty_ovsdb_table AW_Debug - Could not empty AW_Debug table" -l "dm/othr_setup.sh" -ds
 
 set_manager_log DM TRACE &&
     log -deb "dm/othr_setup.sh - Manager log for DM set to TRACE - Success" ||
-    raise "FAIL: set_manager_log DM TRACE - Could not set manager log severity" -l "dm/othr_setup.sh" -ds
+    raise "set_manager_log DM TRACE - Could not set manager log severity" -l "dm/othr_setup.sh" -ds
 
 # Check if all radio interfaces are created
 for if_name in "$@"
 do
     wait_ovsdb_entry Wifi_Radio_State -w if_name "$if_name" -is if_name "$if_name" &&
         log -deb "dm/onbrd_setup.sh - Wifi_Radio_State::if_name '$if_name' present - Success" ||
-        raise "FAIL: Wifi_Radio_State::if_name for '$if_name' does not exist" -l "dm/onbrd_setup.sh" -ds
+        raise "Wifi_Radio_State::if_name for '$if_name' does not exist" -l "dm/onbrd_setup.sh" -ds
 done

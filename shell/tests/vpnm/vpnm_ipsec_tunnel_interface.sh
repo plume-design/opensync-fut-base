@@ -36,15 +36,9 @@ esac
 NARGS=0
 [ $# -ne ${NARGS} ] && usage && raise "Requires exactly ${NARGS} input argument(s)" -l "vpnm/vpnm_ipsec_tunnel_interface.sh" -arg
 
-trap '
-fut_info_dump_line
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
-
 check_ovsdb_table_exist Tunnel_Interface &&
     log "vpnm/vpnm_ipsec_tunnel_interface.sh: Tunnel_Interface table exists in ovsdb - Success" ||
-    raise "FAIL: Tunnel_Interface table does not exist in ovsdb" -l "vpnm/vpnm_ipsec_tunnel_interface.sh" -s
+    raise "Tunnel_Interface table does not exist in ovsdb" -l "vpnm/vpnm_ipsec_tunnel_interface.sh" -s
 
 empty_ovsdb_table VPN_Tunnel
 empty_ovsdb_table IPSec_Config
@@ -62,13 +56,13 @@ insert_ovsdb_entry Tunnel_Interface \
     -i remote_endpoint_addr 8.8.8.8\
     -i key 10 &&
         log "vpnm/vpnm_ipsec_tunnel_interface.sh: insert_ovsdb_entry - Tunnel_Interface - Success" ||
-        raise "FAIL: insert_ovsdb_entry - Tunnel_Interface" -l "vpnm/vpnm_ipsec_tunnel_interface.sh" -oe
+        raise "insert_ovsdb_entry - Tunnel_Interface" -l "vpnm/vpnm_ipsec_tunnel_interface.sh" -fc
 
 sleep 1
 
 log "vpnm/vpnm_ipsec_tunnel_interface.sh: Checking if tunnel interface created"
 ip link show Tunnel0 &&
     log "vpnm/vpnm_ipsec_tunnel_interface.sh: VTI tunnel interface created - Success" ||
-    raise "FAIL: VTI tunnel interface NOT created" -l "vpnm/vpnm_ipsec_tunnel_interface.sh" -oe
+    raise "VTI tunnel interface NOT created" -l "vpnm/vpnm_ipsec_tunnel_interface.sh" -fc
 
 pass

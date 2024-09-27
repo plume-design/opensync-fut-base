@@ -19,16 +19,15 @@ def dm_setup():
     test_class_name = ["TestDm"]
     nodes, clients = determine_required_devices(test_class_name)
     log.info(f"Required devices for DM: {nodes + clients}")
-    for device in nodes:
-        if not hasattr(pytest, device):
-            raise RuntimeError(f"{device.upper()} handler is not set up correctly.")
-        try:
-            device_handler = getattr(pytest, device)
-            phy_radio_ifnames = device_handler.capabilities.get_phy_radio_ifnames(return_type=list)
-            setup_args = device_handler.get_command_arguments(*phy_radio_ifnames)
-            device_handler.fut_device_setup(test_suite_name="dm", setup_args=setup_args)
-        except Exception as exception:
-            raise RuntimeError(f"Unable to perform setup for the {device} device: {exception}")
+    for node in nodes:
+        if not hasattr(pytest, node):
+            raise RuntimeError(f"{node.upper()} handler is not set up correctly.")
+        node_handler = getattr(pytest, node)
+        if "DM" not in node_handler.get_kconfig_managers():
+            pytest.skip("DM not present on device")
+        phy_radio_ifnames = node_handler.capabilities.get_phy_radio_ifnames(return_type=list)
+        setup_args = node_handler.get_command_arguments(*phy_radio_ifnames)
+        node_handler.fut_device_setup(test_suite_name="dm", setup_args=setup_args)
     # Set the baseline OpenSync PIDs used for reboot detection
     pytest.session_baseline_os_pids = pytest.gw.opensync_pid_retrieval(tracked_node_services=pytest.tracked_managers)
 

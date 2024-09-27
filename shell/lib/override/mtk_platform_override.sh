@@ -58,7 +58,7 @@ check_vlan_iface()
     log "mtk_platform_override:check_vlan_iface: Checking for '${vlan_file}' existence - LEVEL2"
     wait_for_function_response 0 "[ -e ${vlan_file} ]" &&
         log "mtk_platform_override:check_vlan_iface: LEVEL2 - PID '${vlan_file}' is runinng - Success" ||
-        raise "FAIL: LEVEL2 - PID ${vlan_file} is NOT running" -l "mtk_platform_override:check_vlan_iface" -tc
+        raise "LEVEL2 - PID ${vlan_file} is NOT running" -l "mtk_platform_override:check_vlan_iface" -tc
 
     log "mtk_platform_override:check_vlan_iface: Output PID ${vlan_file} info:"
     cat "${vlan_file}"
@@ -66,12 +66,12 @@ check_vlan_iface()
     log "mtk_platform_override:check_vlan_iface: Validating PID VLAN config - vlan_id == ${vlan_id} - LEVEL2"
     wait_for_function_response 0 "cat "${vlan_file}" | grep 'VID: ${vlan_id}'" &&
         log "mtk_platform_override:check_vlan_iface: LEVEL2 - VID is set to 100 - Success" ||
-        raise "FAIL: LEVEL2 - VID is not set" -l "mtk_platform_override:check_vlan_iface" -tc
+        raise "LEVEL2 - VID is not set" -l "mtk_platform_override:check_vlan_iface" -tc
 
     log "mtk_platform_override:check_vlan_iface: Check parent device for VLAN - LEVEL2"
     wait_for_function_response 0 "cat "${vlan_file}" | grep 'Device: ${parent_ifname}'" &&
         log "mtk_platform_override:check_vlan_iface: LEVEL2 - Device is set to '${parent_ifname}' - Success" ||
-        raise "FAIL: LEVEL2 - Device is not set to '${parent_ifname}'" -l "mtk_platform_override:check_vlan_iface" -tc
+        raise "LEVEL2 - Device is not set to '${parent_ifname}'" -l "mtk_platform_override:check_vlan_iface" -tc
 
     return 0
 }
@@ -100,7 +100,7 @@ check_tx_chainmask_at_os_level()
     if [ $? = 0 ]; then
         log -deb "mtk_platform_override:check_tx_chainmask_at_os_level - Tx Chainmask '$tx_chainmask' is set at OS - LEVEL2 - Success"
     else
-        raise "FAIL: Tx Chainmask '$tx_chainmask' is not set at OS - LEVEL2" -l "mtk_platform_override:check_tx_chainmask_at_os_level" -tc
+        raise "Tx Chainmask '$tx_chainmask' is not set at OS - LEVEL2" -l "mtk_platform_override:check_tx_chainmask_at_os_level" -tc
     fi
 
     return 0

@@ -116,14 +116,14 @@ def signal_handler(sig, frame):
 
 
 def create_report(
-    cur_data_specific_entries: list or None,
-    ref_data_specific_entries: list or None,
-    common_entries: list or None,
-    filtered_entries: list or None,
-    removed_entries: list or None,
-    mismatch_entries: list or None,
+    cur_data_specific_entries: list | None,
+    ref_data_specific_entries: list | None,
+    common_entries: list | None,
+    filtered_entries: list | None,
+    removed_entries: list | None,
+    mismatch_entries: list | None,
     **kwargs,
-):
+) -> str:
     """
     Create a JSON printable report from the extracted and processed data.
 
@@ -134,8 +134,10 @@ def create_report(
         filtered_entries (list): Tests from the current test run that appear in both runs, filtered by status
         removed_entries (list): Tests removed from the current test run based on the reference status
         mismatch_entries (list): Tests from current run whose status mismatch with the reference run
+
     Kwargs:
         sort_keys (bool): sort dict keys when outputting to JSON
+
     Returns:
         json_report (string): A printable JSON format report of the input data
     """
@@ -198,7 +200,7 @@ def create_stats(
     filtered_entries: list,
     removed_entries: list,
     mismatch_entries: list,
-):
+) -> str:
     """
     Create a printable statistics report from the extracted and processed data.
 

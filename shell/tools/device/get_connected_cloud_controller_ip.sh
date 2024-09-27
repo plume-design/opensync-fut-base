@@ -32,9 +32,9 @@ NARGS=0
 get_target_str="get_ovsdb_entry_value Manager target -r"
 wait_for_function_output "notempty" "${get_target_str}" >/dev/null 2>&1
 if [ $? -eq 0 ]; then
-    resolved_target_addr=$($get_target_str) || raise "FAIL: ${get_target_str}"  -l "tools/device/get_connected_cloud_controller_ip.sh" -f
+    resolved_target_addr=$($get_target_str) || raise "${get_target_str}" -l "tools/device/get_connected_cloud_controller_ip.sh" -fc
 else
-    raise "FAIL: Failed to get 'target' from Manager table" -l "tools/device/get_connected_cloud_controller_ip.sh" -s
+    raise "Failed to get 'target' from Manager table" -l "tools/device/get_connected_cloud_controller_ip.sh" -s
 fi
 
 connected_cloud_ip=$(echo ${resolved_target_addr}| egrep -o '([0-9]{1,3}\.){3}[0-9]{1,3}')

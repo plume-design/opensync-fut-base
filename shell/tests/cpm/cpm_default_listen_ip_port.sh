@@ -45,16 +45,18 @@ validate_tinyproxy_ip_port()
 }
 
 trap '
-fut_info_dump_line
-print_tables Captive_Portal
-echo "Final tinyproxies status:"
-$(get_process_cmd) | grep tinyproxy | grep -v grep
-echo "listenip and listenport in the config file:"
-grep -rn "Listen " /tmp/tinyproxy
-grep -rn "port " /tmp/tinyproxy
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    print_tables Captive_Portal
+    echo "Final tinyproxies status:"
+    $(get_process_cmd) | grep tinyproxy | grep -v grep
+    echo "listenip and listenport in the config file:"
+    grep -rn "Listen " /tmp/tinyproxy
+    grep -rn "port " /tmp/tinyproxy
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 log_title "cpm/cpm_default_listen_ip_port.sh: CPM test - Verify default listen ip and port"
 
@@ -67,14 +69,14 @@ insert_ovsdb_entry Captive_Portal \
     -i proxy_method "reverse" \
     -i uam_url "https://captiveportal1" &&
         log "cpm/cpm_default_listen_ip_port.sh: First Captive_Portal entry inserted - Success" ||
-        raise "FAIL: Failed to insert first Captive_Portal entry" -l "cpm/cpm_default_listen_ip_port.sh" -oe
+        raise "Failed to insert first Captive_Portal entry" -l "cpm/cpm_default_listen_ip_port.sh" -fc
 
 # debounce timer 1 second plus one additional second
 sleep 2
 
 validate_tinyproxy_ip_port &&
     log "cpm/cpm_default_listen_ip_port.sh: Found Listen 127.0.0.1 and port 8888 - Success" ||
-    raise "FAIL: incorrect tinyproxy config listen and port values"  -l "cpm/cpm_default_listen_ip_port.sh" -tc
+    raise "incorrect tinyproxy config listen and port values"  -l "cpm/cpm_default_listen_ip_port.sh" -tc
 
 print_tables Captive_Portal
 

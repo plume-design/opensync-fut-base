@@ -28,15 +28,15 @@ usage_string
 }
 
 trap '
-fut_ec=$?
-fut_info_dump_line
-if [ $fut_ec -ne 0 ]; then
-    cat /var/run/osp_reboot_reason
-fi
-check_restore_ovsdb_server
-fut_info_dump_line
-exit $fut_ec
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    if [ $fut_ec -ne 0 ]; then
+        cat /var/run/osp_reboot_reason
+    fi
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 case "${1}" in
     -h | --help)  usage ; exit 0 ;;
@@ -55,10 +55,10 @@ log_title "dm/dm_verify_reboot_reason.sh: DM test - Verify last reboot reason ma
 
 [ -e "$reboot_file_path" ] &&
     log "dm/dm_verify_reboot_reason.sh: reboot file $reboot_file_path exists - Success" ||
-    raise "FAIL: reboot file - $reboot_file_path is missing" -l "dm/dm_verify_reboot_reason.sh" -tc
+    raise "reboot file - $reboot_file_path is missing" -l "dm/dm_verify_reboot_reason.sh" -tc
 [ -s "$reboot_file_path" ] &&
     log "dm/dm_verify_reboot_reason.sh: reboot file $reboot_file_path is not empty - Success" ||
-    raise "FAIL: reboot file $reboot_file_path is empty" -l "dm/dm_verify_reboot_reason.sh" -tc
+    raise "reboot file $reboot_file_path is empty" -l "dm/dm_verify_reboot_reason.sh" -tc
 
 cat $reboot_file_path | grep -q "REBOOT"
 if [ $? = 0 ]; then
@@ -72,15 +72,15 @@ if [ $? = 0 ]; then
             if [ $reason = $reason_to_check ]; then
                 log "dm/dm_verify_reboot_reason.sh: Found reason: $reason"
             else
-                raise "FAIL: Could not find $reason_to_check string in file" -l "dm/dm_verify_reboot_reason.sh" -tc
+                raise "Could not find $reason_to_check string in file" -l "dm/dm_verify_reboot_reason.sh" -tc
             fi
         ;;
         *)
-            raise "FAIL: Unknown reason to check: $reason_to_check" -l "dm/dm_verify_reboot_reason.sh" -arg
+            raise "Unknown reason to check: $reason_to_check" -l "dm/dm_verify_reboot_reason.sh" -arg
         ;;
     esac
 else
-    raise "FAIL: Could not find REBOOT string in file - $reboot_file_path" -l "dm/dm_verify_reboot_reason.sh" -tc
+    raise "Could not find REBOOT string in file - $reboot_file_path" -l "dm/dm_verify_reboot_reason.sh" -tc
 fi
 
 pass

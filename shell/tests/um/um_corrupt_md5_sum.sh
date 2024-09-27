@@ -43,30 +43,32 @@ fw_path=$1
 fw_url=$2
 
 trap '
+    fut_ec=$?
+    trap - EXIT INT
     fut_info_dump_line
     print_tables AWLAN_Node
     reset_um_triggers $fw_path || true
-    check_restore_ovsdb_server
     fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    exit $fut_ec
+' EXIT INT TERM
 
 log_title "um/um_corrupt_md5_sum.sh: UM test - Corrupt MD5 Sum"
 
 log "um/um_corrupt_md5_sum.sh: Setting firmware_url to $fw_url"
 update_ovsdb_entry AWLAN_Node -u firmware_url "$fw_url" &&
     log "um/um_corrupt_md5_sum.sh: update_ovsdb_entry - AWLAN_Node::firmware_url set to $fw_url - Success" ||
-    raise "FAIL: update_ovsdb_entry - Failed to set firmware_url to $fw_url in AWLAN_Node" -l "um/um_corrupt_md5_sum.sh" -oe
+    raise "update_ovsdb_entry - Failed to set firmware_url to $fw_url in AWLAN_Node" -l "um/um_corrupt_md5_sum.sh" -fc
 
 fw_start_code=$(get_um_code "UPG_STS_FW_DL_START")
 log "um/um_corrupt_md5_sum.sh: Waiting for FW download to start"
 wait_ovsdb_entry AWLAN_Node -is upgrade_status "$fw_start_code" &&
     log "um/um_corrupt_md5_sum.sh: wait_ovsdb_entry - AWLAN_Node::upgrade_status is $fw_start_code - Success" ||
-    raise "FAIL: wait_ovsdb_entry - AWLAN_Node::upgrade_status is not $fw_start_code" -l "um/um_corrupt_md5_sum.sh" -tc
+    raise "wait_ovsdb_entry - AWLAN_Node::upgrade_status is not $fw_start_code" -l "um/um_corrupt_md5_sum.sh" -tc
 
 fw_err_code=$(get_um_code "UPG_ERR_MD5_FAIL")
 log "um/um_corrupt_md5_sum.sh: Waiting for AWLAN_Node::upgrade_status to become UPG_ERR_MD5_FAIL ($fw_err_code)"
 wait_ovsdb_entry AWLAN_Node -is upgrade_status "$fw_err_code" &&
     log "um/um_corrupt_md5_sum.sh: wait_ovsdb_entry - AWLAN_Node::upgrade_status is $fw_err_code - Success" ||
-    raise "FAIL: wait_ovsdb_entry - AWLAN_Node::upgrade_status is not $fw_err_code" -l "um/um_corrupt_md5_sum.sh" -tc
+    raise "wait_ovsdb_entry - AWLAN_Node::upgrade_status is not $fw_err_code" -l "um/um_corrupt_md5_sum.sh" -tc
 
 pass

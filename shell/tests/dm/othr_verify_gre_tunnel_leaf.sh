@@ -30,14 +30,16 @@ case "${1}" in
 esac
 
 trap '
-fut_info_dump_line
-print_tables Wifi_Inet_Config Wifi_Inet_State
-print_tables Wifi_VIF_Config Wifi_VIF_State
-print_tables DHCP_leased_IP
-show_bridge_details
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    print_tables Wifi_Inet_Config Wifi_Inet_State
+    print_tables Wifi_VIF_Config Wifi_VIF_State
+    print_tables DHCP_leased_IP
+    show_bridge_details
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 
 # Input arguments common to GW and LEAF, optional:
@@ -50,10 +52,10 @@ n_ping=${3:-"5"}
 log "othr/othr_verify_gre_tunnel_leaf.sh: Check that LEAF has WAN connectivity via GRE tunnel"
 wait_for_function_response 0 "ping -c${n_ping} ${upstream_router_ip}" &&
     log "othr/othr_verify_gre_tunnel_leaf.sh: Can ping router ${upstream_router_ip} - Success" ||
-    raise "FAIL: Can not ping router ${upstream_router_ip}" -tc
+    raise "Can not ping router ${upstream_router_ip}" -tc
 
 wait_for_function_response 0 "ping -c${n_ping} ${internet_check_ip}" &&
     log "othr/othr_verify_gre_tunnel_leaf.sh: Can ping internet ${internet_check_ip} - Success" ||
-    log -wrn "othr/othr_verify_gre_tunnel_leaf.sh: Can not ping internet ${internet_check_ip}"
+    log "othr/othr_verify_gre_tunnel_leaf.sh: Can NOT ping internet ${internet_check_ip} - Continuing"
 
 pass

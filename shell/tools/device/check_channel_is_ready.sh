@@ -31,15 +31,15 @@ esac
 log "tools/device/$(basename "$0"): check_channel_is_ready - Check if channel on the interface is ready for use"
 
 trap '
-fut_ec=$?
-fut_info_dump_line
-if [ $fut_ec -ne 0 ]; then 
-    print_tables Wifi_Radio_State 
-    check_restore_ovsdb_server
-fi
-fut_info_dump_line
-exit $fut_ec
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    if [ $fut_ec -ne 0 ]; then
+        print_tables Wifi_Radio_State
+    fi
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 NARGS=2
 [ $# -lt ${NARGS} ] && usage && raise "Requires at least ${NARGS} input argument(s)" -arg

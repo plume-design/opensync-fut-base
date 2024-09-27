@@ -8,19 +8,12 @@ source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
 
 device_init &&
     log -deb "nfm/nfm_setup.sh - Device initialized - Success" ||
-    raise "FAIL: device_init - Could not initialize device" -l "nfm/nfm_setup.sh" -ds
-
-start_openswitch &&
-    log -deb "nfm/nfm_setup.sh - Open Switch started - Success" ||
-    raise "FAIL: Could not start Open Switch: start_openswitch" -l "nfm/nfm_setup.sh" -ds
-
-restart_managers
-    log -deb "nfm/nfm_setup.sh: Executed restart_managers, exit code: $?"
+    raise "device_init - Could not initialize device" -l "nfm/nfm_setup.sh" -ds
 
 empty_ovsdb_table AW_Debug &&
     log -deb "nfm/nfm_setup.sh - AW_Debug table emptied - Success"  ||
-    raise "FAIL: Could not empty table: empty_ovsdb_table AW_Debug" -l "nfm/nfm_setup.sh" -ds
+    raise "Could not empty table: empty_ovsdb_table AW_Debug" -l "nfm/nfm_setup.sh" -ds
 
 set_manager_log NFM TRACE &&
     log -deb "nfm/nfm_setup.sh - Manager log for NFM set to TRACE - Success"||
-    raise "FAIL: Could not set manager log severity: set_manager_log NFM TRACE" -l "nfm/nfm_setup.sh" -ds
+    raise "Could not set manager log severity: set_manager_log NFM TRACE" -l "nfm/nfm_setup.sh" -ds

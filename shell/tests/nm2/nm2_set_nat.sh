@@ -40,13 +40,14 @@ if_type=$2
 NAT=$3
 
 trap '
+    fut_ec=$?
+    trap - EXIT INT
     fut_info_dump_line
     print_tables Wifi_Inet_Config Wifi_Inet_State
     reset_inet_entry $if_name || true
-    check_restore_management_access || true
-    check_restore_ovsdb_server
     fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    exit $fut_ec
+' EXIT INT TERM
 
 log_title "nm2/nm2_set_nat.sh: NM2 test - Testing table Wifi_Inet_Config field NAT - $NAT"
 
@@ -61,7 +62,7 @@ if [ "${if_type}" == "vif" ]; then
         -inet_addr "10.10.10.30" \
         -netmask "255.255.255.0" &&
             log "nm2/nm2_set_nat.sh: Interface $if_name created - Success" ||
-            raise "FAIL: Failed to create $if_name interface" -l "nm2/nm2_set_nat.sh" -ds
+            raise "Failed to create $if_name interface" -l "nm2/nm2_set_nat.sh" -ds
 else
     create_inet_entry \
         -if_name "$if_name" \
@@ -70,35 +71,35 @@ else
         -ip_assign_scheme static \
         -if_type "$if_type" &&
             log "nm2/nm2_set_nat.sh: Interface $if_name created - Success" ||
-            raise "FAIL: Failed to create $if_name interface" -l "nm2/nm2_set_nat.sh" -ds
+            raise "Failed to create $if_name interface" -l "nm2/nm2_set_nat.sh" -ds
 fi
 
 log "nm2/nm2_set_nat.sh: Setting NAT for interface $if_name to $NAT"
 update_ovsdb_entry Wifi_Inet_Config -w if_name "$if_name" -u NAT "$NAT" &&
     log "nm2/nm2_set_nat.sh: update_ovsdb_entry - Wifi_Inet_Config::NAT is $NAT - Success" ||
-    raise "FAIL: update_ovsdb_entry - Failed to update Wifi_Inet_Config::NAT is not $NAT" -l "nm2/nm2_set_nat.sh" -oe
+    raise "update_ovsdb_entry - Failed to update Wifi_Inet_Config::NAT is not $NAT" -l "nm2/nm2_set_nat.sh" -fc
 
 wait_ovsdb_entry Wifi_Inet_State -w if_name "$if_name" -is NAT "$NAT" &&
     log "nm2/nm2_set_nat.sh: wait_ovsdb_entry - Wifi_Inet_Config reflected to Wifi_Inet_State::NAT is $NAT - Success" ||
-    raise "FAIL: wait_ovsdb_entry - Failed to reflect Wifi_Inet_Config to Wifi_Inet_State::NAT is not $NAT" -l "nm2/nm2_set_nat.sh" -tc
+    raise "wait_ovsdb_entry - Failed to reflect Wifi_Inet_Config to Wifi_Inet_State::NAT is not $NAT" -l "nm2/nm2_set_nat.sh" -tc
 
 log "nm2/nm2_set_nat.sh: Checking state of NAT for $if_name (must be ON) - LEVEL2"
 wait_for_function_response 0 "check_interface_nat_enabled $if_name" &&
     log "nm2/nm2_set_nat.sh: LEVEL2 - NAT applied to iptables for interface $if_name - Success" ||
-    raise "FAIL: LEVEL2 - Failed to apply NAT to iptables for interface $if_name" -l "nm2/nm2_set_nat.sh" -tc
+    raise "LEVEL2 - Failed to apply NAT to iptables for interface $if_name" -l "nm2/nm2_set_nat.sh" -tc
 
 log "nm2/nm2_set_nat.sh: Disabling NAT for $if_name"
 update_ovsdb_entry Wifi_Inet_Config -w if_name "$if_name" -u NAT false &&
     log "nm2/nm2_set_nat.sh: update_ovsdb_entry - Wifi_Inet_Config table::NAT is 'false' - Success" ||
-    raise "FAIL: update_ovsdb_entry - Failed to update Wifi_Inet_Config::NAT is not 'false'" -l "nm2/nm2_set_nat.sh" -oe
+    raise "update_ovsdb_entry - Failed to update Wifi_Inet_Config::NAT is not 'false'" -l "nm2/nm2_set_nat.sh" -fc
 
 wait_ovsdb_entry Wifi_Inet_State -w if_name "$if_name" -is NAT false &&
     log "nm2/nm2_set_nat.sh: wait_ovsdb_entry - Wifi_Inet_Config reflected to Wifi_Inet_State::NAT is 'false' - Success" ||
-    raise "FAIL: wait_ovsdb_entry - Failed to reflect Wifi_Inet_Config to Wifi_Inet_State::NAT is not 'false'" -l "nm2/nm2_set_nat.sh" -tc
+    raise "wait_ovsdb_entry - Failed to reflect Wifi_Inet_Config to Wifi_Inet_State::NAT is not 'false'" -l "nm2/nm2_set_nat.sh" -tc
 
 log "nm2/nm2_set_nat.sh: Checking state of NAT for $if_name (must be OFF) - LEVEL2"
 wait_for_function_response 1 "check_interface_nat_enabled $if_name" &&
     log "nm2/nm2_set_nat.sh: LEVEL2 - NAT removed from iptables for interface $if_name - Success" ||
-    raise "FAIL: LEVEL2 - Failed to remove NAT from iptables for interface $if_name" -l "nm2/nm2_set_nat.sh" -tc
+    raise "LEVEL2 - Failed to remove NAT from iptables for interface $if_name" -l "nm2/nm2_set_nat.sh" -tc
 
 pass

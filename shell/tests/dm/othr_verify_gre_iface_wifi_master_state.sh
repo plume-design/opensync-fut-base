@@ -43,11 +43,13 @@ case "${1}" in
 esac
 
 trap '
-fut_info_dump_line
-print_tables Wifi_Master_State
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    print_tables Wifi_Master_State
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 NARGS=3
 [ $# -ne ${NARGS} ] && usage && raise "Requires exactly ${NARGS} input argument(s)" -l "othr/othr_verify_gre_iface_wifi_master_state.sh" -arg
@@ -64,7 +66,7 @@ ${OVSH} s Wifi_Master_State
 if [ $? -eq 0 ]; then
     log "othr/othr_verify_gre_iface_wifi_master_state.sh: Wifi_Master_State table exists"
 else
-    raise "FAIL: Wifi_Master_State table does not exist" -l "othr/othr_verify_gre_iface_wifi_master_state.sh" -tc
+    raise "Wifi_Master_State table does not exist" -l "othr/othr_verify_gre_iface_wifi_master_state.sh" -tc
 fi
 
 ap_inet_addr=$(get_ovsdb_entry_value Wifi_Inet_Config inet_addr -w if_name "${bhaul_ap_if_name}" -r)
@@ -82,10 +84,10 @@ create_inet_entry \
     -network true \
     -enabled true &&
         log "othr/othr_verify_gre_iface_wifi_master_state.sh: Interface ${gre_name} created - Success" ||
-        raise "FAIL: Failed to create interface ${gre_name}" -l "othr/othr_verify_gre_iface_wifi_master_state.sh" -ds
+        raise "Failed to create interface ${gre_name}" -l "othr/othr_verify_gre_iface_wifi_master_state.sh" -ds
 
 check_ovsdb_entry Wifi_Master_State -w if_name ${gre_name} &&
     log "othr/othr_verify_gre_iface_wifi_master_state.sh: Wifi_Master_State populated with GRE interface '${gre_name}' - Success" ||
-    raise "FAIL: Wifi_Master_State not populated with GRE interface '${gre_name}'" -l "othr/othr_verify_gre_iface_wifi_master_state.sh" -tc
+    raise "Wifi_Master_State not populated with GRE interface '${gre_name}'" -l "othr/othr_verify_gre_iface_wifi_master_state.sh" -tc
 
 pass

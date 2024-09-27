@@ -2,12 +2,14 @@ import threading
 import time
 import traceback
 from pathlib import Path
+from typing import Any, Callable, Literal
 
 from framework.fut_configurator import FutConfigurator
 from framework.lib.fut_lib import allure_script_execution_post_processing
 from lib_testbed.generic.client.client import Client
 from lib_testbed.generic.pod.pod import Pod
 from lib_testbed.generic.util.logger import log
+from lib_testbed.generic.util.ssh.sshexception import SshException
 
 lock = threading.Lock()
 
@@ -51,7 +53,7 @@ class DeviceHandler:
 
         self.version = self._version()
 
-    def _extract_device_osrt_config(self):
+    def _extract_device_osrt_config(self) -> dict[str, Any]:
         """
         Extract device configuration.
 
@@ -76,7 +78,7 @@ class DeviceHandler:
 
         return device_config
 
-    def _extract_device_config(self):
+    def _extract_device_config(self) -> dict[str, Any]:
         """
         Extract device configuration.
 
@@ -101,7 +103,7 @@ class DeviceHandler:
 
         return model_config
 
-    def _extract_client_config(self):
+    def _extract_client_config(self) -> dict[str, Any]:
         """
         Extract the client device configuration.
 
@@ -134,7 +136,7 @@ class DeviceHandler:
 
         return device_config
 
-    def _get_device_api(self):
+    def _get_device_api(self) -> object:
         """
         Get pod or client API handler.
 
@@ -156,24 +158,24 @@ class DeviceHandler:
 
         return device_api
 
-    def clear_folder(self, folder_path):
+    def clear_folder(self, folder_path: str) -> Literal[True]:
         """Remove contents of the target folder on the remote device."""
         if not Path(folder_path).is_absolute():
             folder_path = f"{self.fut_dir}/{folder_path}/"
-        cmd = f"[ -d {folder_path} ] && rm -rf {folder_path}"
+        cmd = f"[ -d {folder_path} ] && rm -rf {folder_path} || echo '{folder_path} does not exist, nothing to remove.'"
         ret = self.device_api.run_raw(cmd, skip_exception=True)
         if ret[0] != 0:
             log.warning(f"Failed to empty {folder_path} on {self.name}.")
         return True
 
-    def clear_resource_folder(self):
+    def clear_resource_folder(self) -> Callable[[str], Literal[True]]:
         return self.clear_folder(folder_path="resource")
 
-    def clear_tests_folder(self):
+    def clear_tests_folder(self) -> Callable[[str], Literal[True]]:
         return self.clear_folder(folder_path="shell/tests")
 
     @staticmethod
-    def sanitize_arg(arg):
+    def sanitize_arg(arg: str) -> str:
         """
         Sanitize the argument of selected characters.
 
@@ -183,23 +185,14 @@ class DeviceHandler:
         Returns:
             (str): Sanitized argument.
         """
-        try:
-            # Argument is surrounded by "" or '' or starts with -
-            if (arg[0] == '"' and arg[-1] == '"') or (arg[0] == "'" and arg[-1] == "'") or (arg[0] == "-"):
-                arg = arg
-            elif " " in arg:
-                if '"' in arg:
-                    arg = arg.replace('"', '"')
-                arg = f'"{arg}"'
-            else:
-                arg = arg
-        except Exception as e:
-            log.warning(f"Encountered exception while sanitizing arguments: {e}")
-            arg = arg
-
+        if (arg[0] == '"' and arg[-1] == '"') or (arg[0] == "'" and arg[-1] == "'") or (arg[0] == "-"):
+            # Argument is already surrounded by "" or '' or starts with -
+            pass
+        elif " " in arg:
+            arg = f'"{arg}"'
         return arg
 
-    def get_command_arguments(self, *args):
+    def get_command_arguments(self, *args) -> str:
         """
         Return command arguments.
 
@@ -212,18 +205,25 @@ class DeviceHandler:
             (str): Command arguments as a string.
         """
         command = ""
-
         for arg in args:
-            if isinstance(arg, list):
-                return self.get_command_arguments(arg)
+            if isinstance(arg, list | tuple | set):
+                command = str(command) + self.get_command_arguments(*arg)
             else:
+                if isinstance(arg, int):
+                    arg = str(arg)
                 if isinstance(arg, str):
                     arg = arg.strip()
                 command = str(command) + " " + str(self.sanitize_arg(arg))
-
         return command
 
-    def get_remote_test_command(self, test_path, params="", suffix=".sh", folder="shell"):
+    def get_remote_test_command(
+        self,
+        test_path: str,
+        params: str = "",
+        suffix: str = ".sh",
+        folder: str = "shell",
+        **kwargs,
+    ) -> str:
         """
         Construct a string which represents the path to the script.
 
@@ -247,7 +247,7 @@ class DeviceHandler:
         return remote_command
 
     @staticmethod
-    def _get_model_override_dir(override_file):
+    def _get_model_override_dir(override_file: str) -> str:
         """
         Return the path to the model override file.
 
@@ -258,7 +258,7 @@ class DeviceHandler:
             override_file (str): Name of the model override file.
 
         Raises:
-            RuntimeError: If model override file is not found.
+            FileNotFoundError: If model override file is not found.
 
         Returns:
             (str): Path to the model override file.
@@ -273,71 +273,63 @@ class DeviceHandler:
             if model_override_path.joinpath(override_file).is_file():
                 break
         else:
-            raise RuntimeError(
+            raise FileNotFoundError(
                 f"Could not find model override file {override_file} in {model_override_subdir}."
                 f"Please make sure it exists.",
             )
 
         return model_override_path.as_posix()
 
-    def _get_shell_cfg(self):
+    def _get_shell_cfg(self) -> dict[str, Any]:
         """
         Prepare dictionary containing shell environment variables.
 
         Dictionary keys are shell variables, dictionary values are
         values of variables.
 
-        Raises:
-            RuntimeError: If shell environment variables cannot be
-                loaded.
-
         Returns:
             (dict): Dictionary of shell environment variables.
         """
-        tmp_cfg = {}
+        tmp_cfg: dict = {}
 
-        try:
-            for key, value in self.device_config.items():
-                if key.isupper():
-                    tmp_cfg[key] = value
+        for key, value in self.device_config.items():
+            if key.isupper():
+                tmp_cfg[key] = value
 
-            tmp_cfg["FUT_TOPDIR"] = self.fut_dir
-            tmp_cfg["DEFAULT_WAIT_TIME"] = self.test_script_timeout
+        tmp_cfg["FUT_TOPDIR"] = self.fut_dir
+        tmp_cfg["DEFAULT_WAIT_TIME"] = self.test_script_timeout
 
-            if "client" not in self.device_type:
-                # For GW and LEAF devices
-                tmp_cfg["PATH"] = self.capabilities.get_shell_path()
-                if self.capabilities.get_management_iface():
-                    tmp_cfg["MGMT_IFACE"] = self.capabilities.get_management_iface()
-                tmp_cfg["OPENSYNC_ROOTDIR"] = self.capabilities.get_opensync_rootdir()
-                tmp_cfg["OVSH"] = (
-                    f"{self.capabilities.get_opensync_rootdir()}"
-                    f"/tools/ovsh --quiet --timeout={self.test_script_timeout}000"
-                )
-                tmp_cfg["LOGREAD"] = self.capabilities.get_logread_command()
-                model_override_file = self.device_config.get("MODEL_OVERRIDE_FILE")
-                platform_override_file = self.device_config.get("PLATFORM_OVERRIDE_FILE")
-                tmp_cfg["MODEL_OVERRIDE_FILE"] = (
-                    Path(self.fut_dir)
-                    .joinpath(self._get_model_override_dir(model_override_file), model_override_file)
-                    .as_posix()
-                )
-                tmp_cfg["PLATFORM_OVERRIDE_FILE"] = (
-                    Path(self.fut_dir)
-                    .joinpath(self._get_model_override_dir(platform_override_file), platform_override_file)
-                    .as_posix()
-                )
-                tmp_cfg["MGMT_IFACE_UP_TIMEOUT"] = 60
-                tmp_cfg["MGMT_CONN_TIMEOUT"] = 2
-            else:
-                tmp_cfg["PATH"] = self.device_config.get("shell_path")
-
-        except Exception as e:
-            raise RuntimeError(f"Failed to load shell environment variables: {e}")
+        if "client" not in self.device_type:
+            # For GW and LEAF devices
+            tmp_cfg["PATH"] = self.capabilities.get_shell_path()
+            if self.capabilities.get_management_iface():
+                tmp_cfg["MGMT_IFACE"] = self.capabilities.get_management_iface()
+            tmp_cfg["OPENSYNC_ROOTDIR"] = self.capabilities.get_opensync_rootdir()
+            tmp_cfg["OVSH"] = (
+                f"{self.capabilities.get_opensync_rootdir()}"
+                f"/tools/ovsh --quiet --timeout={self.test_script_timeout}000"
+            )
+            tmp_cfg["LOGREAD"] = self.capabilities.get_logread_command()
+            model_override_file = self.device_config.get("MODEL_OVERRIDE_FILE")
+            platform_override_file = self.device_config.get("PLATFORM_OVERRIDE_FILE")
+            tmp_cfg["MODEL_OVERRIDE_FILE"] = (
+                Path(self.fut_dir)
+                .joinpath(self._get_model_override_dir(model_override_file), model_override_file)
+                .as_posix()
+            )
+            tmp_cfg["PLATFORM_OVERRIDE_FILE"] = (
+                Path(self.fut_dir)
+                .joinpath(self._get_model_override_dir(platform_override_file), platform_override_file)
+                .as_posix()
+            )
+            tmp_cfg["MGMT_IFACE_UP_TIMEOUT"] = 60
+            tmp_cfg["MGMT_CONN_TIMEOUT"] = 2
+        else:
+            tmp_cfg["PATH"] = self.device_config.get("shell_path")
 
         return tmp_cfg
 
-    def create_fut_set_env(self):
+    def create_fut_set_env(self) -> str:
         """
         Create file containing shell environment variables.
 
@@ -358,7 +350,7 @@ class DeviceHandler:
 
         return shell_fut_env_path
 
-    def _version(self):
+    def _version(self) -> str:
         """
         Return the version of the device.
 
@@ -374,7 +366,7 @@ class DeviceHandler:
 
         return version
 
-    def file_transfer(self, folders: list, **kwargs):
+    def file_transfer(self, folders: list[str], **kwargs) -> None:
         as_sudo = kwargs.get("as_sudo", True)
         skip_env_file = kwargs.get("skip_env_file", False)
         log.info(f"Transferring the {folders} folders to {self.name}")
@@ -386,14 +378,14 @@ class DeviceHandler:
                         location=f"{self.fut_dir}/{folder}/",
                         as_sudo=as_sudo,
                     )
-            except Exception:
-                raise RuntimeError(traceback.format_exc())
+            except Exception as exception:
+                raise RuntimeError(traceback.format_exc()) from exception
 
             if not skip_env_file:
                 device_env_file = self.create_fut_set_env()
                 self.device_api.put_file(file_name=device_env_file, location=self.fut_dir)
 
-    def check_fut_file_transfer(self):
+    def check_fut_file_transfer(self) -> None | Literal[True]:
         """
         Check if FUT files were transferred to the device.
 
@@ -411,7 +403,7 @@ class DeviceHandler:
         else:
             return True
 
-    def _check_mgmt_ssh_connection_down(self):
+    def _check_mgmt_ssh_connection_down(self) -> bool:
         """
         Check if management SSH connection to the device is down.
 
@@ -428,12 +420,12 @@ class DeviceHandler:
             log.debug(f"Exit code of the SSH connection check: {res}")
             # Each exit_code != 0 is treated as SSH disconnection.
             return res != 0
-        except Exception as e:
-            log.debug(f"An exception was encountered: {e}")
+        except SshException as exception:
+            log.debug(f"An SSH exception was encountered: {exception}")
             # Each exception is treated as SSH disconnection.
             return True
 
-    def _start_rcn_procedure(self):
+    def _start_rcn_procedure(self) -> None | Literal[True]:
         """
         Start reconnection procedure to the device.
 
@@ -471,7 +463,7 @@ class DeviceHandler:
         return True
 
     @allure_script_execution_post_processing
-    def execute(self, path, args="", as_sudo=False, **kwargs):
+    def execute(self, path: str, args: str = "", as_sudo: bool = False, **kwargs) -> tuple[int, str, str]:
         """
         Execute the specified script with optional arguments.
 
@@ -528,7 +520,7 @@ class DeviceHandler:
 
         return cmd_ec, cmd_std_out, cmd_std_err
 
-    def check_wan_connectivity(self):
+    def check_wan_connectivity(self) -> Callable[[str, str, bool, None | str | bool], tuple[int, str, str]]:
         """
         Perform a WAN connectivity check on the device.
 

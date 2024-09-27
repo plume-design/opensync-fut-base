@@ -45,11 +45,11 @@ test -e "${license_file}"
 if [ $? = 0 ]; then
     log "brv/brv_is_bcm_license_on_system.sh: License '${license_file}' found on device - Success"
 else
-    raise "FAIL: License '${license_file}' could not be found on device" -l "brv/brv_is_bcm_license_on_system.sh" -tc
+    raise "License '${license_file}' could not be found on device" -l "brv/brv_is_bcm_license_on_system.sh" -tc
 fi
 
 cat "${license_file}" | grep -w "${service}" &&
     log "brv/brv_is_bcm_license_on_system.sh: License '${license_file}' has support for '${service}' - Success" ||
-    raise "FAIL: License '${license_file}' does not have support for '${service}'" -l "brv/brv_is_bcm_license_on_system.sh" -tc
+    raise "License '${license_file}' does not have support for '${service}'" -l "brv/brv_is_bcm_license_on_system.sh" -tc
 
 pass

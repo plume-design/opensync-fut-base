@@ -30,7 +30,7 @@ NARGS=1
 cert_cn=${1}
 interface=${2}
 
-if [ -n ${interface} ]; then
+if [ -n "${interface}" ]; then
     device_mac=$(get_radio_mac_from_system ${interface})
 else
     device_mac=""

@@ -9,58 +9,11 @@ Ensure DUT is in OpenSync default state, as is after boot.
 The goal of this testcase is to verify that IP port forward rule is created on the device when configured through the
 OVSDB `IP_Port_Forward` or `Netfilter` tables.\
 Which table is used depends on the OpenSync version the DUT is using. The used table is specified by the FUT user and
-can be set in the test case input file. Examples:\
-
-* specify the `IP_Port_Forward` table:
-
-```python
-test_inputs = {
-    "nm2_ovsdb_ip_port_forward": {
-        "default": {
-            "dst_ipaddr": "10.10.10.123",
-            "dst_port": "80",
-            "protocol": "tcp",
-            "src_port": "8080",
-            "pf_table": "IP_Port_Forward",
-        },
-        "args_mapping": [
-            "src_ifname",
-        ],
-        "inputs": [
-            {"FutGen|eth-interfaces-if-name": "lan"},
-            {"FutGen|bridge-interface-if-name": "lan"},
-            {"FutGen|vif-interfaces-if-name": "backhaul_sta"},
-        ],
-    },
-}
-```
-
-* specify the `Netfilter` table:
-
-```python
-test_inputs = {
-    "nm2_ovsdb_ip_port_forward": {
-        "default": {
-            "dst_ipaddr": "10.10.10.123",
-            "dst_port": "80",
-            "protocol": "tcp",
-            "src_port": "8080",
-            "pf_table": "Netfilter",
-        },
-        "args_mapping": [
-            "src_ifname",
-        ],
-        "inputs": [
-            {"FutGen|eth-interfaces-if-name": "lan"},
-            {"FutGen|bridge-interface-if-name": "lan"},
-            {"FutGen|vif-interfaces-if-name": "backhaul_sta"},
-        ],
-    },
-}
-```
+can be set in the test case input file in the `pf_table` input key. Possible values are `Netfilter` and
+`IP_Port_Forward` for their corresponding tables.
 
 Testcase verifies that the setting is applied to the device - LEVEL2.\
-Testcase verifies that the settings are deleted from the device if deleted from the `IP_Port_Forward` table.
+Testcase verifies that the settings are deleted from the device if deleted from the previously specified table.
 
 Test is only valid if WANO (_WAN Orchestrator_) is disabled, otherwise test is not applicable for the device.
 

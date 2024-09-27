@@ -51,12 +51,13 @@ unreachable_internet_counter=${2:-${counter_default}}
 test_type=${3:-"${step_1_name}"}
 
 trap '
-fut_info_dump_line
-print_tables Connection_Manager_Uplink
-check_restore_management_access || true
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    print_tables Connection_Manager_Uplink
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 log_title "cm2/cm2_internet_lost.sh: CM2 test - Internet Lost - $test_type"
 
@@ -64,14 +65,14 @@ if [ "$test_type" = "${step_1_name}" ]; then
     log "cm2/cm2_internet_lost.sh: Waiting for unreachable_internet_counter to reach $unreachable_internet_counter"
     wait_ovsdb_entry Connection_Manager_Uplink -w if_name "${if_name}" -is unreachable_internet_counter "$unreachable_internet_counter" &&
         log "cm2/cm2_internet_lost.sh: Connection_Manager_Uplink::unreachable_internet_counter is $unreachable_internet_counter - Success" ||
-        raise "FAIL: Connection_Manager_Uplink::unreachable_internet_counter is not $unreachable_internet_counter" -l "cm2/cm2_internet_lost.sh" -ow
+        raise "Connection_Manager_Uplink::unreachable_internet_counter is not $unreachable_internet_counter" -l "cm2/cm2_internet_lost.sh" -fc
 elif [ "$test_type" = "${step_2_name}" ]; then
     log "cm2/cm2_internet_lost.sh: Waiting for unreachable_internet_counter to reset to 0"
     wait_ovsdb_entry Connection_Manager_Uplink -w if_name "${if_name}" -is unreachable_internet_counter "0" &&
         log "cm2/cm2_internet_lost.sh: Connection_Manager_Uplink::unreachable_internet_counter reset to 0 - Success" ||
-        raise "FAIL: Connection_Manager_Uplink::unreachable_internet_counter is not 0" -l "cm2/cm2_internet_lost.sh" -ow
+        raise "Connection_Manager_Uplink::unreachable_internet_counter is not 0" -l "cm2/cm2_internet_lost.sh" -fc
 else
-    raise "FAIL: Wrong test type option" -l "cm2/cm2_internet_lost.sh" -arg
+    raise "Wrong test type option" -l "cm2/cm2_internet_lost.sh" -arg
 fi
 
 pass

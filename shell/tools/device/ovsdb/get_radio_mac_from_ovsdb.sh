@@ -29,15 +29,15 @@ case "${1}" in
 esac
 
 trap '
-fut_ec=$?
-if [ $fut_ec -ne 0 ]; then
-    fut_info_dump_line
-    print_tables Wifi_Radio_State
-    check_restore_ovsdb_server
-    fut_info_dump_line
-fi
-exit $fut_ec
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    if [ $fut_ec -ne 0 ]; then
+        fut_info_dump_line
+        print_tables Wifi_Radio_State
+        fut_info_dump_line
+    fi
+    exit $fut_ec
+' EXIT INT TERM
 
 NARGS=1
 [ $# -lt ${NARGS} ] && usage && raise "Requires at least ${NARGS} input argument(s)" -l "tools/device/ovsdb/get_radio_mac_from_ovsdb.sh" -arg
@@ -47,9 +47,9 @@ where_clause="${1}"
 fnc_str="get_radio_mac_from_ovsdb ${where_clause}"
 wait_for_function_output "notempty" "${fnc_str}" >/dev/null 2>&1
 if [ $? -eq 0 ]; then
-    iface_mac_raw=$($fnc_str) || raise "Failure: ${fnc_str}"  -l "tools/device/ovsdb/get_radio_mac_from_ovsdb.sh" -f
+    iface_mac_raw=$($fnc_str) || raise "Failure: ${fnc_str}" -l "tools/device/ovsdb/get_radio_mac_from_ovsdb.sh" -fc
 else
-    raise "Failure: ${fnc_str}" -l "tools/device/ovsdb/get_radio_mac_from_ovsdb.sh" -f
+    raise "Failure: ${fnc_str}" -l "tools/device/ovsdb/get_radio_mac_from_ovsdb.sh" -fc
 fi
 
 echo -n "${iface_mac_raw}"

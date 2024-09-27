@@ -44,15 +44,15 @@ usage_string
 }
 
 trap '
-fut_ec=$?
-fut_info_dump_line
-if [ $fut_ec -ne 0 ]; then 
-    print_tables Wifi_Inet_Config Wifi_Inet_State Wifi_Master_State
-    check_restore_ovsdb_server
-fi
-fut_info_dump_line
-exit $fut_ec
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    if [ $fut_ec -ne 0 ]; then
+        print_tables Wifi_Inet_Config Wifi_Inet_State Wifi_Master_State
+    fi
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 NARGS=1
 [ $# -lt ${NARGS} ] && usage && raise "Requires at least ${NARGS} input argument(s)" -l "tools/device/create_inet_interface.sh" -arg

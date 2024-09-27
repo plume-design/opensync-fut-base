@@ -66,7 +66,7 @@ create_inet_entry \
     raise "WAN interface ${wan_if_name} configuration - Failed" -l "tools/device/set_bridge_mode.sh" -tc
 
 log "tools/device/set_bridge_mode.sh: Adding bridge port ${wan_if_name} to ${bridge_if_name}"
-add_bridge_port "$bridge_if_name" "$wan_if_name" &&
+add_port_to_bridge "$bridge_if_name" "$wan_if_name" &&
     log "tools/device/set_bridge_mode.sh: Bridge port ${wan_if_name} added to bridge ${bridge_if_name} - Success" ||
     raise "Adding of bridge port ${wan_if_name} to bridge ${bridge_if_name} - Failed" -l "tools/device/set_bridge_mode.sh" -tc
 

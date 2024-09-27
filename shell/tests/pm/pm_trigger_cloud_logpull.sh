@@ -47,11 +47,13 @@ aw_lm_config_name=${3}
 log_title "pm/pm_trigger_cloud_logpull.sh: LM test - Verify Cloud triggered logpull event"
 
 trap '
+    fut_ec=$?
+    trap - EXIT INT
     fut_info_dump_line
     print_tables AW_Debug AW_LM_Config
-    check_restore_ovsdb_server
     fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    exit $fut_ec
+' EXIT INT TERM
 
 is_logpull_dir_empty &&
     log "pm/pm_trigger_cloud_logpull.sh: Logpull directory is empty - Success" ||
@@ -59,16 +61,16 @@ is_logpull_dir_empty &&
 
 empty_ovsdb_table AW_Debug &&
     log -deb "pm/pm_trigger_cloud_logpull.sh - AW_Debug table emptied - Success" ||
-    raise "FAIL: empty_ovsdb_table AW_Debug - Could not empty table:" -l "pm/pm_trigger_cloud_logpull.sh" -ds
+    raise "empty_ovsdb_table AW_Debug - Could not empty table:" -l "pm/pm_trigger_cloud_logpull.sh" -ds
 
 log "pm/pm_trigger_cloud_logpull.sh: For PM set log severity to DEBUG"
 set_manager_log PM TRACE &&
     log "pm/pm_trigger_cloud_logpull.sh - set_manager_log PM DEBUG - Success" ||
-    raise "FAIL: set_manager_log PM DEBUG" -l "pm/pm_trigger_cloud_logpull.sh" -tc
+    raise "set_manager_log PM DEBUG" -l "pm/pm_trigger_cloud_logpull.sh" -tc
 
 empty_ovsdb_table AW_LM_Config &&
     log -deb "pm/pm_trigger_cloud_logpull.sh - AW_LM_Config table emptied - Success" ||
-    raise "FAIL: empty_ovsdb_table AW_LM_Config - Could not empty table:" -l "pm/pm_trigger_cloud_logpull.sh" -ds
+    raise "empty_ovsdb_table AW_LM_Config - Could not empty table:" -l "pm/pm_trigger_cloud_logpull.sh" -ds
 
 # Wait a bit for the setting to be applied
 sleep 1
@@ -78,21 +80,21 @@ insert_ovsdb_entry AW_LM_Config \
     -i upload_token "${upload_token}" \
     -i name "${aw_lm_config_name}" &&
         log "pm/pm_trigger_cloud_logpull.sh: AW_LM_Config values inserted - Success" ||
-        raise "FAIL: Failed to insert_ovsdb_entry" -l "pm/pm_trigger_cloud_logpull.sh" -oe
+        raise "Failed to insert_ovsdb_entry" -l "pm/pm_trigger_cloud_logpull.sh" -fc
 
 check_pm_report_log &&
     log "pm/pm_trigger_cloud_logpull.sh: PM logpull log found - Success" ||
-    raise "FAIL: PM logpull log not found" -l "pm/pm_trigger_cloud_logpull.sh" -tc
+    raise "PM logpull log not found" -l "pm/pm_trigger_cloud_logpull.sh" -tc
 
 # By checking that the logpull directory is not empty, we can verify that the logpull tarball was successfully generated
 wait_for_function_exit_code 1 "is_logpull_dir_empty" &&
     log "pm/pm_trigger_cloud_logpull.sh: Logpull directory is not empty - Success" ||
-    raise "FAIL: Logpull directory is empty" -l "pm/pm_trigger_cloud_logpull.sh" -tc
+    raise "Logpull directory is empty" -l "pm/pm_trigger_cloud_logpull.sh" -tc
 
 # By checking that the logpull directory is empty, we can verify that the
 # logpull tarball was deleted after it was sent to the upload location
 wait_for_function_exit_code 0 "is_logpull_dir_empty" 10 10 &&
     log "pm/pm_trigger_cloud_logpull.sh: Logpull directory is empty - Success" ||
-    raise "FAIL: Logpull directory is not empty" -l "pm/pm_trigger_cloud_logpull.sh" -tc
+    raise "Logpull directory is not empty" -l "pm/pm_trigger_cloud_logpull.sh" -tc
 
 pass

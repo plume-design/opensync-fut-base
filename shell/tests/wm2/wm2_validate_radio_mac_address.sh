@@ -42,7 +42,7 @@ log -deb "wm2/wm2_validate_radio_mac_address.sh - OS MAC address: '$mac_address_
 # Validate MAC format
 validate_mac "$mac_address_os" &&
     log -deb "wm2/wm2_validate_radio_mac_address.sh - OS MAC address: '$mac_address_os' is validated - Success" ||
-    raise "FAIL: OS MAC address is not valid: '$mac_address_os'" -l "wm2/wm2_validate_radio_mac_address.sh" -oe
+    raise "OS MAC address is not valid: '$mac_address_os'" -l "wm2/wm2_validate_radio_mac_address.sh" -fc
 
 # Step 2 compare MAC from os and MAC from OVSDB
 mac_address_ovsdb=$(${OVSH} s Wifi_Radio_State -w if_name=="$if_name" mac -r)
@@ -51,7 +51,7 @@ log -deb "wm2/wm2_validate_radio_mac_address.sh - OVSDB MAC address: '$mac_addre
 if [ "$mac_address_ovsdb" == "$mac_address_os" ]; then
     log -deb "wm2/wm2_validate_radio_mac_address.sh - MAC address: '$mac_address' at OS match MAC address: '$mac_address_ovsdb' from OVSDB - Success"
 else
-    raise "FAIL: MAC address: '$mac_address' from OS does not match MAC address: '$mac_address_ovsdb' from OVSDB" -l "wm2/wm2_validate_radio_mac_address.sh" -tc
+    raise "MAC address: '$mac_address' from OS does not match MAC address: '$mac_address_ovsdb' from OVSDB" -l "wm2/wm2_validate_radio_mac_address.sh" -tc
 fi
 
 pass

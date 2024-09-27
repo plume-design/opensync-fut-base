@@ -44,14 +44,15 @@ if_name=$2
 NM2_DELAY="2"
 
 trap '
+    fut_ec=$?
+    trap - EXIT INT
     fut_info_dump_line
     print_tables Wifi_Inet_Config Wifi_Inet_State Bridge Port Interface
     reset_inet_entry $if_name || true
     reset_inet_entry $bridge || true
-    run_setup_if_crashed nm || true
-    check_restore_management_access || true
     fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    exit $fut_ec
+' EXIT INT TERM
 
 log_title "$tc_name: - Configuring and validating Native Linux Bridge - $bridge $if_name"
 
@@ -66,7 +67,7 @@ create_inet_entry \
     -network true \
     -enabled true &&
         log "$tc_name: Interface ${if_name} created - Success" ||
-        raise "FAIL: Failed to create interface ${if_name}" -l "$tc_name" -ds
+        raise "Failed to create interface ${if_name}" -l "$tc_name" -ds
 
 # create inet entry for the bridge
 log "$tc_name: Creating Wifi_Inet_Config entries for $bridge (enabled=true, network=false, ip_assign_scheme=none)"
@@ -77,13 +78,13 @@ create_inet_entry \
     -network false \
     -enabled true &&
         log "$tc_name: Interface ${bridge} created - Success" ||
-        raise "FAIL: Failed to create interface ${bridge}" -l "$tc_name" -ds
+        raise "Failed to create interface ${bridge}" -l "$tc_name" -ds
 
 # create the native bridge by updating Bridge, Port and Interface table.
 log "$tc_name: Creating bridge $bridge"
-wait_for_function_response 0 "ovs_create_bridge $bridge" &&
+wait_for_function_response 0 "ovsdb_create_bridge $bridge" &&
     log "$tc_name: Creating bridge '$bridge' - Success" ||
-    raise "FAIL: Creating bridge $bridge" -l "$tc_name" -tc
+    raise "Creating bridge $bridge" -l "$tc_name" -tc
 
 # Check if the bridge is configured in the systema (LEVEL2)
 sleep $NM2_DELAY
@@ -91,22 +92,22 @@ brctl show | grep -q "$bridge"
 if [ $? = 0 ]; then
     log "$tc_name: - LEVEL2 - bridge '$bridge' created - Success"
 else
-    raise "FAIL: - LEVEL2 - bridge '$bridge' not created" -l "$tc_name" -tc
+    raise "- LEVEL2 - bridge '$bridge' not created" -l "$tc_name" -tc
 fi
 
 # add interface to bridge
-add_bridge_port "$bridge" "$if_name"
+add_port_to_bridge "$bridge" "$if_name"
 # Check if interface is added to the bridge (LEVEL2)
 log "$tc_name: Checking if port '$if_name' is added to bridge '$bridge'"
-wait_for_function_response 0 "check_if_port_in_bridge $if_name $bridge" &&
+wait_for_function_response 0 "check_if_port_in_bridge $bridge $if_name" &&
     log "$tc_name: check_if_port_in_bridge - LEVEL2 - port '$if_name' added to '$bridge' - Success" ||
-    raise "FAIL: check_if_port_in_bridge - LEVEL2 - port '$if_name' not added to $bridge" -l "$tc_name" -tc
+    raise "check_if_port_in_bridge - LEVEL2 - port '$if_name' not added to $bridge" -l "$tc_name" -tc
 
 # enable hairpin configuration on the interface
 log "$tc_name: Validating enabling hairpin configuration on port '$if_name'"
 wait_for_function_response 0 "nb_configure_hairpin $if_name "on"" &&
     log "$tc_name: enabled hairpin mode on port '$if_name' - Success" ||
-    raise "FAIL: enabled hairpin mode on port '$if_name' " -l "$tc_name" -tc
+    raise "enabled hairpin mode on port '$if_name' " -l "$tc_name" -tc
 
 sleep $NM2_DELAY
 # validate if hairpin configuration is enabled on the interface
@@ -116,14 +117,14 @@ if [ "$hairpin_config" -eq 1 ]; then
     log "$tc_name: enabling hairpin mode on port $if_name - Success"
 else
     log "$tc_name: enabling hairpin mode on port $if_name - Fail"
-    raise "FAIL: LEVEL2 - hairpin is not enabled on $if_name " -l "$tc_name" -tc
+    raise "LEVEL2 - hairpin is not enabled on $if_name " -l "$tc_name" -tc
 fi
 
 # diable hairpin configuration on the interface
 log "$tc_name: Validating disabling hairpin configuration on port '$if_name'"
 wait_for_function_response 0 "nb_configure_hairpin $if_name "off"" &&
     log "$tc_name: disable hairpin mode on port $if_name - Success" ||
-    raise "FAIL: disable hairpin mode on port '$if_name' " -l "$tc_name" -tc
+    raise "disable hairpin mode on port '$if_name' " -l "$tc_name" -tc
 
 sleep $NM2_DELAY
 # validate if hairpin configuration is disabled on the interface
@@ -133,7 +134,7 @@ if [ "$hairpin_config" -eq 0 ]; then
     log "$tc_name: disabling hairpin mode on port $if_name - Success"
 else
     log "$tc_name: disabling hairpin mode on port $if_name - Fail"
-    raise "FAIL: nb_configure_hairpin - LEVEL2 - hairpin is not disabled on $if_name " -l "$tc_name" -tc
+    raise "nb_configure_hairpin - LEVEL2 - hairpin is not disabled on $if_name " -l "$tc_name" -tc
 fi
 
 # remove the interface from the bridge
@@ -141,37 +142,31 @@ remove_port_from_bridge "$bridge" "$if_name"
 sleep $NM2_DELAY
 
 # validate is the interface is removed from the bridge
-check_if_port_in_bridge "$if_name" "$bridge"
+check_if_port_in_bridge "$bridge" "$if_name"
 # returns 0 if port is found in the bridge
 if [ "$?" -eq 0 ]; then
     log "$tc_name: Interface $if_name not removed from the bridge $bridge - Fail"
-    raise "FAIL: Interface $if_name exists on system, but should NOT" -l "$tc_name" -tc
+    raise "Interface $if_name exists on system, but should NOT" -l "$tc_name" -tc
 fi
 
 # clean up Bridge, Interface and Port tables
-ovs_delete_bridge "$bridge"
+ovsdb_delete_bridge "$bridge"
 sleep $NM2_DELAY
 # nb_check_if_bridge_present "$bridge"
 brctl show | grep -q "$bridge"
 if [ "$?" -eq 0 ]; then
     log "$tc_name: Bridge $bridge not removed from the system - Fail"
-    raise "FAIL: Interface $bridge exists on system, but should NOT" -l "$tc_name" -tc
+    raise "Interface $bridge exists on system, but should NOT" -l "$tc_name" -tc
 fi
 
 log "$tc_name: Remove interface $if_name"
 delete_inet_interface "$if_name" &&
     log "$tc_name: interface $if_name removed from device - Success" ||
-    raise "FAIL: interface $if_name not removed from device" -l "$tc_name" -tc
+    raise "interface $if_name not removed from device" -l "$tc_name" -tc
 
 log "$tc_name: Remove interface $bridge"
 delete_inet_interface "$bridge" &&
     log "$tc_name: interface $bridge removed from device - Success" ||
-    raise "FAIL: interface $bridge not removed from device" -l "$tc_name" -tc
-
-# Check if manager survived.
-manager_pid_file="${OPENSYNC_ROOTDIR}/bin/nm"
-wait_for_function_response 0 "check_manager_alive $manager_pid_file" &&
-    log "$tc_name: NETWORK MANAGER is running - Success" ||
-    raise "FAIL: NETWORK MANAGER not running/crashed" -l "$tc_name" -tc
+    raise "interface $bridge not removed from device" -l "$tc_name" -tc
 
 pass

@@ -34,18 +34,17 @@ NARGS=0
 [ $# -ne ${NARGS} ] && usage && raise "Requires exactly ${NARGS} input argument(s)" -l "ltem/ltem_validation.sh" -arg
 
 trap '
-fut_info_dump_line
-print_tables Lte_Config Lte_State
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_info_dump_line
+    print_tables Lte_Config Lte_State
+    fut_info_dump_line
+' EXIT INT TERM
 
 check_ovsdb_table_exist Lte_Config &&
     log "ltem/ltem_verify_table_exists.sh: Lte_Config table exists in ovsdb - Success" ||
-    raise "FAIL: Lte_Config table does not exist in ovsdb" -l "ltem/ltem_verify_table_exists.sh" -s
+    raise "Lte_Config table does not exist in ovsdb" -l "ltem/ltem_verify_table_exists.sh" -s
 
 check_ovsdb_table_exist Lte_State &&
     log "ltem/ltem_verify_table_exists.sh: Lte_State table exists in ovsdb - Success" ||
-    raise "FAIL: Lte_State table does not exist in ovsdb" -l "ltem/ltem_verify_table_exists.sh" -s
+    raise "Lte_State table does not exist in ovsdb" -l "ltem/ltem_verify_table_exists.sh" -s
 
 pass

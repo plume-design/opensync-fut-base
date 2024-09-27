@@ -5,8 +5,8 @@ import pytest
 
 from framework.fut_configurator import FutConfigurator
 from framework.lib.fut_lib import determine_required_devices, step
+from lib_testbed.generic.util.common import compare_fw_versions
 from lib_testbed.generic.util.logger import log
-
 
 ExpectedShellResult = pytest.expected_shell_result
 pytest.fut_configurator = FutConfigurator()
@@ -18,17 +18,16 @@ def cm2_setup():
     test_class_name = ["TestCm2"]
     nodes, clients = determine_required_devices(test_class_name)
     log.info(f"Required devices for CM2: {nodes + clients}")
-    for device in nodes:
-        if not hasattr(pytest, device):
-            raise RuntimeError(f"{device.upper()} handler is not set up correctly.")
-        try:
-            device_handler = getattr(pytest, device)
-            device_wan_iface = device_handler.capabilities.get_primary_wan_iface()
-            device_wan_bridge = device_handler.capabilities.get_wan_bridge_ifname()
-            setup_args = device_handler.get_command_arguments(device_wan_iface, device_wan_bridge)
-            device_handler.fut_device_setup(test_suite_name="cm2", setup_args=setup_args)
-        except Exception as exception:
-            raise RuntimeError(f"Unable to perform setup for the {device} device: {exception}")
+    for node in nodes:
+        if not hasattr(pytest, node):
+            raise RuntimeError(f"{node.upper()} handler is not set up correctly.")
+        node_handler = getattr(pytest, node)
+        if "CM" not in node_handler.get_kconfig_managers():
+            pytest.skip("CM not present on device")
+        node_handler.fut_device_setup(test_suite_name="cm2")
+        service_status = node_handler.get_node_services_and_status()
+        if service_status["cm"]["status"] != "enabled":
+            pytest.skip("CM not enabled on device")
     # Set the baseline OpenSync PIDs used for reboot detection
     pytest.session_baseline_os_pids = pytest.gw.opensync_pid_retrieval(tracked_node_services=pytest.tracked_managers)
 
@@ -102,7 +101,8 @@ class TestCm2:
 
         with step("Preparation of testcase parameters"):
             # GW specific arguments
-            gw_wan_inet_addr = server.wan_ip_dict.get("gw")
+            gw_wan_iface = gw.capabilities.get_primary_wan_iface()
+            gw_wan_inet_addr = gw.device_api.get_ips(iface=gw_wan_iface)["ipv4"]
 
             internet_blocked_args = gw.get_command_arguments("internet_blocked")
             internet_recovered_args = gw.get_command_arguments("internet_recovered")
@@ -210,7 +210,9 @@ class TestCm2:
 
         with step("Preparation of testcase parameters"):
             # GW specific arguments
-            gw_wan_inet_addr = server.wan_ip_dict.get("gw")
+            gw_wan_iface = gw.capabilities.get_primary_wan_iface()
+            gw_wan_inet_addr = gw.device_api.get_ips(iface=gw_wan_iface)["ipv4"]
+
             dns_blocked_args = gw.get_command_arguments("dns_blocked")
             dns_unblocked_args = gw.get_command_arguments("dns_recovered")
             gw_wan_inet_addr_blocked = gw.get_command_arguments(gw_wan_inet_addr, "block")
@@ -247,8 +249,9 @@ class TestCm2:
 
         with step("Preparation of testcase parameters"):
             # GW specific arguments
-            gw_wan_inet_addr = server.wan_ip_dict.get("gw")
             gw_wan_iface = gw.capabilities.get_primary_wan_iface()
+            gw_wan_inet_addr = gw.device_api.get_ips(iface=gw_wan_iface)["ipv4"]
+
             counter = cfg.get("unreachable_internet_counter")
             internet_blocked_args = gw.get_command_arguments(gw_wan_iface, counter, "check_counter")
             internet_recovered_args = gw.get_command_arguments(gw_wan_iface, "0", "internet_recovered")
@@ -304,3 +307,143 @@ class TestCm2:
 
         with step("Test Case"):
             assert gw.execute_with_logging("tests/cm2/cm2_ssl_check")[0] == ExpectedShellResult
+
+    @allure.severity(allure.severity_level.NORMAL)
+    @pytest.mark.parametrize("cfg", cm2_config.get("cm2_network_outage_link", []))
+    def test_cm2_network_outage_link(self, cfg: dict):
+        gw = pytest.gw
+        min_opensync_version = "6.5.0.0"
+        opensync_version = gw.get_opensync_version()
+
+        if compare_fw_versions(opensync_version, min_opensync_version, "<"):
+            pytest.skip(f"Insufficient OpenSync version:{opensync_version}. Required {min_opensync_version} or higher.")
+
+        with step("Preparation of testcase parameters"):
+            # GW specific arguments
+            gw_wan_iface = gw.capabilities.get_primary_wan_iface()
+            test_args = gw.get_command_arguments(gw_wan_iface)
+
+        with step("Test Case"):
+            assert gw.execute_with_logging("tests/cm2/cm2_network_outage_link", test_args)[0] == ExpectedShellResult
+        with step("Wait 60s to make sure gw fully recovers"):
+            time.sleep(60)
+
+    @allure.severity(allure.severity_level.NORMAL)
+    @pytest.mark.parametrize("cfg", cm2_config.get("cm2_network_outage_router", []))
+    def test_cm2_network_outage_router(self, cfg: dict):
+        server, gw = pytest.server, pytest.gw
+        min_opensync_version = "6.5.0.0"
+        opensync_version = gw.get_opensync_version()
+
+        if compare_fw_versions(opensync_version, min_opensync_version, "<"):
+            pytest.skip(f"Insufficient OpenSync version:{opensync_version}. Required {min_opensync_version} or higher.")
+
+        with step("Preparation of testcase parameters"):
+            # GW specific arguments
+            gw_wan_iface = gw.capabilities.get_primary_wan_iface()
+            gw_wan_inet_addr = gw.device_api.get_ips(iface=gw_wan_iface)["ipv4"]
+
+            block_args_device = gw.get_command_arguments("router_blocked")
+            block_args_server = gw.get_command_arguments(gw_wan_inet_addr, "block")
+            unblock_args_device = gw.get_command_arguments("router_unblocked")
+            unblock_args_server = gw.get_command_arguments(gw_wan_inet_addr, "unblock")
+
+        try:
+            with step("Run arping manipuation script - BLOCK"):
+                assert (
+                    server.execute("tools/server/cm/arping_man", block_args_server, as_sudo=True)[0]
+                    == ExpectedShellResult
+                )
+
+            with step("Run address_internet_man script - BLOCK"):
+                assert (
+                    server.execute("tools/server/cm/address_internet_man", block_args_server, as_sudo=True)[0]
+                    == ExpectedShellResult
+                )
+
+            with step("Run cm2_network_outage_router script - BLOCK"):
+                assert (
+                    gw.execute_with_logging("tests/cm2/cm2_network_outage_router", block_args_device)[0]
+                    == ExpectedShellResult
+                )
+
+            with step("Run arping manipuation script - UNBLOCK"):
+                assert (
+                    server.execute("tools/server/cm/address_internet_man", unblock_args_server, as_sudo=True)[0]
+                    == ExpectedShellResult
+                )
+
+            with step("Run address_internet_man script - UNBLOCK"):
+                assert (
+                    server.execute("tools/server/cm/arping_man", unblock_args_server, as_sudo=True)[0]
+                    == ExpectedShellResult
+                )
+
+            with step("Run cm2_network_outage_router script - UNBLOCK"):
+                assert (
+                    gw.execute_with_logging("tests/cm2/cm2_network_outage_router", unblock_args_device)[0]
+                    == ExpectedShellResult
+                )
+
+        finally:
+            with step("Cleanup"):
+                assert (
+                    server.execute("tools/server/cm/address_internet_man", unblock_args_server, as_sudo=True)[0]
+                    == ExpectedShellResult
+                )
+                assert (
+                    server.execute("tools/server/cm/arping_man", unblock_args_server, as_sudo=True)[0]
+                    == ExpectedShellResult
+                )
+
+    @allure.severity(allure.severity_level.NORMAL)
+    @pytest.mark.parametrize("cfg", cm2_config.get("cm2_network_outage_internet", []))
+    def test_cm2_network_outage_internet(self, cfg: dict):
+        server, gw = pytest.server, pytest.gw
+        min_opensync_version = "6.5.0.0"
+        opensync_version = gw.get_opensync_version()
+
+        if compare_fw_versions(opensync_version, min_opensync_version, "<"):
+            pytest.skip(f"Insufficient OpenSync version:{opensync_version}. Required {min_opensync_version} or higher.")
+
+        with step("Preparation of testcase parameters"):
+            # GW specific arguments
+            gw_wan_iface = gw.capabilities.get_primary_wan_iface()
+            gw_wan_inet_addr = gw.device_api.get_ips(iface=gw_wan_iface)["ipv4"]
+
+            block_args_device = gw.get_command_arguments("internet_blocked")
+            block_args_server = gw.get_command_arguments(gw_wan_inet_addr, "block")
+            unblock_args_device = gw.get_command_arguments("internet_unblocked")
+            unblock_args_server = gw.get_command_arguments(gw_wan_inet_addr, "unblock")
+
+        try:
+            with step("Run address_internet_man script - BLOCK"):
+                assert (
+                    server.execute("tools/server/cm/address_internet_man", block_args_server, as_sudo=True)[0]
+                    == ExpectedShellResult
+                )
+
+            with step("Run cm2_network_outage_internet script - BLOCK"):
+                assert (
+                    gw.execute_with_logging("tests/cm2/cm2_network_outage_internet", block_args_device)[0]
+                    == ExpectedShellResult
+                )
+
+            with step("Run address_internet_man script - UNBLOCK"):
+                assert (
+                    server.execute("tools/server/cm/address_internet_man", unblock_args_server, as_sudo=True)[0]
+                    == ExpectedShellResult
+                )
+
+            with step("Run cm2_network_outage_internet script - UNBLOCK"):
+                assert (
+                    gw.execute_with_logging("tests/cm2/cm2_network_outage_internet", unblock_args_device)[0]
+                    == ExpectedShellResult
+                )
+
+        finally:
+            with step("Cleanup"):
+                assert (
+                    server.execute("tools/server/cm/address_internet_man", unblock_args_server, as_sudo=True)[0]
+                    == ExpectedShellResult
+                )

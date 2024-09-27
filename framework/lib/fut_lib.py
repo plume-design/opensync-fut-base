@@ -8,37 +8,35 @@ FUT test suite but belong to no particular class.
 import hashlib
 import json
 import subprocess
+from os import PathLike
 from pathlib import Path
+from typing import Any, Callable, Literal
 
-import allure
+import allure  # type: ignore
 import yaml
 
+from config.defaults import all_bandwidth_list, radio_band_list
 from lib_testbed.generic.util.logger import log
 
 
-def allure_attach_to_report(name, body):
+type fileDescriptorOrPathstr = int | str | bytes | PathLike[str] | PathLike[bytes]
+
+
+def allure_attach_to_report(name: str | None, body: Any):
     """
     Create Allure report attachment.
 
     Args:
-        name (str): Name of the attachment.
-        body (str): Body of the attachment.
-
-    Returns:
-        (bool): True always.
+        name (str | None): Name of the attachment.
+        body (Any): Body of the attachment.
     """
     try:
-        allure.attach(
-            name=name,
-            body=body,
-        )
+        allure.attach(name=name, body=body)
     except Exception as exception:
         log.warning(f"Failed to create the Allure report attachment: {exception}")
 
-    return True
 
-
-def multi_device_script_execution(devices: list, script: str, args="", **kwargs):
+def multi_device_script_execution(devices: list, script: str, args: str = "", **kwargs) -> None:
     """
     Execute a script on all specified devices.
 
@@ -46,24 +44,22 @@ def multi_device_script_execution(devices: list, script: str, args="", **kwargs)
         devices (list): List of NodeHandler or DeviceHandler objects.
         script (str):  Path to script.
         args (str): Optional script arguments. Defaults to empty string.
+
     Keyword Args:
         as_sudo (bool): Execute script with superuser privileges.
         suffix (str): Suffix of the script.
         folder (str): Name of the folder where the script is located.
-
-    Returns:
-        (bool): True if the script was successfully executed on all devices.
     """
     try:
         for device in devices:
             assert device.execute(script, args, **kwargs)[0] == 0
-    except Exception as e:
-        raise RuntimeError(f"Unable to execute script on all specified devices: {e}")
+    except AssertionError as assertion:
+        raise RuntimeError(
+            f"Unable to execute script on all specified devices {device}, assertion on {device}: {assertion}",
+        )
 
-    return True
 
-
-def allure_script_execution_post_processing(function):
+def allure_script_execution_post_processing(function: Callable) -> Callable:
     """
     Wrap functions and methods for enhanced Allure output.
 
@@ -80,7 +76,7 @@ def allure_script_execution_post_processing(function):
     return wrapper
 
 
-def step(step_title):
+def step(step_title: str) -> Callable:
     """
     Format step mark for Allure report and add colon to step title.
 
@@ -93,7 +89,7 @@ def step(step_title):
     return allure.step(f"{step_title}:")
 
 
-def print_allure(message):
+def print_allure(message: str) -> None:
     """
     Redirect a message.
 
@@ -109,13 +105,19 @@ def print_allure(message):
     )
 
 
-def output_to_json(data, json_file=None, sort_keys=True, indent=4, convert_only=False):
+def output_to_json(
+    data: object,
+    json_file: fileDescriptorOrPathstr = "fut_data.json",
+    sort_keys: bool = True,
+    indent: int = 4,
+    convert_only: bool = False,
+) -> str | None:
     """
     Output given data to JSON file.
 
     Args:
         data (JSON serializable data, dict(), list() etc.)
-        json_file (str): Path to JSON file
+        json_file (FileDescriptorOrPathstr): Path to JSON file
         sort_keys (bool): sort output of dictionaries by key
         indent (int): pretty-print object members with specified indent level
         convert_only (bool): only convert data to JSON format without writing to file
@@ -124,7 +126,6 @@ def output_to_json(data, json_file=None, sort_keys=True, indent=4, convert_only=
         RuntimeError: Failed to output data to JSON file
 
     Returns:
-        (bool): True
         (str): JSON string if convert_only is set to True
     """
     try:
@@ -133,13 +134,14 @@ def output_to_json(data, json_file=None, sort_keys=True, indent=4, convert_only=
             return json_string
         with open(json_file, "w") as jsf:
             jsf.write(json.dumps({"data": data}, sort_keys=sort_keys, indent=indent))
-    except Exception as e:
-        raise RuntimeError(f"Failed to output data to JSON file {e}")
+            return None
+    except PermissionError as exception:
+        raise RuntimeError(f"Failed to output data to JSON file {exception}")
+    except TypeError as exception:
+        raise RuntimeError(f"Input data: {data} contains non-basic objects unsupported by json.dumps(): {exception}")
 
-    return True
 
-
-def check_if_dicts_match(dict1, dict2):
+def check_if_dicts_match(dict1: dict, dict2: dict) -> list | Literal[True]:
     """
     Verify if dictionaries match.
 
@@ -178,7 +180,7 @@ def check_if_dicts_match(dict1, dict2):
     return True
 
 
-def execute_locally(path, args="", suffix=".sh", **kwargs):
+def execute_locally(path: str, args: str = "", suffix=".sh", **kwargs) -> tuple[int, str, str]:
     """
     Execute the specified script locally with optional arguments.
 
@@ -202,8 +204,8 @@ def execute_locally(path, args="", suffix=".sh", **kwargs):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
-    cmd_std_out, cmd_std_err = stream.communicate()
-    cmd_std_out, cmd_std_err = cmd_std_out.decode("utf-8").strip(), cmd_std_err.decode("utf-8").strip()
+    cmd_std_out_bytes, cmd_std_err_bytes = stream.communicate()
+    cmd_std_out, cmd_std_err = cmd_std_out_bytes.decode("utf-8").strip(), cmd_std_err_bytes.decode("utf-8").strip()
     cmd_ec = stream.returncode
 
     allure_attach_to_report(
@@ -220,7 +222,7 @@ def execute_locally(path, args="", suffix=".sh", **kwargs):
     return cmd_ec, cmd_std_out, cmd_std_err
 
 
-def flatten_list(nested_list):
+def flatten_list(nested_list: list[list]) -> list[Any]:
     """
     Flatten a nested list.
 
@@ -235,7 +237,7 @@ def flatten_list(nested_list):
     ]
 
 
-def determine_required_devices(test_suites: list):
+def determine_required_devices(test_suites: list[str]) -> tuple[list[str], list[str]]:
     """
     Determine required devices for the execution of the specified tests.
 
@@ -247,7 +249,7 @@ def determine_required_devices(test_suites: list):
     """
     filename = "test_suite_device_requirements.yaml"
     dirname = "config/rules"
-    filepaths = []
+    filepaths: list[PathLike] = []
     for parent_dir in [".", "internal"]:
         if Path(parent_dir).joinpath(dirname).is_dir():
             filepaths.append(*Path(parent_dir).joinpath(dirname).glob(filename))
@@ -271,7 +273,7 @@ def determine_required_devices(test_suites: list):
     return required_nodes, required_clients
 
 
-def map_dict_key_path(dictionary, key_mem=""):
+def map_dict_key_path(dictionary: dict, key_mem: str = "") -> list[Any]:
     """Map dictionary to list.
 
     Uses recursion if value of key in argument dictionary is a dictionary.
@@ -292,63 +294,66 @@ def map_dict_key_path(dictionary, key_mem=""):
     return result
 
 
-def load_reg_rule():
+def load_reg_rule() -> dict:
     """Load regulatory rules from regulatory.yaml file.
 
     Returns:
         (dict): regulatory rules dictionary
-        (None): on exception or failure
     """
     full_path = f'{str(Path(__file__).absolute()).split("framework")[0]}/config/rules/regulatory.yaml'
     try:
         with open(full_path) as reg_rule_file:
             return yaml.safe_load(reg_rule_file)
-    except Exception as e:
-        log.warning(f"Failed to load regulatory domain rules from {full_path}\n{e}")
-    return None
+    except yaml.YAMLError as exception:
+        raise RuntimeError(f"Failed to load regulatory rules from YAML file {full_path}: {exception}") from exception
+    except PermissionError as exception:
+        raise RuntimeError(f"Failed to open file file {full_path}: {exception}") from exception
 
 
 def validate_channel_ht_mode_band(
-    channel,
-    ht_mode="HT20",
-    radio_band=None,
-    regulatory_rule=None,
-    reg_domain="US",
-    raise_broken=False,
-):
-    """Verify if the selected channel, ht_mode and radio_band are configured regulatory domain.
+    channel: int,
+    ht_mode: str = "HT20",
+    radio_band: str = "",
+    regulatory_rule: dict | None = None,
+    reg_domain: str = "US",
+    raise_broken: bool = False,
+) -> bool:
+    """Verify if the selected channel, ht_mode and radio_band are compatible with the regulatory domain.
 
     Args:
         channel (int): WiFi channel
-        ht_mode (str): supported "HT20", "HT2040", "HT40", "HT40+", "HT40-", "HT80", "HT160", "HT80+80"
-        radio_band (str): supported "24g", "5g", "6g", "5gl" and "5gu" are transformed into "5g"
-        reg_domain (str): supported "US", "EU", "GB", "JP" defaulted to US
+        ht_mode (str): channel bandwidth
+        radio_band (str): WiFi band.
+        reg_domain (str): regulatory domain. Supported "US" (default), "EU", "GB".
 
     Returns:
-        bool: True for success, raises exception otherwise.
+        bool: True if the combination of band, channel, ht_mode, reg_domain is supported by the device, False otherwise.
     """
-    assert ht_mode in ["HT20", "HT2040", "HT40", "HT40+", "HT40-", "HT80", "HT160", "HT80+80"]
     if not regulatory_rule:
         log.warning("Regulatory rules not found, loading")
         regulatory_rule = load_reg_rule()
     try:
+        assert ht_mode in all_bandwidth_list
+        assert radio_band in radio_band_list
         if channel not in regulatory_rule[reg_domain.upper()]["band"][radio_band.lower()][ht_mode.upper()]:
-            msg = f"Incorrect combination of parameters: channel:{channel}, ht_mode:{ht_mode.upper()}, band:{radio_band.lower()}, regulatory domain: {reg_domain.upper()}"
-            log.warning(msg)
+            msg = f"Invalid combination of parameters: channel:{channel}, ht_mode:{ht_mode.upper()}, band:{radio_band.lower()}, regulatory domain: {reg_domain.upper()}"
+            log.debug(msg)
             if raise_broken:
                 raise RuntimeError(msg)
         else:
             return True
+    except AssertionError:
+        log.error(f"Invalid radio_band: {radio_band} and ht_mode:{ht_mode}")
     except RuntimeError as e:
         log.error(e)
-    except Exception as e:
-        log.warning(
-            f"Failed to validate channel {channel}[{ht_mode}] for {radio_band} against regulatory rules for {reg_domain.upper()}\n{e}",
+    except KeyError:
+        log.debug(
+            f"Parameters unsupported by device. channel:{channel}, ht_mode:{ht_mode}, band:{radio_band}, regulatory domain: {reg_domain}",
         )
     return False
 
 
-def get_str_hash(input_string: str, hash_length: int = 32):
+def get_str_hash(input_string: str, hash_length: int = 32) -> str:
     """Get a hash of the desired length from the input string.
 
     Args:
@@ -362,7 +367,7 @@ def get_str_hash(input_string: str, hash_length: int = 32):
     return hashlib.md5(input_string.encode()).hexdigest()[:hash_length]
 
 
-def find_filename_in_dir(directory: str, pattern: str) -> list:
+def find_filename_in_dir(directory: str, pattern: str) -> list[str]:
     """Recursively find files with a specific file name pattern in the directory tree.
 
     Args:

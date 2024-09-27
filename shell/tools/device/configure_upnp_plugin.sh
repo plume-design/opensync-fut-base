@@ -29,19 +29,18 @@ case "${1}" in
 esac
 
 trap '
-fut_info_dump_line
-print_tables Wifi_Inet_Config Wifi_Inet_State
-print_tables Wifi_VIF_Config Wifi_VIF_State
-print_tables Wifi_Radio_Config Wifi_Radio_State
-print_tables Openflow_Config Openflow_State
-print_tables Flow_Service_Manager_Config
-print_tables FSM_Policy
-print_tables Wifi_Master_State
-print_tables Object_Store_State
-show_bridge_details
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_info_dump_line
+    print_tables Wifi_Inet_Config Wifi_Inet_State
+    print_tables Wifi_VIF_Config Wifi_VIF_State
+    print_tables Wifi_Radio_Config Wifi_Radio_State
+    print_tables Openflow_Config Openflow_State
+    print_tables Flow_Service_Manager_Config
+    print_tables FSM_Policy
+    print_tables Wifi_Master_State
+    print_tables Object_Store_State
+    show_bridge_details
+    fut_info_dump_line
+' EXIT INT TERM
 
 NARGS=4
 [ $# -ne ${NARGS} ] && usage && raise "Requires exactly ${NARGS} input argument(s)" -arg
@@ -75,7 +74,7 @@ insert_ovsdb_entry Openflow_Config \
     -i bridge "${lan_bridge_if_name}" \
     -i action "normal,output:${of_port}" &&
         log "tools/device/configure_upnp_plugin.sh: insert_ovsdb_entry - Ingress rule inserted to Openflow_Config - Success" ||
-        raise "FAIL: insert_ovsdb_entry - Failed to insert ingress rule to Openflow_Config" -l "tools/device/configure_upnp_plugin.sh" -oe
+        raise "insert_ovsdb_entry - Failed to insert ingress rule to Openflow_Config" -l "tools/device/configure_upnp_plugin.sh" -fc
 
 insert_ovsdb_entry Flow_Service_Manager_Config \
     -i if_name "${tap_upnp_if}" \
@@ -84,4 +83,4 @@ insert_ovsdb_entry Flow_Service_Manager_Config \
     -i plugin "${fsm_plugin}" \
     -i other_config '["map",[["mqtt_v","'"${mqtt_topic}"'"],["dso_init","upnp_plugin_init"]]]' &&
         log "tools/device/configure_upnp_plugin.sh: insert_ovsdb_entry - MQTT config inserted to Flow_Service_Manager_Config - Success" ||
-        raise "FAIL: insert_ovsdb_entry - Failed to insert MQTT config to Flow_Service_Manager_Config" -l "tools/device/configure_upnp_plugin.sh" -oe
+        raise "insert_ovsdb_entry - Failed to insert MQTT config to Flow_Service_Manager_Config" -l "tools/device/configure_upnp_plugin.sh" -fc

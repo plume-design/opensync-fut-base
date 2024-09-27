@@ -40,14 +40,13 @@ country_to_check=$2
 trap '
     fut_info_dump_line
     print_tables Wifi_Radio_State
-    check_restore_ovsdb_server
     fut_info_dump_line
-' EXIT SIGINT SIGTERM
+' EXIT INT TERM
 
 log_title "wm2/wm2_set_radio_country.sh: WM2 test - Testing Wifi_Radio_State field country - '${country_to_check}'"
 
 check_ovsdb_entry Wifi_Radio_State -w if_name "$if_name" -w country "$country_to_check" &&
     log "wm2/wm2_set_radio_country.sh: wait_ovsdb_entry - Wifi_Radio_State::country is $country_to_check - Success" ||
-    raise "FAIL: wait_ovsdb_entry - Wifi_Radio_State::country is not $country_to_check" -l "wm2/wm2_set_radio_country.sh" -tc
+    raise "wait_ovsdb_entry - Wifi_Radio_State::country is not $country_to_check" -l "wm2/wm2_set_radio_country.sh" -tc
 
 pass

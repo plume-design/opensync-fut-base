@@ -100,16 +100,12 @@ device_socket.open()
 
 while 1:
     try:
-        try:
-            data = device_socket.receive()
-            if data:
-                device_socket.send_type("echo")
-                device_socket.receive()
-                log(f"Sleep {SOCKET_LISTEN_SLEEP} seconds")
-                sleep(SOCKET_LISTEN_SLEEP)
-        except RuntimeError as e:
-            log(f"RuntimeError - {e}")
-            device_socket.open()
-    except Exception as e:
-        log(f"EXCEPTION: {e}")
+        data = device_socket.receive()
+        if data:
+            device_socket.send_type("echo")
+            device_socket.receive()
+            log(f"Sleep {SOCKET_LISTEN_SLEEP} seconds")
+            sleep(SOCKET_LISTEN_SLEEP)
+    except RuntimeError as exception:
+        log(f"RuntimeError - {exception}")
         device_socket.open()

@@ -61,7 +61,7 @@ if [ $time_diff -le "$time_accuracy" ]; then
     log "onbrd/onbrd_verify_dut_system_time_accuracy.sh: Time difference ${time_diff}s is within ${time_accuracy}s - Success"
 else
     log -err "onbrd/onbrd_verify_dut_system_time_accuracy.sh:\nDevice time: ${time_now_str} -> ${time_now_timestamp}\nReference time: ${time_ref_str} -> ${time_ref_timestamp}"
-    raise "FAIL: Time difference ${time_diff}s is NOT within ${time_accuracy}s" -l "onbrd/onbrd_verify_dut_system_time_accuracy.sh" -tc
+    raise "Time difference ${time_diff}s is NOT within ${time_accuracy}s" -l "onbrd/onbrd_verify_dut_system_time_accuracy.sh" -tc
 fi
 
 pass

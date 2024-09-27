@@ -35,23 +35,25 @@ NARGS=1
 expected_model=$1
 
 trap '
-fut_info_dump_line
-print_tables AWLAN_Node
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    print_tables AWLAN_Node
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 log_title "onbrd/onbrd_verify_model_awlan_node.sh: ONBRD test - Verify model in AWLAN_Node, waiting for '$expected_model' string"
 
 log "onbrd/onbrd_verify_model_awlan_node.sh: Verify model, waiting for '$expected_model'"
 wait_for_function_response 0 "check_ovsdb_entry AWLAN_Node -w model \"'$expected_model'\"" &&
     log "onbrd/onbrd_verify_model_awlan_node.sh: AWLAN_Node::model is '$expected_model' - Success" ||
-    raise "FAIL: AWLAN_Node::model is not '$expected_model'" -l "onbrd/onbrd_verify_model_awlan_node.sh" -tc
+    raise "AWLAN_Node::model is not '$expected_model'" -l "onbrd/onbrd_verify_model_awlan_node.sh" -tc
 
 model_string=$(get_ovsdb_entry_value AWLAN_Node model -r)
 log "onbrd/onbrd_verify_model_awlan_node.sh: Check the model string for allowed characters."
 check_model_pattern "${model_string}" &&
     log "onbrd/onbrd_verify_model_awlan_node.sh: AWLAN_Node::model is valid - Success" ||
-    raise "FAIL: AWLAN_Node::model is not valid" -l "onbrd/onbrd_verify_model_awlan_node.sh" -tc
+    raise "AWLAN_Node::model is not valid" -l "onbrd/onbrd_verify_model_awlan_node.sh" -tc
 
 pass

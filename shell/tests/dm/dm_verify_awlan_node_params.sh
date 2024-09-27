@@ -34,11 +34,13 @@ case "${1}" in
 esac
 
 trap '
-fut_info_dump_line
-print_tables AWLAN_Node
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    print_tables AWLAN_Node
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 NARGS=2
 [ $# -ne ${NARGS} ] && usage && raise "Requires exactly ${NARGS} input arguments" -l "dm/dm_verify_awlan_node_params.sh" -arg
@@ -56,11 +58,11 @@ if [ "$awlan_node_field_val" = "notempty" ]
 then
     wait_for_function_response "$awlan_node_field_val" "get_ovsdb_entry_value AWLAN_Node $awlan_node_field" 5 &&
         log "dm/dm_verify_awlan_node_params.sh: AWLAN_Node::$awlan_node_field is populated - Success" ||
-        raise "FAIL: AWLAN_Node::$awlan_node_field is empty" -l "dm/dm_verify_awlan_node_params.sh" -tc
+        raise "AWLAN_Node::$awlan_node_field is empty" -l "dm/dm_verify_awlan_node_params.sh" -tc
 else
     wait_ovsdb_entry AWLAN_Node -is vendor_name "$awlan_node_field_val" &&
     log "dm/dm_verify_awlan_node_params.sh: AWLAN_Node::$awlan_node_field equals expected '$awlan_node_field_val' - Success" ||
-    raise "FAIL: AWLAN_Node::$awlan_node_field does not equal expected '$awlan_node_field_val'"  -l "dm/dm_verify_awlan_node_params.sh" -tc
+    raise "AWLAN_Node::$awlan_node_field does not equal expected '$awlan_node_field_val'"  -l "dm/dm_verify_awlan_node_params.sh" -tc
 fi
 
 pass

@@ -50,36 +50,38 @@ fw_up_timer=${3}
 fw_name=${4}
 
 trap '
+    fut_ec=$?
+    trap - EXIT INT
     fut_info_dump_line
     print_tables AWLAN_Node
     reset_um_triggers $fw_path || true
-    check_restore_ovsdb_server
     fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    exit $fut_ec
+' EXIT INT TERM
 
 log_title "um/um_set_upgrade_timer.sh: UM test - Download FW - upgrade_timer - 2 seconds +/-"
 
 log "um/um_set_upgrade_timer.sh: Setting firmware_url to $fw_url"
 update_ovsdb_entry AWLAN_Node -u firmware_url "$fw_url" &&
     log "um/um_set_upgrade_timer.sh: update_ovsdb_entry - AWLAN_Node::firmware_url is $fw_url - Success" ||
-    raise "FAIL: update_ovsdb_entry - AWLAN_Node::firmware_url is not $fw_url" -l "um/um_set_upgrade_timer.sh" -oe
+    raise "update_ovsdb_entry - AWLAN_Node::firmware_url is not $fw_url" -l "um/um_set_upgrade_timer.sh" -fc
 
 dl_start_code=$(get_um_code "UPG_STS_FW_DL_START")
 log "um/um_set_upgrade_timer.sh: Waiting for FW download to start, AWLAN_Node::upgrade_status to become UPG_STS_FW_DL_START ('$dl_start_code')"
 wait_ovsdb_entry AWLAN_Node -is upgrade_status "$dl_start_code" &&
     log "um/um_set_upgrade_timer.sh: wait_ovsdb_entry - AWLAN_Node::upgrade_status is $dl_start_code - Success" ||
-    raise "FAIL: wait_ovsdb_entry - AWLAN_Node::upgrade_status is not $dl_start_code" -l "um/um_set_upgrade_timer.sh" -tc
+    raise "wait_ovsdb_entry - AWLAN_Node::upgrade_status is not $dl_start_code" -l "um/um_set_upgrade_timer.sh" -tc
 
 dl_stop_code=$(get_um_code "UPG_STS_FW_DL_END")
 log "um/um_set_upgrade_timer.sh: Waiting for FW download to finish"
 wait_ovsdb_entry AWLAN_Node -is upgrade_status "$dl_stop_code" &&
     log "um/um_set_upgrade_timer.sh: wait_ovsdb_entry - AWLAN_Node::upgrade_status is $dl_stop_code - Success" ||
-    raise "FAIL: wait_ovsdb_entry - AWLAN_Node::upgrade_status is not $dl_stop_code" -l "um/um_set_upgrade_timer.sh" -tc
+    raise "wait_ovsdb_entry - AWLAN_Node::upgrade_status is not $dl_stop_code" -l "um/um_set_upgrade_timer.sh" -tc
 
 log "um/um_set_upgrade_timer.sh: Setting AWLAN_Node::upgrade_timer to $fw_up_timer"
 update_ovsdb_entry AWLAN_Node -u upgrade_timer "$fw_up_timer" &&
     log "um/um_set_upgrade_timer.sh: update_ovsdb_entry - AWLAN_Node::upgrade_timer is $fw_up_timer - Success" ||
-    raise "FAIL: update_ovsdb_entry - AWLAN_Node::upgrade_timer is not $fw_up_timer" -l "um/um_set_upgrade_timer.sh" -oe
+    raise "update_ovsdb_entry - AWLAN_Node::upgrade_timer is not $fw_up_timer" -l "um/um_set_upgrade_timer.sh" -fc
 
 # Delete image file on device to skip upgrade process
 if [ -n "$fw_path" ] && [ -n "$fw_name" ]; then
@@ -94,7 +96,7 @@ upg_start_code=$(get_um_code "UPG_STS_FW_WR_START")
 log "um/um_set_upgrade_timer.sh: Waiting for UM upgrade start"
 wait_ovsdb_entry AWLAN_Node -is upgrade_status "$upg_start_code" &&
     log "um/um_set_upgrade_timer.sh: wait_ovsdb_entry - AWLAN_Node::upgrade_status is $upg_start_code - Success" ||
-    raise "FAIL: wait_ovsdb_entry - AWLAN_Node::upgrade_status is not $upg_start_code" -l "um/um_set_upgrade_timer.sh" -tc
+    raise "wait_ovsdb_entry - AWLAN_Node::upgrade_status is not $upg_start_code" -l "um/um_set_upgrade_timer.sh" -tc
 
 end_time=$(date -D "%H:%M:%S"  +"%Y.%m.%d-%H:%M:%S")
 
@@ -108,7 +110,7 @@ upgrade_time_upper=$(( $upgrade_time + 2 ))
 if [ "$upgrade_time_lower" -le "$fw_up_timer" ] && [ "$upgrade_time_upper" -ge "$fw_up_timer" ]; then
     log "um/um_set_upgrade_timer.sh: Upgrade started after upgrade_timer=${fw_up_timer} seconds and finished after ${upgrade_time} seconds - Success"
 else
-    raise "FAIL: Upgrade DID NOT start in upgrade_timer=${fw_up_timer} seconds, but finished after ${upgrade_time}" -l "um/um_set_upgrade_timer.sh" -tc
+    raise "Upgrade DID NOT start in upgrade_timer=${fw_up_timer} seconds, but finished after ${upgrade_time}" -l "um/um_set_upgrade_timer.sh" -tc
 fi
 
 # For the purpose of the test procedure, the image is removed to prevent actual upgrade. This step is also tested.
@@ -116,6 +118,6 @@ upg_err_code=$(get_um_code "UPG_ERR_IMG_FAIL")
 log "um/um_set_upgrade_timer.sh: Waiting for UM upgrade error"
 wait_ovsdb_entry AWLAN_Node -is upgrade_status "$upg_err_code" &&
     log "um/um_set_upgrade_timer.sh: wait_ovsdb_entry - AWLAN_Node::upgrade_status is $upg_err_code - Success" ||
-    raise "FAIL: wait_ovsdb_entry - AWLAN_Node::upgrade_status is not $upg_err_code" -l "um/um_set_upgrade_timer.sh" -tc
+    raise "wait_ovsdb_entry - AWLAN_Node::upgrade_status is not $upg_err_code" -l "um/um_set_upgrade_timer.sh" -tc
 
 pass

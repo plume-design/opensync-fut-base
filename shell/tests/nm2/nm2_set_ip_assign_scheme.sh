@@ -77,13 +77,14 @@ inet_addr=${10:-${inet_addr_default}}
 remote_inet_addr="1.1.1.1"
 
 trap '
+    fut_ec=$?
+    trap - EXIT INT
     fut_info_dump_line
     reset_inet_entry $if_name || true
-    check_restore_management_access || true
     print_tables Wifi_Inet_Config Wifi_Inet_State
-    check_restore_ovsdb_server
     fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    exit $fut_ec
+' EXIT INT TERM
 
 log_title "nm2/nm2_set_ip_assign_scheme.sh: NM2 test - Testing table Wifi_Inet_Config field ip_assign_scheme"
 
@@ -99,7 +100,7 @@ log "nm2/nm2_set_ip_assign_scheme.sh: Creating Wifi_Inet_Config entries for $if_
 
 if [ "${if_type}" == "bridge" ];then
     if [ "${is_wano}" == "false" ];then
-        add_bridge_port "${if_name}" "${wan_eth}"
+        add_port_to_bridge "${if_name}" "${wan_eth}"
         create_inet_entry \
             -if_name "${if_name}" \
             -enabled true \
@@ -107,14 +108,14 @@ if [ "${if_type}" == "bridge" ];then
             -ip_assign_scheme "${ip_assign_scheme}" \
             -if_type "bridge" &&
             log "nm2/nm2_set_ip_assign_scheme.sh: Interface $if_name created - Success" ||
-            raise "FAIL: Failed to create $if_name interface" -l "nm2/nm2_set_ip_assign_scheme.sh" -ds
+            raise "Failed to create $if_name interface" -l "nm2/nm2_set_ip_assign_scheme.sh" -ds
 
-        add_bridge_port "${if_name}" "${patch_w2h}"
+        add_port_to_bridge "${if_name}" "${patch_w2h}"
         set_interface_patch "${if_name}" "${patch_w2h}" "${patch_h2w}"
-        add_bridge_port "${lan_bridge}" "${patch_h2w}"
+        add_port_to_bridge "${lan_bridge}" "${patch_h2w}"
         set_interface_patch "${lan_bridge}" "${patch_h2w}" "${patch_w2h}"
     else
-        add_bridge_port "${lan_bridge}" "${wan_eth}"
+        add_port_to_bridge "${lan_bridge}" "${wan_eth}"
         create_inet_entry \
             -if_name "${lan_bridge}" \
             -enabled true \
@@ -122,7 +123,7 @@ if [ "${if_type}" == "bridge" ];then
             -ip_assign_scheme "none" \
             -if_type "bridge" &&
             log "nm2/nm2_set_ip_assign_scheme.sh: Interface $if_name created - Success" ||
-            raise "FAIL: Failed to create $if_name interface" -l "nm2/nm2_set_ip_assign_scheme.sh" -ds
+            raise "Failed to create $if_name interface" -l "nm2/nm2_set_ip_assign_scheme.sh" -ds
     fi
 elif [ "${if_type}" == "gre" ];then
     ap_inet_addr=$(get_ovsdb_entry_value Wifi_Inet_Config inet_addr -w if_name "${bhaul_ap_if_name}" -r)
@@ -137,7 +138,7 @@ elif [ "${if_type}" == "gre" ];then
         -network true \
         -enabled true &&
         log "nm2/nm2_set_ip_assign_scheme.sh: Interface ${gre_name} created - Success" ||
-        raise "FAIL: Failed to create interface ${gre_name}" -l "nm2/nm2_set_ip_assign_scheme.sh" -ds
+        raise "Failed to create interface ${gre_name}" -l "nm2/nm2_set_ip_assign_scheme.sh" -ds
 
 else
     create_inet_entry \
@@ -149,37 +150,37 @@ else
         -ip_assign_scheme static \
         -if_type "$if_type" &&
         log "nm2/nm2_set_ip_assign_scheme.sh: Interface $if_name created - Success" ||
-        raise "FAIL: Failed to create $if_name interface" -l "nm2/nm2_set_ip_assign_scheme.sh" -ds
+        raise "Failed to create $if_name interface" -l "nm2/nm2_set_ip_assign_scheme.sh" -ds
 fi
 
 if [ "$ip_assign_scheme" = "dhcp" ]; then
     log "nm2/nm2_set_ip_assign_scheme.sh: Setting dhcp for $if_name to dhcp"
     update_ovsdb_entry Wifi_Inet_Config -w if_name "$if_name" -u ip_assign_scheme dhcp &&
         log "nm2/nm2_set_ip_assign_scheme.sh: update_ovsdb_entry - Wifi_Inet_Config::ip_assign_scheme is 'dhcp' - Success" ||
-        raise "FAIL: update_ovsdb_entry - Wifi_Inet_Config::ip_assign_scheme is not 'dhcp'" -l "nm2/nm2_set_ip_assign_scheme.sh" -oe
+        raise "update_ovsdb_entry - Wifi_Inet_Config::ip_assign_scheme is not 'dhcp'" -l "nm2/nm2_set_ip_assign_scheme.sh" -fc
 
     wait_ovsdb_entry Wifi_Inet_State -w if_name "$if_name" -is ip_assign_scheme dhcp &&
         log "nm2/nm2_set_ip_assign_scheme.sh: wait_ovsdb_entry - Wifi_Inet_Config reflected to Wifi_Inet_State::ip_assign_scheme is 'dhcp' - Success" ||
-        raise "FAIL: wait_ovsdb_entry - Failed to reflect Wifi_Inet_Config to Wifi_Inet_State::ip_assign_scheme is not 'dhcp'" -l "nm2/nm2_set_ip_assign_scheme.sh" -tc
+        raise "wait_ovsdb_entry - Failed to reflect Wifi_Inet_Config to Wifi_Inet_State::ip_assign_scheme is not 'dhcp'" -l "nm2/nm2_set_ip_assign_scheme.sh" -tc
 
     log "nm2/nm2_set_ip_assign_scheme.sh: Checking if DHCP client is alive - LEVEL2"
     wait_for_function_response 0 "check_pid_file alive \"/var/run/udhcpc-$if_name.pid\"" &&
         log "nm2/nm2_set_ip_assign_scheme.sh: LEVEL2 - DHCP client process ACTIVE for interface $if_name - Success" ||
-        raise "FAIL: LEVEL2 - DHCP client process NOT ACTIVE for interface $if_name" -l "nm2/nm2_set_ip_assign_scheme.sh" -tc
+        raise "LEVEL2 - DHCP client process NOT ACTIVE for interface $if_name" -l "nm2/nm2_set_ip_assign_scheme.sh" -tc
 
     log "nm2/nm2_set_ip_assign_scheme.sh: Setting dhcp for $if_name to none"
     update_ovsdb_entry Wifi_Inet_Config -w if_name "$if_name" -u ip_assign_scheme none &&
         log "nm2/nm2_set_ip_assign_scheme.sh: update_ovsdb_entry - Wifi_Inet_Config::ip_assign_scheme is 'none' - Success" ||
-        raise "FAIL: update_ovsdb_entry - Wifi_Inet_Config::ip_assign_scheme is not 'none'" -l "nm2/nm2_set_ip_assign_scheme.sh" -oe
+        raise "update_ovsdb_entry - Wifi_Inet_Config::ip_assign_scheme is not 'none'" -l "nm2/nm2_set_ip_assign_scheme.sh" -fc
 
     wait_ovsdb_entry Wifi_Inet_State -w if_name "$if_name" -is ip_assign_scheme none &&
         log "nm2/nm2_set_ip_assign_scheme.sh: wait_ovsdb_entry - Wifi_Inet_Config reflected to Wifi_Inet_State::ip_assign_scheme is 'none' - Success" ||
-        raise "FAIL: wait_ovsdb_entry - Failed to reflect Wifi_Inet_Config to Wifi_Inet_State::ip_assign_scheme is not 'none'" -l "nm2/nm2_set_ip_assign_scheme.sh" -tc
+        raise "wait_ovsdb_entry - Failed to reflect Wifi_Inet_Config to Wifi_Inet_State::ip_assign_scheme is not 'none'" -l "nm2/nm2_set_ip_assign_scheme.sh" -tc
 
     log "nm2/nm2_set_ip_assign_scheme.sh: Checking if DHCP client is dead - LEVEL2"
     wait_for_function_response 0 "check_pid_file dead \"/var/run/udhcpc-$if_name.pid\"" &&
         log "nm2/nm2_set_ip_assign_scheme.sh: LEVEL2 - DHCP client process NOT ACTIVE - Success" ||
-        raise "FAIL: LEVEL2 - DHCP client process ACTIVE" -l "nm2/nm2_set_ip_assign_scheme.sh" -tc
+        raise "LEVEL2 - DHCP client process ACTIVE" -l "nm2/nm2_set_ip_assign_scheme.sh" -tc
 
 elif [ "$ip_assign_scheme" = "static" ]; then
     log "nm2/nm2_set_ip_assign_scheme.sh: Setting ip_assign_scheme for $if_name to static"
@@ -187,23 +188,23 @@ elif [ "$ip_assign_scheme" = "static" ]; then
         -u ip_assign_scheme static \
         -u inet_addr "$inet_addr" &&
             log "nm2/nm2_set_ip_assign_scheme.sh: update_ovsdb_entry - Wifi_Inet_Config::ip_assign_scheme, Wifi_Inet_Config::inet_addr - Success" ||
-            raise "FAIL: update_ovsdb_entry - Failed to update Wifi_Inet_Config::ip_assign_scheme, Wifi_Inet_Config::inet_addr" -l "nm2/nm2_set_ip_assign_scheme.sh" -oe
+            raise "update_ovsdb_entry - Failed to update Wifi_Inet_Config::ip_assign_scheme, Wifi_Inet_Config::inet_addr" -l "nm2/nm2_set_ip_assign_scheme.sh" -fc
 
     wait_ovsdb_entry Wifi_Inet_State -w if_name "$if_name" \
         -is ip_assign_scheme static \
         -is inet_addr "$inet_addr" &&
             log "nm2/nm2_set_ip_assign_scheme.sh: wait_ovsdb_entry - Wifi_Inet_Config reflected to Wifi_Inet_State::ip_assign_scheme is 'static' - Success" ||
-            raise "FAIL: wait_ovsdb_entry - Failed to reflect Wifi_Inet_Config to Wifi_Inet_State::ip_assign_scheme is not 'static'" -l "nm2/nm2_set_ip_assign_scheme.sh" -tc
+            raise "wait_ovsdb_entry - Failed to reflect Wifi_Inet_Config to Wifi_Inet_State::ip_assign_scheme is not 'static'" -l "nm2/nm2_set_ip_assign_scheme.sh" -tc
 
     log "nm2/nm2_set_ip_assign_scheme.sh: Checking if settings are applied to ifconfig - LEVEL2"
     wait_for_function_response 0 "check_interface_ip_address_set_on_system $if_name | grep -q \"$inet_addr\"" &&
         log "nm2/nm2_set_ip_assign_scheme.sh: LEVEL2 - Settings applied to ifconfig for interface $if_name - Success" ||
-        raise "FAIL: LEVEL2 - Failed to apply settings to ifconfig for interface $if_name" -l "nm2/nm2_set_ip_assign_scheme.sh" -tc
+        raise "LEVEL2 - Failed to apply settings to ifconfig for interface $if_name" -l "nm2/nm2_set_ip_assign_scheme.sh" -tc
 
     log "nm2/nm2_set_ip_assign_scheme.sh: Checking if DHCP client is DEAD - LEVEL2"
     wait_for_function_response 0 "check_pid_file dead \"/var/run/udhcpc-$if_name.pid\"" &&
         log "nm2/nm2_set_ip_assign_scheme.sh: LEVEL2 - DHCP client process is DEAD for interface $if_name - Success" ||
-        raise "FAIL: LEVEL2 - DHCP client process is NOT DEAD for interface $if_name" -l "nm2/nm2_set_ip_assign_scheme.sh" -tc
+        raise "LEVEL2 - DHCP client process is NOT DEAD for interface $if_name" -l "nm2/nm2_set_ip_assign_scheme.sh" -tc
 else
     raise "Wrong IP_ASSIGN_SCHEME parameter - $ip_assign_scheme" -l "nm2/nm2_set_ip_assign_scheme.sh" -arg
 fi

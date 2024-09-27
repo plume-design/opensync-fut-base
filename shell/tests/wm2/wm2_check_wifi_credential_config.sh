@@ -32,16 +32,15 @@ esac
 trap '
     fut_info_dump_line
     print_tables Wifi_Credential_Config
-    check_restore_ovsdb_server
     fut_info_dump_line
-' EXIT SIGINT SIGTERM
+' EXIT INT TERM
 
 log_title "wm2/wm2_check_wifi_credential_config.sh: WM2 test - checks Wifi_Credential_Config table is empty or not"
 
 if [ "$(${OVSH} s Wifi_Credential_Config -r | wc -l)" -gt 0 ]; then
     log "wm2/wm2_check_wifi_credential_config.sh: Pre-populated entry present in Wifi_Credential_Config table - Success"
 else
-    raise "FAIL: Wifi_Credential_Config table is empty" -l "wm2/wm2_check_wifi_credential_config.sh" -tc
+    raise "Wifi_Credential_Config table is empty" -l "wm2/wm2_check_wifi_credential_config.sh" -tc
 fi
 
 pass

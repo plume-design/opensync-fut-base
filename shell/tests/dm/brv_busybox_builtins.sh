@@ -40,14 +40,14 @@ log_title "brv/brv_busybox_builtins.sh: BRV test - Verify '${builtin_tool}' is b
 is_tool_on_system "busybox"
 rc=$?
 if [ $rc != 0 ]; then
-    raise "FAIL: Refusing tool search, busybox is not present on system" -l "brv/brv_busybox_builtins.sh" -nf
+    raise "Refusing tool search, busybox is not present on system" -l "brv/brv_busybox_builtins.sh" -fc
 fi
 is_busybox_builtin "${builtin_tool}"
 rc=$?
 if [ $rc == 0 ]; then
     log "brv/brv_busybox_builtins.sh: '${builtin_tool}' is built into busybox - Success"
 else
-    raise "FAIL: '${builtin_tool}' is not built into busybox" -l "brv/brv_busybox_builtins.sh" -tc
+    raise "'${builtin_tool}' is not built into busybox" -l "brv/brv_busybox_builtins.sh" -tc
 fi
 
 pass

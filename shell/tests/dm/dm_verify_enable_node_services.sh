@@ -42,11 +42,13 @@ manager=${1}
 kconfig_val=${2}
 
 trap '
-fut_info_dump_line
-print_tables Node_Services
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    print_tables Node_Services
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 log_title "dm/dm_verify_enable_node_services.sh: DM test - Verify status of each manager against 'enable' field value in the 'Node_Services' table."
 
@@ -54,11 +56,11 @@ print_tables Node_Services
 
 check_kconfig_option "$kconfig_val" "y" &&
     log "dm/dm_verify_enable_node_services.sh: $kconfig_val = y - KCONFIG exists on the device - Success" ||
-    raise "FAIL: $kconfig_val != y - KCONFIG does not exist on the device" -l "dm/dm_verify_enable_node_services.sh" -s
+    raise "$kconfig_val != y - KCONFIG does not exist on the device" -l "dm/dm_verify_enable_node_services.sh" -s
 
 check_ovsdb_entry Node_Services -w service "$manager" &&
     log "dm/dm_verify_enable_node_services.sh: Node_Services table contains $manager - Success" ||
-    raise "FAIL: Node_Services table does not contain $manager" -l "dm/dm_verify_enable_node_services.sh" -tc
+    raise "Node_Services table does not contain $manager" -l "dm/dm_verify_enable_node_services.sh" -tc
 
 service_enabled=$(get_ovsdb_entry_value Node_Services enable -w service $manager -r)
 
@@ -71,12 +73,12 @@ log -deb "dm/dm_verify_enable_node_services.sh: PID is '${pid_of_manager}'"
 if [ $service_enabled == "false" ]; then
     status="not "
     [ -z $pid_of_manager ] ||
-        raise "FAIL: Service ${manager} is running despite 'enable' field is set 'false' in 'Node_Services' table." -l "dm/dm_verify_enable_node_services.sh" -tc
+        raise "Service ${manager} is running despite 'enable' field is set 'false' in 'Node_Services' table." -l "dm/dm_verify_enable_node_services.sh" -tc
 elif [ $service_enabled == "true" ]; then
     [ -z $pid_of_manager ] &&
-        raise "FAIL: Service ${manager} is not running despite 'enable' field is set 'true' in 'Node_Services' table." -l "dm/dm_verify_enable_node_services.sh" -tc
+        raise "Service ${manager} is not running despite 'enable' field is set 'true' in 'Node_Services' table." -l "dm/dm_verify_enable_node_services.sh" -tc
 else
-    raise "FAIL: 'enable' field for ${manager} is set invalid value in 'Node_Services' table." -l "dm/dm_verify_enable_node_services.sh" -tc
+    raise "'enable' field for ${manager} is set invalid value in 'Node_Services' table." -l "dm/dm_verify_enable_node_services.sh" -tc
 fi
 
 log "dm/dm_verify_enable_node_services.sh: Service '${manager}' is ${status}running as 'enable' field is set '${service_enabled}' in the 'Node_Services' table - Success"

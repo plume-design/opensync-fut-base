@@ -32,11 +32,13 @@ case "${1}" in
 esac
 
 trap '
-fut_info_dump_line
-print_tables Wifi_Master_State
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    print_tables Wifi_Master_State
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 NARGS=1
 [ $# -ne ${NARGS} ] && usage && raise "Requires ${NARGS} input argument(s)" -l "othr/othr_verify_eth_lan_iface_wifi_master_state.sh" -arg
@@ -48,17 +50,17 @@ ${OVSH} s Wifi_Master_State
 if [ $? -eq 0 ]; then
     log "othr/othr_verify_eth_lan_iface_wifi_master_state.sh: Wifi_Master_State table exists - Success"
 else
-    raise "FAIL: Wifi_Master_State table does not exist" -l "othr/othr_verify_eth_lan_iface_wifi_master_state.sh" -tc
+    raise "Wifi_Master_State table does not exist" -l "othr/othr_verify_eth_lan_iface_wifi_master_state.sh" -tc
 fi
 
 check_ovsdb_entry Wifi_Inet_Config -w if_name $eth_lan_if_name ||
-    raise "FAIL: Wifi_Inet_Config not populated with eth lan interface '$eth_lan_if_name'" -l "othr/othr_verify_eth_lan_iface_wifi_master_state.sh" -s
+    raise "Wifi_Inet_Config not populated with eth lan interface '$eth_lan_if_name'" -l "othr/othr_verify_eth_lan_iface_wifi_master_state.sh" -s
 
 check_ovsdb_entry Wifi_Master_State -w if_name $eth_lan_if_name
 if [ $? -eq 0 ]; then
     log "othr/othr_verify_eth_lan_iface_wifi_master_state.sh: Wifi_Master_State populated with eth lan interface '$eth_lan_if_name' - Success"
 else
-    raise "FAIL: Wifi_Master_State not populated with eth lan interface '$eth_lan_if_name'" -l "othr/othr_verify_eth_lan_iface_wifi_master_state.sh" -tc
+    raise "Wifi_Master_State not populated with eth lan interface '$eth_lan_if_name'" -l "othr/othr_verify_eth_lan_iface_wifi_master_state.sh" -tc
 fi
 
 pass

@@ -32,13 +32,14 @@ case "${1}" in
 esac
 
 trap '
-fut_info_dump_line
-print_tables Connection_Manager_Uplink
-set_interface_up "$if_name" || true
-check_restore_management_access || true
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    print_tables Connection_Manager_Uplink
+    set_interface_up "$if_name" || true
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 check_kconfig_option "TARGET_CAP_EXTENDER" "y" ||
     raise "TARGET_CAP_EXTENDER != y - Testcase applicable only for EXTENDER-s" -l "onbrd/onbrd_verify_dhcp_dry_run_success.sh" -s
@@ -57,26 +58,26 @@ check_kconfig_option "CONFIG_MANAGER_WANO" "y" &&
 log "onbrd/onbrd_verify_dhcp_dry_run_success.sh: Dropping interface $if_name"
 set_interface_down "$if_name" &&
     log "onbrd/onbrd_verify_dhcp_dry_run_success.sh: Interface $if_name is down - Success" ||
-    raise "FAIL: Could not bring down interface $if_name" -l "onbrd/onbrd_verify_dhcp_dry_run_success.sh" -ds
+    raise "Could not bring down interface $if_name" -l "onbrd/onbrd_verify_dhcp_dry_run_success.sh" -ds
 
 log "onbrd/onbrd_verify_dhcp_dry_run_success.sh: Waiting for Connection_Manager_Uplink::has_L2 is false on $if_name"
 wait_ovsdb_entry Connection_Manager_Uplink -w if_name "$if_name" -is has_L2 false &&
     log "onbrd/onbrd_verify_dhcp_dry_run_success.sh: wait_ovsdb_entry - Interface $if_name has_L2 is false - Success" ||
-    raise "FAIL: wait_ovsdb_entry - Connection_Manager_Uplink::has_L2 is not false" -l "onbrd/onbrd_verify_dhcp_dry_run_success.sh" -tc
+    raise "wait_ovsdb_entry - Connection_Manager_Uplink::has_L2 is not false" -l "onbrd/onbrd_verify_dhcp_dry_run_success.sh" -tc
 
 log "onbrd/onbrd_verify_dhcp_dry_run_success.sh: Bringing up interface $if_name"
 set_interface_up "$if_name" &&
     log "onbrd/onbrd_verify_dhcp_dry_run_success.sh: Interface $if_name is up - Success" ||
-    raise "FAIL: Could not bring up interface $if_name" -l "onbrd/onbrd_verify_dhcp_dry_run_success.sh" -ds
+    raise "Could not bring up interface $if_name" -l "onbrd/onbrd_verify_dhcp_dry_run_success.sh" -ds
 
 log "onbrd/onbrd_verify_dhcp_dry_run_success.sh: Waiting for Connection_Manager_Uplink::has_L2 is true on $if_name"
 wait_ovsdb_entry Connection_Manager_Uplink -w if_name "$if_name" -is has_L2 true &&
     log "onbrd/onbrd_verify_dhcp_dry_run_success.sh: wait_ovsdb_entry - Connection_Manager_Uplink::has_L2 is 'true' - Success" ||
-    raise "FAIL: wait_ovsdb_entry - Connection_Manager_Uplink::has_L2 is not 'true'" -l "onbrd/onbrd_verify_dhcp_dry_run_success.sh" -tc
+    raise "wait_ovsdb_entry - Connection_Manager_Uplink::has_L2 is not 'true'" -l "onbrd/onbrd_verify_dhcp_dry_run_success.sh" -tc
 
 log "onbrd/onbrd_verify_dhcp_dry_run_success.sh: Waiting for Connection_Manager_Uplink::has_L3 is true on $if_name"
 wait_ovsdb_entry Connection_Manager_Uplink -w if_name "$if_name" -is has_L3 true &&
     log "onbrd/onbrd_verify_dhcp_dry_run_success.sh: wait_ovsdb_entry - Connection_Manager_Uplink::has_L3 is 'true' - Success" ||
-    raise "FAIL: wait_ovsdb_entry - Connection_Manager_Uplink::has_L3 is not 'true'" -l "onbrd/onbrd_verify_dhcp_dry_run_success.sh" -tc
+    raise "wait_ovsdb_entry - Connection_Manager_Uplink::has_L3 is not 'true'" -l "onbrd/onbrd_verify_dhcp_dry_run_success.sh" -tc
 
 pass

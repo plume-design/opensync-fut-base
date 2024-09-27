@@ -42,15 +42,15 @@ if [ ${file_type} == "cert_file" ]; then
 elif [ ${file_type} == "ca_file" ]; then
     file=$(get_ovsdb_entry_value SSL ca_cert -r)
 else
-    raise "FAIL: ARG1 - Wrong option provided" -l "tools/device/get_client_certificate.sh" -arg
+    raise "ARG1 - Wrong option provided" -l "tools/device/get_client_certificate.sh" -arg
 fi
 
 [ -e "$file" ] ||
-    raise "FAIL: '$file_type' is NOT present on DUT" -l "tools/device/get_client_certificate.sh" -tc
+    raise "'$file_type' is NOT present on DUT" -l "tools/device/get_client_certificate.sh" -tc
 
 [ ${query} == "full_path" ] &&
     echo -n "${file}" && exit 0
 [ ${query} == "file_name" ] &&
     echo -n "${file##*/}" && exit 0
 
-raise "FAIL: ARG2 - Wrong option provided" -l "tools/device/get_client_certificate.sh" -arg
+raise "ARG2 - Wrong option provided" -l "tools/device/get_client_certificate.sh" -arg

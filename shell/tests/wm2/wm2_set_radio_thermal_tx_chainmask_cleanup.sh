@@ -16,7 +16,7 @@ Description:
     - Script tries to set chosen THERMAL TX CHAINMASK back to default pre-test values (empty set).
 Arguments:
     -h  show this help message
-    \$1 (if_name)               : Wifi_Radio_Config::if_name        : (string)(required)
+    \$1 (radio_if_name) : Wifi_Radio_Config::if_name : (string)(required)
 Script usage example:
     ./wm2/wm2_set_radio_thermal_tx_chainmask_cleanup.sh wifi0
 
@@ -29,20 +29,22 @@ esac
 
 NARGS=1
 [ $# -lt ${NARGS} ] && usage && raise "Requires at least ${NARGS} input argument(s)" -l "wm2/wm2_set_radio_thermal_tx_chainmask_cleanup.sh" -arg
-if_name=${1}
+radio_if_name=${1}
 
 trap '
+    fut_ec=$?
+    trap - EXIT INT
     fut_info_dump_line
     print_tables Wifi_Radio_Config Wifi_Radio_State
     print_tables Wifi_VIF_Config Wifi_VIF_State
-    check_restore_ovsdb_server
     fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    exit $fut_ec
+' EXIT INT TERM
 
-update_ovsdb_entry Wifi_Radio_Config -w if_name "$if_name" -u thermal_tx_chainmask '["set",[]]' &&
+update_ovsdb_entry Wifi_Radio_Config -w if_name "$radio_if_name" -u thermal_tx_chainmask '["set",[]]' &&
     log "wm2/wm2_set_radio_thermal_tx_chainmask_cleanup.sh: update_ovsdb_entry - Wifi_Radio_Config::thermal_tx_chainmask is '[\"set\",[]]' - Success" ||
-    raise "FAIL: update_ovsdb_entry - Wifi_Radio_Config::thermal_tx_chainmask is not '[\"set\",[]]'" -l "wm2/wm2_set_radio_thermal_tx_chainmask_cleanup.sh" -oe
+    raise "update_ovsdb_entry - Wifi_Radio_Config::thermal_tx_chainmask is not '[\"set\",[]]'" -l "wm2/wm2_set_radio_thermal_tx_chainmask_cleanup.sh" -fc
 
-wait_ovsdb_entry Wifi_Radio_State -w if_name "$if_name" -is thermal_tx_chainmask '["set",[]]' &&
+wait_ovsdb_entry Wifi_Radio_State -w if_name "$radio_if_name" -is thermal_tx_chainmask '["set",[]]' &&
     log "wm2/wm2_set_radio_thermal_tx_chainmask_cleanup.sh: wait_ovsdb_entry - Wifi_Radio_Config reflected to Wifi_Radio_State::thermal_tx_chainmask is '[\"set\",[]]' - Success" ||
-    raise "FAIL: wait_ovsdb_entry - Failed to reflect Wifi_Radio_Config to Wifi_Radio_State::thermal_tx_chainmask is not '[\"set\",[]]'" -l "wm2/wm2_set_radio_thermal_tx_chainmask_cleanup.sh" -tc
+    raise "wait_ovsdb_entry - Failed to reflect Wifi_Radio_Config to Wifi_Radio_State::thermal_tx_chainmask is not '[\"set\",[]]'" -l "wm2/wm2_set_radio_thermal_tx_chainmask_cleanup.sh" -tc

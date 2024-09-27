@@ -32,9 +32,9 @@ NARGS=0
 redirector_addr="get_ovsdb_entry_value AWLAN_Node redirector_addr -r"
 wait_for_function_output "notempty" "${redirector_addr}" >/dev/null 2>&1
 if [ $? -eq 0 ]; then
-    resolved_target_addr=$($redirector_addr) || raise "FAIL: ${redirector_addr}"  -l "tools/device/get_redirector_hostname.sh" -f
+    resolved_target_addr=$($redirector_addr) || raise "${redirector_addr}" -l "tools/device/get_redirector_hostname.sh" -fc
 else
-    raise "FAIL: Failed to get 'redirector_addr' from AWLAN_Node table" -l "tools/device/get_redirector_hostname.sh" -s
+    raise "Failed to get 'redirector_addr' from AWLAN_Node table" -l "tools/device/get_redirector_hostname.sh" -s
 fi
 
 hostname=$(echo ${resolved_target_addr} | cut -d ":" -f2)

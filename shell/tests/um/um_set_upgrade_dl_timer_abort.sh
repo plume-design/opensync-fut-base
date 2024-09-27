@@ -48,12 +48,14 @@ fw_url=$2
 fw_dl_timer=$3
 
 trap '
+    fut_ec=$?
+    trap - EXIT INT
     fut_info_dump_line
     print_tables AWLAN_Node
     reset_um_triggers $fw_path || true
-    check_restore_ovsdb_server
     fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    exit $fut_ec
+' EXIT INT TERM
 
 log_title "um/um_set_upgrade_dl_timer_abort.sh: UM test - Download FW - upgrade_dl_timer - abort"
 
@@ -62,7 +64,7 @@ update_ovsdb_entry AWLAN_Node \
     -u upgrade_dl_timer "$fw_dl_timer" \
     -u firmware_url "$fw_url" &&
         log "um/um_set_upgrade_dl_timer_abort.sh: update_ovsdb_entry - AWLAN_Node updated - Success" ||
-        raise "FAIL: update_ovsdb_entry - Failed to update AWLAN_Node" -l "um/um_set_upgrade_dl_timer_abort.sh" -oe
+        raise "update_ovsdb_entry - Failed to update AWLAN_Node" -l "um/um_set_upgrade_dl_timer_abort.sh" -fc
 
 start_time=$(date -D "%H:%M:%S"  +"%Y.%m.%d-%H:%M:%S")
 
@@ -70,7 +72,7 @@ dl_start_code=$(get_um_code "UPG_STS_FW_DL_START")
 log "um/um_set_upgrade_dl_timer_abort.sh: Waiting for FW download to start, AWLAN_Node::upgrade_status to become UPG_STS_FW_DL_START ('$dl_start_code')"
 wait_ovsdb_entry AWLAN_Node -is upgrade_status "$dl_start_code" &&
     log "um/um_set_upgrade_dl_timer_abort.sh: wait_ovsdb_entry - AWLAN_Node::upgrade_status is $dl_start_code - Success" ||
-    raise "FAIL: wait_ovsdb_entry - AWLAN_Node::upgrade_status is not $dl_start_code" -l "um/um_set_upgrade_dl_timer_abort.sh" -tc
+    raise "wait_ovsdb_entry - AWLAN_Node::upgrade_status is not $dl_start_code" -l "um/um_set_upgrade_dl_timer_abort.sh" -tc
 
 dl_abort_code=$(get_um_code "UPG_ERR_DL_FW")
 log "um/um_set_upgrade_dl_timer_abort.sh: Waiting for FW download to abort, AWLAN_Node::upgrade_status to become UPG_ERR_DL_FW ('$dl_abort_code')"
@@ -87,7 +89,7 @@ if [ $? -eq 0 ]; then
     log "um/um_set_upgrade_dl_timer_abort.sh: wait_ovsdb_entry - AWLAN_Node::upgrade_status is '$dl_abort_code', FW download aborted after $download_time secs - Success"
 }
 else
-    raise "FAIL: wait_ovsdb_entry - Failed to abort FW download after download timer ($fw_dl_timer secs) expired" -l "um/um_set_upgrade_dl_timer_abort.sh" -tc
+    raise "wait_ovsdb_entry - Failed to abort FW download after download timer ($fw_dl_timer secs) expired" -l "um/um_set_upgrade_dl_timer_abort.sh" -tc
 fi
 
 pass

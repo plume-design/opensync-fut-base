@@ -16,19 +16,24 @@ def vpnm_setup():
     test_class_name = ["TestVpnm"]
     nodes, clients = determine_required_devices(test_class_name)
     log.info(f"Required devices for VPNM: {nodes + clients}")
-    for device in nodes:
-        if not hasattr(pytest, device):
-            raise RuntimeError(f"{device.upper()} handler is not set up correctly.")
-        try:
-            device_handler = getattr(pytest, device)
-            if device_handler.name == "gw":
-                check_kconfig_args = device_handler.get_command_arguments("CONFIG_MANAGER_VPNM", "y")
-                check_kconfig_ec = device_handler.execute("tools/device/check_kconfig_option", check_kconfig_args)[0]
-                if check_kconfig_ec != 0:
-                    pytest.skip("VPNM not present on device")
-            device_handler.fut_device_setup(test_suite_name="vpnm")
-        except Exception as exception:
-            raise RuntimeError(f"Unable to perform setup for the {device} device: {exception}")
+    for node in nodes:
+        if not hasattr(pytest, node):
+            raise RuntimeError(f"{node.upper()} handler is not set up correctly.")
+        node_handler = getattr(pytest, node)
+        if "VPNM" not in node_handler.get_kconfig_managers():
+            pytest.skip("VPNM not present on device")
+        kconfig = node_handler.get_kconfig()
+        dconfig = dict(item.split("=", 1) for item in kconfig)
+        if dconfig.get("CONFIG_OSN_BACKEND_IPSEC_NULL") is not None:
+            pytest.skip("Null IPSec implementation on device, VPNM tests not supported.")
+        if dconfig.get("CONFIG_OSN_BACKEND_VPN_NULL") is not None:
+            pytest.skip("Null VPN implementation on device, VPNM tests not supported.")
+        if dconfig.get("CONFIG_OSN_LINUX_TUNNEL_IFACE") != "y":
+            pytest.skip("Linux tunnel interface not configured on device, VPNM tests not supported.")
+        node_handler.fut_device_setup(test_suite_name="vpnm")
+        service_status = node_handler.get_node_services_and_status()
+        if service_status["vpnm"]["status"] != "enabled":
+            pytest.skip("VPNM not enabled on device")
     # Set the baseline OpenSync PIDs used for reboot detection
     pytest.session_baseline_os_pids = pytest.gw.opensync_pid_retrieval(tracked_node_services=pytest.tracked_managers)
 

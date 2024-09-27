@@ -66,13 +66,15 @@ port1="80"
 port2="8080"
 
 trap '
+    fut_ec=$?
+    trap - EXIT INT
     fut_info_dump_line
     print_tables Openflow_Tag IP_Interface Interface_Classifier
     reset_inet_entry $if_name || true
     run_setup_if_crashed nbm || true
-    check_restore_management_access || true
     fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    exit $fut_ec
+' EXIT INT TERM
 
 log_title "nm2/nm2_verify_linux_traffic_control_rules.sh:  Configuring and Validating Linux Traffic Control template Rule"
 
@@ -86,7 +88,7 @@ create_inet_entry \
     -network true \
     -enabled true &&
         log "nm2/nm2_verify_linux_traffic_control_rules.sh: Interface $if_name created - Success" ||
-        raise "FAIL: Failed to create interface $if_name" -l "nm2/nm2_verify_linux_traffic_control_rules.sh" -ds
+        raise "Failed to create interface $if_name" -l "nm2/nm2_verify_linux_traffic_control_rules.sh" -ds
 
 # create Interface classifier for ingress
 log "nm2/nm2_verify_linux_traffic_control_rules.sh: - Creating Interface_Classifier '$ic_ingress_token' (match:'$ingress_match_with_tag')"
@@ -96,7 +98,7 @@ insert_ovsdb_entry Interface_Classifier \
     -i match "$ingress_match_with_tag" \
     -i action "$ingress_action" &&
         log "nm2/nm2_verify_linux_traffic_control_rules.sh: Interface classifier $ic_ingress_token created - Success" ||
-        raise "FAIL: Failed to create interface classifier $ic_ingress_token" -l "nm2/nm2_verify_linux_traffic_control_rules.sh" -ds
+        raise "Failed to create interface classifier $ic_ingress_token" -l "nm2/nm2_verify_linux_traffic_control_rules.sh" -ds
 
 # create Interface classifier with template match for egress
 log "nm2/nm2_verify_linux_traffic_control_rules.sh: - Creating Interface_Classifier '$ic_ingress_token' (match:'$egress_match_with_tag')"
@@ -106,7 +108,7 @@ insert_ovsdb_entry Interface_Classifier \
     -i match "$egress_match_with_tag" \
     -i action "$ingress_action" &&
         log "nm2/nm2_verify_linux_traffic_control_rules.sh: Interface classifier $ic_egress_token_with_tag created - Success" ||
-        raise "FAIL: Failed to create interface classifier $ic_egress_token_with_tag" -l "nm2/nm2_verify_linux_traffic_control_rules.sh" -ds
+        raise "Failed to create interface classifier $ic_egress_token_with_tag" -l "nm2/nm2_verify_linux_traffic_control_rules.sh" -ds
 
 # create Interface classifier for egress
 log "nm2/nm2_verify_linux_traffic_control_rules.sh: - Creating Interface_Classifier '$ic_egress_token' (match:'$egress_match')"
@@ -116,19 +118,19 @@ insert_ovsdb_entry Interface_Classifier \
     -i match "$egress_match" \
     -i action "$egress_action" &&
         log "nm2/nm2_verify_linux_traffic_control_rules.sh: Interface classifier $ic_ingress_token created - Success" ||
-        raise "FAIL: Failed to create interface classifier $ic_ingress_token" -l "nm2/nm2_verify_linux_traffic_control_rules.sh" -ds
+        raise "Failed to create interface classifier $ic_ingress_token" -l "nm2/nm2_verify_linux_traffic_control_rules.sh" -ds
 
 log "nm2/nm2_verify_linux_traffic_control_rules.sh: Getting uuid for Interface classifier '$ic_ingress_token'"
 ic_ingress_uuid=$(get_ovsdb_entry_value Interface_Classifier _uuid -w "token" "$ic_ingress_token") ||
-    raise "FAIL: Failed to get uuid for Interface Classifier" -l "nm2/nm2_verify_linux_traffic_control_rules.sh:" -oe
+    raise "Failed to get uuid for Interface Classifier" -l "nm2/nm2_verify_linux_traffic_control_rules.sh:" -fc
 
 log "nm2/nm2_verify_linux_traffic_control_rules.sh: Getting uuid for Interface classifier '$ic_egress_token'"
 ic_egress_uuid=$(get_ovsdb_entry_value Interface_Classifier _uuid -w "token" "$ic_egress_token") ||
-    raise "FAIL: Failed to get uuid for Interface Classifier" -l "nm2/nm2_verify_linux_traffic_control_rules.sh:" -oe
+    raise "Failed to get uuid for Interface Classifier" -l "nm2/nm2_verify_linux_traffic_control_rules.sh:" -fc
 
 log "nm2/nm2_verify_linux_traffic_control_rules.sh: Getting uuid for Interface classifier '$ic_egress_token_with_tag'"
 ic_egress_with_tag_uuid=$(get_ovsdb_entry_value Interface_Classifier _uuid -w "token" "$ic_egress_token_with_tag") ||
-    raise "FAIL: Failed to get uuid for Interface Classifier" -l "nm2/nm2_verify_linux_traffic_control_rules.sh:" -oe
+    raise "Failed to get uuid for Interface Classifier" -l "nm2/nm2_verify_linux_traffic_control_rules.sh:" -fc
 
 # create IP_Interface and set the ingress rule
 log "nm2/nm2_verify_linux_traffic_control_rules.sh: Creating IP_Interface '$ip_intf_name' with ingress rule"
@@ -137,7 +139,7 @@ insert_ovsdb_entry IP_Interface \
     -i name "$ip_intf_name" \
     -i ingress_classifier '["set",[["uuid","'${ic_ingress_uuid}'"]]]' &&
         log "nm2/nm2_verify_linux_traffic_control_rules.sh: IP_Interface $ip_intf_name created - Success" ||
-        raise "FAIL: Failed to create IP_Interface $ip_intf_name" -l "nm2/nm2_verify_linux_traffic_control_rules.sh" -ds
+        raise "Failed to create IP_Interface $ip_intf_name" -l "nm2/nm2_verify_linux_traffic_control_rules.sh" -ds
 
 # creating openflow_Tag after the tag is referenced.  The rule should be
 # updated with the tag value.
@@ -145,44 +147,44 @@ insert_ovsdb_entry Openflow_Tag \
     -i name "${tag_name}" \
     -i cloud_value '["set",["'${port1}'","'${port2}'"]]' &&
         log "nm2/nm2_verify_linux_traffic_control_rules.sh: Entry inserted to Openflow_Tag for name '$tag_name'  - Success" ||
-        raise "FAIL: Failed to insert $tag_name in Openflow_Tag table" -l "nm2/nm2_verify_linux_traffic_control_rules.sh" -oe
+        raise "Failed to insert $tag_name in Openflow_Tag table" -l "nm2/nm2_verify_linux_traffic_control_rules.sh" -fc
 
 # verify if the ingress configuration with tag value is applied correctly in the system
 port1_hexval=$(printf '%x\n' $port1)
 log "nm2/nm2_verify_linux_traffic_control_rules.sh:  port1_hexval '$port1_hexval' "
 nb_is_tc_rule_configured "${if_name}" ${port1_hexval} "ingress" &&
     log "nm2/nm2_verify_linux_traffic_control_rules.sh: Ingress Traffic Control rule with ${port1} is configured on device - Success" ||
-    raise "FAIL: failed Traffic Control rule with ${port1} is configured on device" -l "nm2/nm2_verify_linux_traffic_control_rules.sh:" -oe
+    raise "failed Traffic Control rule with ${port1} is configured on device" -l "nm2/nm2_verify_linux_traffic_control_rules.sh:" -fc
 
 port2_hexval=$(printf '%x\n' $port2)
 log "nm2/nm2_verify_linux_traffic_control_rules.sh:  port2_hexval '$port2_hexval' "
 nb_is_tc_rule_configured "${if_name}" ${port2_hexval} "ingress" &&
     log "nm2/nm2_verify_linux_traffic_control_rules.sh: Ingress Traffic Control rule with ${port2} is configured on device - Success" ||
-    raise "FAIL: failed Traffic Control rule with ${port2} is configured on device" -l "nm2/nm2_verify_linux_traffic_control_rules.sh:" -oe
+    raise "failed Traffic Control rule with ${port2} is configured on device" -l "nm2/nm2_verify_linux_traffic_control_rules.sh:" -fc
 
 log "nm2/nm2_verify_linux_traffic_control_rules.sh: Updating IP_Interface '$ip_intf_name' with egress rule "
 update_ovsdb_entry IP_Interface \
     -w if_name "${if_name}" \
     -u egress_classifier '["set",[["uuid","'${ic_egress_uuid}'"]]]' &&
         log "nm2/nm2_verify_linux_traffic_control_rules.sh: Updating IP_Interface $ip_intf_name with egress rule - Success" ||
-        raise "FAIL: Updating IP_Interface $ip_intf_name with egress rule" -l "nm2/nm2_verify_linux_traffic_control_rules.sh" -ds
+        raise "Updating IP_Interface $ip_intf_name with egress rule" -l "nm2/nm2_verify_linux_traffic_control_rules.sh" -ds
 
 # verify if the egress classifier rule is applied in the system (L2 check)
 nb_is_tc_rule_configured ${if_name} ${egress_expected_str} "egress" &&
     log "nm2/nm2_verify_linux_traffic_control_rules.sh: Egress Traffic Control rule with ${egress_expected_str} is configured on device - Success" ||
-    raise "FAIL: failed Egress Traffic Control rule with ${egress_expected_str} is configured on device" -l "nm2/nm2_verify_linux_traffic_control_rules.sh:" -oe
+    raise "failed Egress Traffic Control rule with ${egress_expected_str} is configured on device" -l "nm2/nm2_verify_linux_traffic_control_rules.sh:" -fc
 
 log "nm2/nm2_verify_linux_traffic_control_rules.sh: Updating IP_Interface '$ip_intf_name' with egress tag rule "
 update_ovsdb_entry IP_Interface \
     -w if_name "${if_name}" \
     -u egress_classifier '["set",[["uuid","'${ic_egress_with_tag_uuid}'"]]]' &&
         log "nm2/nm2_verify_linux_traffic_control_rules.sh: Updating IP_Interface $ip_intf_name with egress rule - Success" ||
-        raise "FAIL: Updating IP_Interface $ip_intf_name with egress rule" -l "nm2/nm2_verify_linux_traffic_control_rules.sh" -ds
+        raise "Updating IP_Interface $ip_intf_name with egress rule" -l "nm2/nm2_verify_linux_traffic_control_rules.sh" -ds
 
 # verify if the egress configuration is applied correctly in the system
 nb_is_tc_rule_configured ${if_name} ${port1_hexval} "egress" &&
     log "nm2/nm2_verify_linux_traffic_control_rules.sh: Egress Traffic Control rule with ${port1} is configured on device - Success" ||
-    raise "FAIL: Failed Egress Traffic Control rule with ${port1} is configured on device" -l "nm2/nm2_verify_linux_traffic_control_rules.sh:" -oe
+    raise "Failed Egress Traffic Control rule with ${port1} is configured on device" -l "nm2/nm2_verify_linux_traffic_control_rules.sh:" -fc
 
 # Delete Interface Classifiers and IP_Interface
 log "nm2/nm2_verify_linux_traffic_control_rules.sh: Removing ingress and egress classifiers from '$ip_intf_name'"
@@ -191,7 +193,7 @@ update_ovsdb_entry IP_Interface \
     -u egress_classifier '["set", ['']]' \
     -u ingress_classifier '["set", ['']]' &&
         log "nm2/nm2_verify_linux_traffic_control_rules.sh: Removing ingress and egress classifiers from '$ip_intf_name' - Success" ||
-        raise "FAIL: Removing ingress and egress classifiers from '$ip_intf_name'" -l "nm2/nm2_verify_linux_traffic_control_rules.sh" -ds
+        raise "Removing ingress and egress classifiers from '$ip_intf_name'" -l "nm2/nm2_verify_linux_traffic_control_rules.sh" -ds
 
 log "nm2/nm2_verify_linux_traffic_control_rules.sh: Clean up ingress Interface Classifier ${ic_ingress_token}"
 remove_ovsdb_entry Interface_Classifier -w token "${ic_ingress_token}" &&
@@ -216,12 +218,6 @@ remove_ovsdb_entry IP_Interface -w name "${ip_intf_name}" &&
 log "nm2/nm2_verify_linux_traffic_control_rules.sh: clean up interface $if_name"
 delete_inet_interface "$if_name" &&
     log "nm2/nm2_verify_linux_traffic_control_rules.sh: interface $if_name removed from device - Success" ||
-    raise "FAIL: interface $if_name not removed from device" -l "nm2/nm2_verify_linux_traffic_control_rules.sh" -tc
-
-# Check if manager survived.
-manager_pid_file="${OPENSYNC_ROOTDIR}/bin/qosm"
-wait_for_function_response 0 "check_manager_alive $manager_pid_file" &&
-    log "nm2/nm2_verify_linux_traffic_control_rules.sh: QOSM is running - Success" ||
-    raise "FAIL: QOSM not running/crashed" -l "nm2/nm2_verify_linux_traffic_control_rules.sh" -tc
+    raise "interface $if_name not removed from device" -l "nm2/nm2_verify_linux_traffic_control_rules.sh" -tc
 
 pass

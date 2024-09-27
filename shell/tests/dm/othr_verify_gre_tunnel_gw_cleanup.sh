@@ -26,12 +26,14 @@ case "${1}" in
 esac
 
 trap '
-fut_info_dump_line
-print_tables Wifi_Inet_Config
-show_bridge_details
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    print_tables Wifi_Inet_Config
+    show_bridge_details
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 NARGS=1
 [ $# -ne ${NARGS} ] && usage && raise "Requires exactly ${NARGS} input argument(s)" -l "othr/othr_verify_gre_tunnel_gw_cleanup.sh" -arg

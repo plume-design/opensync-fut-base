@@ -11,120 +11,75 @@ echo "${FUT_TOPDIR}/shell/lib/base_lib.sh sourced"
 
 ###############################################################################
 # DESCRIPTION:
-#   Function is used to raise an exception, usually during test execution.
+#   Function is used to log errors or failures and exit with a non-zero code.
+#
+#   Note that exit is used and not return, which prevents calling functions
+#   from doing their own error handling.
 # INPUT PARAMETER(S):
-#   The function has 5 parameters for the user to customize and 2 modes:
-#   Parameters:
-#       exception_msg: Message to be displayed in terminal
-#       exception_location: Where did the error happen
-#       exception_name: Error name to report to framework:
-#                   "FunctionCall"
-#                   "DeviceSetup"
-#                   "OvsdbWait"
-#                   "OvsdbException"
-#                   "NativeFunction"
-#                   "TestFailure"
-#                   "InvalidOrMissingArgument"
-#       exception_type: Type of error to report to framework: ERROR|BROKEN
-#       exit_code: actual process exit code to return to calling function
-#   Modes:
-#       is_skip=true: propagate skip condition to framework (exit_code=3)
-#       is_skip=false: an error occurred
-# EXITS:
-#   With exit code:
-#       - 1, default
-#       - 3, -s, skipped test
-#       - custom, use -ec flag
+#   $1  Message to be logged to stdout (string, optional)
+#   Supported flags:
+#       -arg: Invalid or missing argument
+#       -ds:  Error during device setup
+#       -ec:  Define custom exit code
+#       -fc:  Error during function call
+#       -l:   Location of error instead of this file
+#       -ofm: Missing shell override file
+#       -s:   Propagate skip condition to framework
+#       -tc:  Testcase failure
 # USAGE EXAMPLE(S):
-#   raise <raise message> -l <raise location> -tc
-#   raise <raise message> -l <raise location> -ds
+#   raise <message> -s
+#   raise <message> -l <raise location> -tc
+#   raise <message> -ec 42 -ds
 ###############################################################################
 raise()
 {
+    exception_type="BROKEN"
+    exception_name="FutShellException"
+    exception_location=$(basename "$0")
     exception_msg=${1:-"Unknown error"}
     shift 1
-    exception_location=$(basename "$0")
-    exception_name="CommonShellException"
-    exception_type="BROKEN"
-    is_skip=false
     exit_code=1
 
     while [ -n "$1" ]; do
         option=$1
         shift
         case "$option" in
-            # Use for generic failures
-            -f)
-                exception_type="FAIL"
+            -arg)
+                exception_name="InvalidOrMissingArgument"
                 ;;
-            # Use to define custom exit code
-            -ec)
-                exit_code=${1}
-                shift
-                ;;
-            # Use to propagate "skip" condition to framework
-            -s)
-                exit_code=3
-                is_skip=true
-                ;;
-            # Customize location of error, instead of this library
-            -l)
-                exception_location=${1}
-                shift
-                ;;
-            # Use when error occurred during function call
-            -fc)
-                exception_name="FunctionCall"
-                ;;
-            # Use when error occurred during device setup
             -ds)
                 exception_name="DeviceSetup"
                 exception_type="FAIL"
                 ;;
-            # Use when error occurred during ovsdb-wait
-            -ow)
-                exception_name="OvsdbWait"
-                exception_type="FAIL"
+            -ec)
+                exit_code=${1}
+                shift
                 ;;
-            # Use when error occurred due to ovsdb issue
-            -oe)
-                exception_name="OvsdbException"
+            -fc)
+                exception_name="FunctionCall"
                 ;;
-            # Use when error occurred due to native function issue
-            -nf)
-                exception_name="NativeFunction"
-                exception_type="FAIL"
+            -l)
+                exception_location=${1}
+                shift
                 ;;
-            # Use for detection of down-ed / crashed ovsdb-server
-            -osc)
-                exception_name="OVSDBServerCrashed"
-                exception_type="FAIL"
-                ;;
-            # Use for testcase failures
-            -tc)
-                exception_name="TestFailure"
-                exception_type="FAIL"
-                ;;
-            # Use for testcase failures
             -ofm)
                 exception_name="OverrideFileMissing"
                 exception_type="FAIL"
                 exception_msg="Missing *_OVERRIDE_FILE=${exception_msg} file. Check *_OVERRIDE_FILE and file existence"
                 ;;
-            # Use when error occurred due to invalid or missing argument
-            -arg)
-                exception_name="InvalidOrMissingArgument"
+            -s)
+                exit_code=3
+                exception_type="SKIP"
+                ;;
+            -tc)
+                exception_name="TestFailure"
+                exception_type="FAIL"
                 ;;
         esac
     done
 
-    echo "$(date +%T) [ERROR] ${exception_location} - ${exception_msg}"
-    if [ "$is_skip" = 'false' ]; then
-        echo "FutShellException|FES|${exception_type}|FES|${exception_name}|FES|${exception_msg} AT ${exception_location}"
-    else
-        echo "${exception_msg} AT ${exception_location}"
-    fi
-    exit "$exit_code"
+    echo "$(date +%T) [${exception_type}] [${exception_name}] ${exception_location} - ${exception_msg}"
+    exit ${exit_code}
 }
 
 ###############################################################################
@@ -139,19 +94,17 @@ raise()
 ###############################################################################
 pass()
 {
-    if [ $# -ge 1 ]; then
-        echo -e "\n$(date +%T) [SHELL] $*"
-    else
-        echo -e "\n$(date +%T) [SHELL] TEST PASSED"
-    fi
+    echo
+    log ${*:-TEST PASSED}
     exit 0
 }
 
 ###############################################################################
 # DESCRIPTION:
-#   Function is used to log title.
+#   Function is used to print titles decorated by separate rows of asterisks.
 # INPUT PARAMETER(S):
-# RETURNS:
+#   $1  message (string, required)
+#   $2  single decorator character (string, optional, default="*")
 # USAGE EXAMPLE(S):
 #   log_title <log title>
 ###############################################################################
@@ -164,83 +117,37 @@ log_title()
 
 ###############################################################################
 # DESCRIPTION:
-#   Function is used to log test event.
-#   Echoes log message prefixed with time mark.
+#   Function is used to log messages to stdout, prefixed with a time mark.
 #   Supported flags:
 #       -deb    mark log message as debug
-#       -wrn    mark log message as warning
 #       -err    mark log message as error
-#   If called without flag, message is shell log.
 # INPUT PARAMETER(S):
 #   $1  log type, setting debug, warning or error log type (string, optional)
 # RETURNS:
-#   0   DEBUG or SHELL message logged.
-#   1   ERROR message logged.
+#   0   When logging regular or -deb messages.
+#   1   When logging -err messages.
 # USAGE EXAMPLE(S):
 #   log <log message>
 #   log -deb <log message>
-#   log -wrn <log message>
 #   log -err <log message>
 ###############################################################################
 log()
 {
-    msg_type="[SHELL]"
-    exit_code=0
-    if [ "$1" = "-deb" ]; then
-        msg_type="[DEBUG]"
-        shift
-    elif [ "$1" = "-wrn" ]; then
-        msg_type="[WARNING]"
-        shift
-    elif [ "$1" = "-err" ]; then
-        msg_type="[ERROR]"
-        exit_code=1
-        shift
-    fi
-
+    return_val=0
+    case "$1" in
+        -deb)
+            msg_type="[DEBUG]"
+            shift
+            ;;
+        -err)
+            msg_type="[ERROR]"
+            return_val=1
+            shift
+            ;;
+        *)
+            msg_type="[SHELL]"
+            ;;
+    esac
     echo -e "$(date +%T) $msg_type $*"
-
-    return $exit_code
-}
-
-contains_element()
-{
-    local match="$1"
-    shift
-    while [ -n "${1}" ]; do
-        value="${1}"
-        [ "${value}" == "${match}" ] && echo 0 && return 0
-        shift
-    done
-    echo 1 && return 1
-}
-
-get_index_in_list()
-{
-    local index_for="$1"
-    shift
-    index=0
-    values="$@"
-    while [ -n "${1}" ]; do
-        value="${1}"
-        [ "${value}" == "${index_for}" ] && echo $index && return 0
-        index=$((index + 1))
-        shift
-    done
-    return 1
-}
-
-get_by_index_from_list()
-{
-    local index="$1"
-    shift
-    check_index=0
-    values="$@"
-    while [ -n "${1}" ]; do
-        value="${1}"
-        [ "${check_index}" == "${index}" ] && echo "$value" && return 0
-        check_index=$((check_index+1))
-        shift
-    done
-    return 1
+    return ${return_val}
 }

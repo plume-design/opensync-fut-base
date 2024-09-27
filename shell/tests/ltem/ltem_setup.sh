@@ -38,33 +38,21 @@ if_name=${1}
 apn=${2}
 os_persist=${3}
 
-disable_watchdog &&
-    log -deb "ltem/ltem_setup.sh - Watchdog disabled - Success" ||
-    raise "FAIL: disable_watchdog - Could not disable watchdog" -l "ltem/ltem_setup.sh" -ds
-
-stop_healthcheck &&
-    log -deb "ltem/ltem_setup.sh - Healthcheck stopped - Success" ||
-    raise "FAIL: stop_healthcheck - Could not stop healthcheck" -l "ltem/ltem_setup.sh" -ds
-
-disable_fatal_state_cm &&
-    log -deb "ltem/ltem_setup.sh - CM fatal state disabled - Success" ||
-    raise "FAIL: disable_fatal_state_cm - Could not disable CM fatal state" -l "ltem/ltem_setup.sh" -ds
-
-start_openswitch &&
-    log -deb "ltem/ltem_setup.sh - OpenvSwitch started - Success" ||
-    raise "FAIL: Could not start OpenvSwitch: start_openswitch" -l "ltem/ltem_setup.sh" -ds
+device_init &&
+    log -deb "ltem/ltem_setup.sh - Device initialized - Success" ||
+    raise "device_init - Could not initialize device" -l "ltem/ltem_setup.sh" -ds
 
 empty_ovsdb_table AW_Debug &&
     log -deb "ltem/ltem_setup.sh - AW_Debug table emptied - Success" ||
-    raise "FAIL: empty_ovsdb_table AW_Debug - Could not empty AW_Debug table" -l "ltem/ltem_setup.sh" -ds
+    raise "empty_ovsdb_table AW_Debug - Could not empty AW_Debug table" -l "ltem/ltem_setup.sh" -ds
 
 set_manager_log LTEM TRACE &&
-    log -deb "ltem/ltem_setup.sh - Manager log for SM set to TRACE - Success" ||
-    raise "FAIL: set_manager_log SM TRACE - Could not set manager log severity" -l "ltem/ltem_setup.sh" -ds
+    log -deb "ltem/ltem_setup.sh - Manager log for LTEM set to TRACE - Success" ||
+    raise "set_manager_log LTEM TRACE - Could not set manager log severity" -l "ltem/ltem_setup.sh" -ds
 
 check_ovsdb_table_exist Lte_Config &&
     log -deb "ltem/ltem_setup.sh - Lte_Config table exists in OVSDB - Success" ||
-    raise "FAIL: Lte_Config table does not exist in OVSDB" -l "ltem/ltem_setup.sh" -s
+    raise "Lte_Config table does not exist in OVSDB" -l "ltem/ltem_setup.sh" -s
 
 check_field=$(${OVSH} s Lte_Config -w if_name==$if_name)
 if [ -z "$check_field" ]; then
@@ -79,7 +67,7 @@ if [ -z "$check_field" ]; then
         -i active_simcard_slot "0" \
         -i os_persist "$os_persist" &&
             log -deb "ltem/ltem_setup.sh - Lte_Config::lte interface $if_name was inserted - Success" ||
-            raise "FAIL: Lte_Config::lte interface $if_name is not inserted" -l "ltem/ltem_setup.sh" -ds
+            raise "Lte_Config::lte interface $if_name is not inserted" -l "ltem/ltem_setup.sh" -ds
 else
     log -deb "ltem/ltem_setup.sh - Entry for $if_name in Lte_Config already exists, skipping..."
 fi
@@ -94,7 +82,7 @@ if [ -z "$check_field" ]; then
         -i NAT "true" \
         -i os_persist "$os_persist" &&
             log -deb "ltem/ltem_setup.sh - Insert entry for $if_name interface in Wifi_Inet_Config - Success" ||
-            raise "FAIL: Insert was not done for the entry of $if_name interface in Wifi_Inet_Config " -l "ltem/ltem_setup.sh" -ds
+            raise "Insert was not done for the entry of $if_name interface in Wifi_Inet_Config " -l "ltem/ltem_setup.sh" -ds
 else
     log -deb "ltem/ltem_setup.sh - Entry for $if_name in Wifi_Inet_Config already exists, skipping..."
 fi

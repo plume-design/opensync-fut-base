@@ -22,11 +22,10 @@ case "${1}" in
 esac
 
 trap '
-fut_info_dump_line
-print_tables Openflow_Config Openflow_State
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_info_dump_line
+    print_tables Openflow_Config Openflow_State
+    fut_info_dump_line
+' EXIT INT TERM
 
 NARGS=1
 [ $# -lt ${NARGS} ] && usage && raise "Requires at least ${NARGS} input argument(s)" -arg
@@ -47,7 +46,7 @@ insert_ovsdb_entry Openflow_Config \
     -i bridge "${bridge}" \
     -i action normal &&
         log "configure_dpi_openflow_rules.sh: Openflow rule 1 inserted - Success" ||
-        raise "FAIL: Failed to insert Openflow rule" -l "configure_dpi_openflow_rules.sh" -oe
+        raise "Failed to insert Openflow rule" -l "configure_dpi_openflow_rules.sh" -fc
 
 insert_ovsdb_entry Openflow_Config \
     -i token "${dev_token}" \
@@ -56,7 +55,7 @@ insert_ovsdb_entry Openflow_Config \
     -i bridge "${bridge}" \
     -i action "resubmit(,7)" &&
         log "configure_dpi_openflow_rules.sh: Openflow rule 2 inserted - Success" ||
-        raise "FAIL: Failed to insert Openflow rule" -l "configure_dpi_openflow_rules.sh" -oe
+        raise "Failed to insert Openflow rule" -l "configure_dpi_openflow_rules.sh" -fc
 
 insert_ovsdb_entry Openflow_Config \
     -i token "${dev_token}" \
@@ -65,7 +64,7 @@ insert_ovsdb_entry Openflow_Config \
     -i bridge "${bridge}" \
     -i action normal &&
         log "configure_dpi_openflow_rules.sh: Openflow rule 3 inserted - Success" ||
-        raise "FAIL: Failed to insert Openflow rule" -l "configure_dpi_openflow_rules.sh" -oe
+        raise "Failed to insert Openflow rule" -l "configure_dpi_openflow_rules.sh" -fc
 
 insert_ovsdb_entry Openflow_Config \
     -i token "${dev_token}" \
@@ -75,7 +74,7 @@ insert_ovsdb_entry Openflow_Config \
     -i rule "ct_state=-trk,ip" \
     -i action "ct(table=7,zone=1)" &&
         log "configure_dpi_openflow_rules.sh: Openflow rule 4 inserted - Success" ||
-        raise "FAIL: Failed to insert Openflow rule" -l "configure_dpi_openflow_rules.sh" -oe
+        raise "Failed to insert Openflow rule" -l "configure_dpi_openflow_rules.sh" -fc
 
 insert_ovsdb_entry Openflow_Config \
     -i token "${dev_token}" \
@@ -85,7 +84,7 @@ insert_ovsdb_entry Openflow_Config \
     -i rule "ct_state=+trk,ct_mark=0,ip" \
     -i action "ct(commit,zone=1,exec(load:0x1->NXM_NX_CT_MARK[])),NORMAL,output:${of_port}" &&
         log "configure_dpi_openflow_rules.sh: Openflow rule 5 inserted - Success" ||
-        raise "FAIL: Failed to insert Openflow rule" -l "configure_dpi_openflow_rules.sh" -oe
+        raise "Failed to insert Openflow rule" -l "configure_dpi_openflow_rules.sh" -fc
 
 insert_ovsdb_entry Openflow_Config \
     -i token "${dev_token}" \
@@ -95,7 +94,7 @@ insert_ovsdb_entry Openflow_Config \
     -i rule "ct_zone=1,ct_state=+trk,ct_mark=1,ip" \
     -i action "NORMAL,output:${of_port}" &&
         log "configure_dpi_openflow_rules.sh: Openflow rule 6 inserted - Success" ||
-        raise "FAIL: Failed to insert Openflow rule" -l "configure_dpi_openflow_rules.sh" -oe
+        raise "Failed to insert Openflow rule" -l "configure_dpi_openflow_rules.sh" -fc
 
 insert_ovsdb_entry Openflow_Config \
     -i token "${dev_token}" \
@@ -105,7 +104,7 @@ insert_ovsdb_entry Openflow_Config \
     -i rule "ct_zone=1,ct_state=+trk,ct_mark=2,ip" \
     -i action "NORMAL" &&
         log "configure_dpi_openflow_rules.sh: Openflow rule 7 inserted - Success" ||
-        raise "FAIL: Failed to insert Openflow rule" -l "configure_dpi_openflow_rules.sh" -oe
+        raise "Failed to insert Openflow rule" -l "configure_dpi_openflow_rules.sh" -fc
 
 insert_ovsdb_entry Openflow_Config \
     -i token "${dev_token}" \
@@ -115,6 +114,6 @@ insert_ovsdb_entry Openflow_Config \
     -i rule "ct_state=+trk,ct_mark=3,ip" \
     -i action "DROP" &&
         log "configure_dpi_openflow_rules.sh: Openflow rule 8 inserted - Success" ||
-        raise "FAIL: Failed to insert Openflow rule" -l "configure_dpi_openflow_rules.sh" -oe
+        raise "Failed to insert Openflow rule" -l "configure_dpi_openflow_rules.sh" -fc
 
 pass

@@ -65,14 +65,13 @@ case "${1}" in
 esac
 
 trap '
-fut_info_dump_line
-print_tables Wifi_Inet_Config Wifi_Inet_State
-print_tables Wifi_VIF_Config Wifi_VIF_State
-print_tables DHCP_leased_IP
-show_bridge_details
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_info_dump_line
+    print_tables Wifi_Inet_Config Wifi_Inet_State
+    print_tables Wifi_VIF_Config Wifi_VIF_State
+    print_tables DHCP_leased_IP
+    show_bridge_details
+    fut_info_dump_line
+' EXIT INT TERM
 
 NARGS=4
 [ $# -ne ${NARGS} ] && usage && raise "Requires exactly ${NARGS} input argument(s)" -l "othr/configure_gre_tunnel_gw.sh" -arg
@@ -114,13 +113,13 @@ create_inet_entry \
     -network true \
     -enabled true &&
         log "tools/device/configure_gre_tunnel_gw.sh: Interface ${gre_name} created - Success" ||
-        raise "FAIL: Failed to create interface ${gre_name}" -l "tools/device/configure_gre_tunnel_gw.sh" -ds
+        raise "Failed to create interface ${gre_name}" -l "tools/device/configure_gre_tunnel_gw.sh" -ds
 
 wait_for_function_exit_code 0 "check_vif_interface_state_is_up ${gre_name}" "${associate_retry_count}" "${associate_retry_sleep}" &&
     log -deb "tools/device/configure_gre_tunnel_gw.sh: Interface ${gre_name} is up on system" ||
-    raise "FAIL: Interface ${gre_name} is not up on system" -l "tools/device/configure_gre_tunnel_gw.sh" -ds
+    raise "Interface ${gre_name} is not up on system" -l "tools/device/configure_gre_tunnel_gw.sh" -ds
 
 log "tools/device/configure_gre_tunnel_gw.sh: Put GW GRE interface into LAN bridge"
-add_bridge_port "${lan_bridge_if_name}" "${gre_name}"
+add_port_to_bridge "${lan_bridge_if_name}" "${gre_name}"
 
 pass

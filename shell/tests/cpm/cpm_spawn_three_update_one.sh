@@ -51,12 +51,14 @@ validate_tinyproxies()
 
 
 trap '
-fut_info_dump_line
-print_tables Captive_Portal
-$(get_process_cmd) | grep tinyproxy | grep -v grep
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    print_tables Captive_Portal
+    $(get_process_cmd) | grep tinyproxy | grep -v grep
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 log_title "cpm/cpm_spawn_three_update_one.sh: CPM test - Verify CPM spawning tinyproxies"
 
@@ -69,7 +71,7 @@ insert_ovsdb_entry Captive_Portal \
 -i proxy_method "reverse" \
 -i uam_url "https://captiveportal1" &&
     log "cpm/cpm_spawn_three_update_one.sh: First Captive_Portal entry inserted - Success" ||
-    raise "FAIL: Failed to insert first Captive_Portal entry" -l "cpm/cpm_spawn_three_update_one.sh" -oe
+    raise "Failed to insert first Captive_Portal entry" -l "cpm/cpm_spawn_three_update_one.sh" -fc
 
 insert_ovsdb_entry Captive_Portal \
 -i additional_headers '["map",[["X-LocationID","100000000000000000000001"],["X-PodID","1000000001"],["X-PodMac","aa:bb:cc:dd:ee:ff"],["X-SSID","FUT_ssid_guest"]]]' \
@@ -78,7 +80,7 @@ insert_ovsdb_entry Captive_Portal \
 -i proxy_method "reverse" \
 -i uam_url "https://captiveportal2" &&
     log "cpm/cpm_spawn_three_update_one.sh: Second Captive_Portal entry inserted - Success" ||
-    raise "FAIL: Failed to insert second Captive_Portal entry" -l "cpm/cpm_spawn_three_update_one.sh" -oe
+    raise "Failed to insert second Captive_Portal entry" -l "cpm/cpm_spawn_three_update_one.sh" -fc
 
 insert_ovsdb_entry Captive_Portal \
 -i additional_headers '["map",[["X-LocationID","100000000000000000000001"],["X-PodID","1000000001"],["X-PodMac","aa:bb:cc:dd:ee:ff"],["X-SSID","FUT_ssid_guest"]]]' \
@@ -87,21 +89,21 @@ insert_ovsdb_entry Captive_Portal \
 -i proxy_method "reverse" \
 -i uam_url "https://captiveportal3" &&
     log "cpm/cpm_spawn_three_update_one.sh: Third Captive_Portal entry inserted - Success" ||
-    raise "FAIL: Failed to insert third Captive_Portal entry" -l "cpm/cpm_spawn_three_update_one.sh" -oe
+    raise "Failed to insert third Captive_Portal entry" -l "cpm/cpm_spawn_three_update_one.sh" -fc
 
 update_ovsdb_entry Captive_Portal \
 -w name "employee" \
 -u other_config '["map",[["pkt_mark","0x2"],["listenip","127.0.0.1"],["listenport","8891"]]]' \
 -u uam_url "https://captiveportal4" &&
     log "cpm/cpm_spawn_three_update_one.sh: Third Captive_Portal entry updated - Success" ||
-    raise "FAIL: Failed to update third Captive_Portal entry" -l "cpm/cpm_spawn_three_update_one.sh" -oe
+    raise "Failed to update third Captive_Portal entry" -l "cpm/cpm_spawn_three_update_one.sh" -fc
 
 # debounce timer 1 sec plus 1 sec add-on for tinyproxies to get created
 sleep 2
 
 validate_tinyproxies &&
     log "cpm/cpm_spawn_three_update_one.sh: Captive_Portal entries handled - Success" ||
-    raise "FAIL: Captive_Portal entries handling failed"  -l "cpm/cpm_spawn_three_update_one.sh" -tc
+    raise "Captive_Portal entries handling failed"  -l "cpm/cpm_spawn_three_update_one.sh" -tc
 
 print_tables Captive_Portal
 

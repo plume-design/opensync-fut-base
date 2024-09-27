@@ -9,7 +9,7 @@ Ensure DUT is in OpenSync default state, as is after boot. Ensure the OpenSync v
 The goal of this testcase is to verify that a new `tinyproxy` instance will be spawned with the same configuration in
 case a running instance crashes.
 
-To simulate a process crash, the command `kill <tinyproxy-pid>` is used. The default signal is `SIGTERM`, but others can
+To simulate a process crash, the command `kill <tinyproxy-pid>` is used. The default signal is `TERM`, but others can
 be used, for example `SIGSEGV`.
 
 Insert two entries into the `Captive_Portal` table to spawn two `tinyproxy` instances listening on selected IPs and

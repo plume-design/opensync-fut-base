@@ -37,11 +37,13 @@ case "${1}" in
 esac
 
 trap '
-fut_info_dump_line
-print_tables AWLAN_Node
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    print_tables AWLAN_Node
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 NARGS=1
 [ $# -ne ${NARGS} ] && usage && raise "Requires exactly ${NARGS} input argument(s)" -l "onbrd/onbrd_verify_fw_version_awlan_node.sh" -arg
@@ -56,15 +58,15 @@ log "onbrd/onbrd_verify_fw_version_awlan_node.sh: Verifying FW version string '$
 if [ "${match_rule}" = "non_empty" ]; then
     log "onbrd/onbrd_verify_fw_version_awlan_node.sh: FW version string must not be empty"
     [ "${fw_version_string}" = "" ] &&
-        raise "FAIL: FW version string is empty" -l "onbrd/onbrd_verify_fw_version_awlan_node.sh" -tc ||
+        raise "FW version string is empty" -l "onbrd/onbrd_verify_fw_version_awlan_node.sh" -tc ||
         log "onbrd/onbrd_verify_fw_version_awlan_node.sh: FW version string is not empty - Success"
 elif [ "${match_rule}" = "pattern_match" ]; then
     log "onbrd/onbrd_verify_fw_version_awlan_node.sh: FW version string must match parsing rules and regular expression"
     check_fw_pattern "${fw_version_string}" &&
         log "onbrd/onbrd_verify_fw_version_awlan_node.sh: FW version string is valid - Success" ||
-        raise "FAIL: FW version string is not valid" -l "onbrd/onbrd_verify_fw_version_awlan_node.sh" -tc
+        raise "FW version string is not valid" -l "onbrd/onbrd_verify_fw_version_awlan_node.sh" -tc
 else
-    raise "FAIL: Invalid match_rule '${match_rule}', must be 'non_empty' or 'pattern_match'" -l "onbrd/onbrd_verify_fw_version_awlan_node.sh" -arg
+    raise "Invalid match_rule '${match_rule}', must be 'non_empty' or 'pattern_match'" -l "onbrd/onbrd_verify_fw_version_awlan_node.sh" -arg
 fi
 
 pass

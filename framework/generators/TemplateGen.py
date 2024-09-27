@@ -1,4 +1,5 @@
 class TemplateGen:
-    @staticmethod
-    def gen_template_inputs_test(inputs):
+    def gen_template_inputs_test(self, inputs):
+        # Put your custom functionality here
+        inputs = self.default_gen(inputs)
         return inputs

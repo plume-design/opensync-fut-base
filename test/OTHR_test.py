@@ -19,19 +19,13 @@ def othr_setup():
     test_class_name = ["TestOthr"]
     nodes, clients = determine_required_devices(test_class_name)
     log.info(f"Required devices for OTHR: {nodes + clients}")
-    for device in nodes:
-        if not hasattr(pytest, device):
-            continue
-        try:
-            device_handler = getattr(pytest, device)
-            if device_handler.device_type == "node":
-                phy_radio_ifnames = device_handler.capabilities.get_phy_radio_ifnames(return_type=list)
-                setup_args = device_handler.get_command_arguments(*phy_radio_ifnames)
-                device_handler.fut_device_setup(test_suite_name="dm", setup_args=setup_args)
-            else:
-                device_handler.fut_device_setup(test_suite_name="dm")
-        except Exception as exception:
-            RuntimeError(f"Unable to perform setup for the {device} device: {exception}")
+    for node in nodes:
+        if not hasattr(pytest, node):
+            raise RuntimeError(f"{node.upper()} handler is not set up correctly.")
+        node_handler = getattr(pytest, node)
+        phy_radio_ifnames = node_handler.capabilities.get_phy_radio_ifnames(return_type=list)
+        setup_args = node_handler.get_command_arguments(*phy_radio_ifnames)
+        node_handler.fut_device_setup(test_suite_name="dm", setup_args=setup_args)
     # Set the baseline OpenSync PIDs used for reboot detection
     pytest.session_baseline_os_pids = pytest.gw.opensync_pid_retrieval(tracked_node_services=pytest.tracked_managers)
 
@@ -40,7 +34,7 @@ class TestOthr:
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", othr_config.get("othr_add_client_freeze", []))
     def test_othr_add_client_freeze(self, cfg: dict, update_baseline_os_pids):
-        fut_configurator, gw, w1 = pytest.fut_configurator, pytest.gw, pytest.w1
+        gw, w1 = pytest.gw, pytest.w1
 
         with step("Preparation of testcase parameters"):
             # Arguments from test case configuration
@@ -48,7 +42,6 @@ class TestOthr:
             ht_mode = cfg.get("ht_mode")
             radio_band = cfg.get("radio_band")
             encryption = cfg["encryption"]
-            wifi_security_type = cfg.get("wifi_security_type", "wpa")
             device_mode = cfg.get("device_mode", "router")
             client_retry = cfg.get("client_retry", 2)
 
@@ -62,22 +55,18 @@ class TestOthr:
             wlan_if_name = w1.device_config.get("wlan_if_name")
             w1_mac = w1.device_api.get_mac(if_name=wlan_if_name)
 
-            # Constant arguments
-            ssid, psk = fut_configurator.base_ssid, fut_configurator.base_psk
+            # GW interface creation
+            gw.create_interface_object(
+                channel=channel,
+                ht_mode=ht_mode,
+                radio_band=radio_band,
+                encryption=encryption,
+                interface_role="home_ap",
+            )
 
-            # GW AP arguments
-            gw_ap_vif_args = {
-                "channel": channel,
-                "ht_mode": ht_mode,
-                "radio_band": radio_band,
-                "wpa_psk": psk,
-                "wifi_security_type": wifi_security_type,
-                "encryption": encryption,
-                "ssid": ssid,
-                "reset_vif": True,
-            }
-
-            gw.ap_args = gw_ap_vif_args
+            # Retrieve AP SSID and PSK values
+            ssid = gw.interfaces["home_ap"].ssid_raw
+            psk = gw.interfaces["home_ap"].psk_raw
 
             internet_block_args = w1.get_command_arguments(
                 network_namespace,
@@ -98,9 +87,13 @@ class TestOthr:
             with step(f"Put GW into {device_mode} mode"):
                 assert gw.configure_device_mode(device_mode=device_mode)
             with step("GW AP creation"):
-                assert gw.configure_radio_vif_and_network()
+                assert gw.interfaces["home_ap"].configure_interface() == ExpectedShellResult
             with step("Client connection"):
-                w1.device_api.connect(ssid=ssid, psk=psk, retry=client_retry)
+                w1.device_api.connect(
+                    ssid=ssid,
+                    psk=psk,
+                    retry=client_retry,
+                )
             with step("Verify client connection"):
                 assert w1_mac in gw.device_api.get_wifi_associated_clients()[0]
             with step("Test case"):
@@ -120,6 +113,7 @@ class TestOthr:
                 )
         finally:
             with step("Cleanup"):
+                gw.interfaces["home_ap"].vif_reset()
                 gw.execute("tests/dm/othr_connect_wifi_client_to_ap_unfreeze")
                 gw.execute("tests/dm/othr_setup", setup_args)
                 gw.configure_device_mode(device_mode="router")
@@ -127,7 +121,7 @@ class TestOthr:
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", othr_config.get("othr_connect_wifi_client_multi_psk", []))
     def test_othr_connect_wifi_client_multi_psk(self, cfg: dict):
-        fut_configurator, gw, w1 = pytest.fut_configurator, pytest.gw, pytest.w1
+        gw, w1 = pytest.gw, pytest.w1
 
         with step("Preparation of testcase parameters"):
             # Arguments from test case configuration
@@ -136,7 +130,6 @@ class TestOthr:
             radio_band = cfg.get("radio_band")
             encryption = cfg["encryption"]
             device_mode = cfg.get("device_mode", "router")
-            wifi_security_type = cfg.get("wifi_security_type", "wpa")
             client_retry = cfg.get("client_retry", 2)
             psk_a = cfg.get("psk_a")
             psk_b = cfg.get("psk_b")
@@ -149,22 +142,18 @@ class TestOthr:
             wlan_if_name = w1.device_config.get("wlan_if_name")
             w1_mac = w1.device_api.get_mac(if_name=wlan_if_name)
 
-            # Constant arguments
-            ssid = fut_configurator.base_ssid
+            # GW interface creation
+            gw.create_interface_object(
+                channel=channel,
+                ht_mode=ht_mode,
+                radio_band=radio_band,
+                encryption=encryption,
+                interface_role="home_ap",
+                wpa_psks=[psk_a, psk_b],
+            )
 
-            # GW AP arguments
-            gw_ap_vif_args = {
-                "channel": channel,
-                "ht_mode": ht_mode,
-                "radio_band": radio_band,
-                "wpa_psk": [psk_a, psk_b],
-                "wifi_security_type": wifi_security_type,
-                "encryption": encryption,
-                "ssid": ssid,
-                "reset_vif": True,
-            }
-
-            gw.ap_args = gw_ap_vif_args
+            # Retrieve AP SSID and PSK values
+            ssid = gw.interfaces["home_ap"].ssid_raw
 
             othr_cleanup_args = gw.get_command_arguments(
                 lan_br_if_name,
@@ -175,23 +164,32 @@ class TestOthr:
             with step(f"Put GW into {device_mode} mode"):
                 assert gw.configure_device_mode(device_mode=device_mode)
             with step("GW AP creation"):
-                assert gw.configure_radio_vif_and_network()
+                assert gw.interfaces["home_ap"].configure_interface() == ExpectedShellResult
             with step("Test case"):
                 with step("Client connection #1 PSK"):
-                    w1.device_api.connect(ssid=ssid, psk=psk_a, retry=client_retry)
+                    w1.device_api.connect(
+                        ssid=ssid,
+                        psk=psk_a,
+                        retry=client_retry,
+                    )
                     assert w1_mac in gw.device_api.get_wifi_associated_clients()[0]
                 with step("Client connection #2 PSK"):
-                    w1.device_api.connect(ssid=ssid, psk=psk_b, retry=client_retry)
+                    w1.device_api.connect(
+                        ssid=ssid,
+                        psk=psk_b,
+                        retry=client_retry,
+                    )
                     assert w1_mac in gw.device_api.get_wifi_associated_clients()[0]
         finally:
             with step("Cleanup"):
+                gw.interfaces["home_ap"].vif_reset()
                 gw.execute("tests/dm/othr_cleanup", othr_cleanup_args)
                 gw.configure_device_mode(device_mode="router")
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", othr_config.get("othr_connect_wifi_client_to_ap", []))
     def test_othr_connect_wifi_client_to_ap(self, cfg: dict):
-        fut_configurator, gw, w1 = pytest.fut_configurator, pytest.gw, pytest.w1
+        gw, w1 = pytest.gw, pytest.w1
 
         with step("Preparation of testcase parameters"):
             # Arguments from test case configuration
@@ -200,7 +198,6 @@ class TestOthr:
             radio_band = cfg.get("radio_band")
             encryption = cfg["encryption"]
             device_mode = cfg.get("device_mode", "router")
-            wifi_security_type = cfg.get("wifi_security_type", "wpa")
             client_retry = cfg.get("client_retry", 2)
 
             # GW specific arguments
@@ -211,22 +208,18 @@ class TestOthr:
             wlan_if_name = w1.device_config.get("wlan_if_name")
             w1_mac = w1.device_api.get_mac(if_name=wlan_if_name)
 
-            # Constant arguments
-            ssid, psk = fut_configurator.base_ssid, fut_configurator.base_psk
+            # GW interface creation
+            gw.create_interface_object(
+                channel=channel,
+                ht_mode=ht_mode,
+                radio_band=radio_band,
+                encryption=encryption,
+                interface_role="home_ap",
+            )
 
-            # GW AP arguments
-            gw_ap_vif_args = {
-                "channel": channel,
-                "ht_mode": ht_mode,
-                "radio_band": radio_band,
-                "wpa_psk": psk,
-                "wifi_security_type": wifi_security_type,
-                "encryption": encryption,
-                "ssid": ssid,
-                "reset_vif": True,
-            }
-
-            gw.ap_args = gw_ap_vif_args
+            # Retrieve AP SSID and PSK values
+            ssid = gw.interfaces["home_ap"].ssid_raw
+            psk = gw.interfaces["home_ap"].psk_raw
 
             othr_cleanup_args = gw.get_command_arguments(
                 lan_br_if_name,
@@ -237,13 +230,18 @@ class TestOthr:
             with step(f"Put GW into {device_mode} mode"):
                 assert gw.configure_device_mode(device_mode=device_mode)
             with step("GW AP creation"):
-                assert gw.configure_radio_vif_and_network()
+                assert gw.interfaces["home_ap"].configure_interface() == ExpectedShellResult
             with step("Test case"):
                 with step("Client connection #1 PSK"):
-                    w1.device_api.connect(ssid=ssid, psk=psk, retry=client_retry)
+                    w1.device_api.connect(
+                        ssid=ssid,
+                        psk=psk,
+                        retry=client_retry,
+                    )
                     assert w1_mac in gw.device_api.get_wifi_associated_clients()[0]
         finally:
             with step("Cleanup"):
+                gw.interfaces["home_ap"].vif_reset()
                 gw.execute("tests/dm/othr_cleanup", othr_cleanup_args)
                 gw.configure_device_mode(device_mode="router")
 
@@ -273,7 +271,9 @@ class TestOthr:
             with step("Client eth-connect"):
                 e2.device_api.eth_connect(pod=gw.device_api, dhclient=False, skip_exception=True)
             with step("Add bridge port"):
-                assert gw.execute("tools/device/add_bridge_port", add_eth_port_to_bridge_args)[0] == ExpectedShellResult
+                assert (
+                    gw.execute("tools/device/add_port_to_bridge", add_eth_port_to_bridge_args)[0] == ExpectedShellResult
+                )
             with step("Client start-dhclient"):
                 assert e2.device_api.refresh_ip_address(reuse=True)
             with step("Test case - validate client association to GW"):
@@ -289,7 +289,7 @@ class TestOthr:
         finally:
             with step("Cleanup"):
                 e2.device_api.eth_disconnect()
-                gw.execute("tools/device/remove_bridge_port", add_eth_port_to_bridge_args)
+                gw.execute("tools/device/remove_port_from_bridge", add_eth_port_to_bridge_args)
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", othr_config.get("othr_verify_eth_lan_iface_wifi_master_state", []))
@@ -362,7 +362,9 @@ class TestOthr:
             with step("Put GW into router mode"):
                 assert gw.configure_device_mode(device_mode="router")
             with step("Add LAN ethernet port into LAN bridge"):
-                assert gw.execute("tools/device/add_bridge_port", add_eth_port_to_bridge_args)[0] == ExpectedShellResult
+                assert (
+                    gw.execute("tools/device/add_port_to_bridge", add_eth_port_to_bridge_args)[0] == ExpectedShellResult
+                )
             with step("Network switch configuration"):
                 # On Network Switch - Configure Network Switch for LEAF to use VLAN309 of GW device.
                 server.switch.vlan_set(port_names=l1_wan_iface, vlan=309, vlan_type="untagged")
@@ -379,7 +381,7 @@ class TestOthr:
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", othr_config.get("othr_verify_gre_iface_wifi_master_state", []))
     def test_othr_verify_gre_iface_wifi_master_state(self, cfg: dict):
-        fut_configurator, gw = pytest.fut_configurator, pytest.gw
+        gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
             # Arguments from test case configuration
@@ -387,10 +389,6 @@ class TestOthr:
             ht_mode = cfg.get("ht_mode")
             radio_band = cfg.get("radio_band")
             encryption = cfg["encryption"]
-            wifi_security_type = cfg.get("wifi_security_type", "wpa")
-
-            # Constant arguments
-            ssid, psk = fut_configurator.base_ssid, fut_configurator.base_psk
 
             # GW specific arguments
             gw_bhaul_interface_type = "backhaul_ap"
@@ -403,20 +401,14 @@ class TestOthr:
             gw_gre_if_name = f"gre-ifname-{randrange(100, 1000)}"
             gw_bhaul_ap_if_name = gw.capabilities.get_ifname(freq_band=radio_band, iftype=gw_bhaul_interface_type)
 
-            gw_ap_vif_args = {
-                "channel": channel,
-                "ht_mode": ht_mode,
-                "radio_band": radio_band,
-                "wpa_psk": psk,
-                "wifi_security_type": wifi_security_type,
-                "encryption": encryption,
-                "ssid": ssid,
-                "interface_type": "backhaul_ap",
-                "bridge": False,
-                "reset_vif": True,
-            }
-
-            gw.ap_args = gw_ap_vif_args
+            # GW interface creation
+            gw.create_interface_object(
+                channel=channel,
+                ht_mode=ht_mode,
+                radio_band=radio_band,
+                encryption=encryption,
+                interface_role="backhaul_ap",
+            )
 
             with step("Determine GW network mode and WANO"):
                 gw_in_bridge_mode_args = gw.get_command_arguments(
@@ -430,9 +422,6 @@ class TestOthr:
                     gw.execute("tools/device/check_device_in_bridge_mode", gw_in_bridge_mode_args)[0]
                     == ExpectedShellResult
                 )
-                wan_handling_args = gw.get_command_arguments("CONFIG_MANAGER_WANO", "y")
-                has_wano = gw.execute("tools/device/check_kconfig_option", wan_handling_args)[0] == ExpectedShellResult
-
                 gw_lan_br_inet_args_base = [
                     f"-if_name {lan_br_if_name}",
                     "-if_type bridge",
@@ -449,7 +438,7 @@ class TestOthr:
                         '-dhcpd \'["map",[["start","192.168.0.10"],["stop","192.168.0.200"]]]\'',
                     ]
                 else:
-                    ip_assign_scheme = "none" if has_wano else "dhcp"
+                    ip_assign_scheme = "none" if "WANO" in gw.get_kconfig_managers() else "dhcp"
                     gw_lan_br_inet_args_base.append(f"-ip_assign_scheme {ip_assign_scheme}")
 
                 gw_lan_br_inet_args = gw.get_command_arguments(*gw_lan_br_inet_args_base)
@@ -463,33 +452,14 @@ class TestOthr:
         with step("LAN configuration"):
             assert gw.execute("tools/device/create_inet_interface", gw_lan_br_inet_args)[0] == ExpectedShellResult
         with step("GW AP creation"):
-            assert gw.configure_radio_vif_and_network()
+            assert gw.interfaces["backhaul_ap"].configure_interface() == ExpectedShellResult
         with step("Testcase"):
             assert (
                 gw.execute_with_logging("tests/dm/othr_verify_gre_iface_wifi_master_state", gw_gre_conf_verify_args)[0]
                 == ExpectedShellResult
             )
-
-    @allure.severity(allure.severity_level.NORMAL)
-    @pytest.mark.parametrize("cfg", othr_config.get("othr_verify_iperf3_speedtest", []))
-    def test_othr_verify_iperf3_speedtest(self, cfg: dict):
-        server, gw = pytest.server, pytest.gw
-
-        with step("Preparation of testcase parameters"):
-            # Arguments from test case configuration
-            traffic_type = cfg.get("traffic_type")
-
-            # Server specific arguments
-            server_hostname = server.mqtt_hostname
-
-            test_args = gw.get_command_arguments(
-                server_hostname,
-                traffic_type,
-            )
-
-        with step("Test case"):
-            assert server.execute("tools/server/run_iperf3_server", as_sudo=True)[0] == ExpectedShellResult
-            assert gw.execute_with_logging("tests/dm/othr_verify_iperf3_speedtest", test_args)[0] == ExpectedShellResult
+        with step("Cleanup"):
+            gw.interfaces["backhaul_ap"].vif_reset()
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", othr_config.get("othr_verify_lan_bridge_iface_wifi_master_state", []))
@@ -508,92 +478,6 @@ class TestOthr:
                 gw.execute_with_logging("tests/dm/othr_verify_lan_bridge_iface_wifi_master_state", test_args)[0]
                 == ExpectedShellResult
             )
-
-    @allure.severity(allure.severity_level.NORMAL)
-    @pytest.mark.parametrize("cfg", othr_config.get("othr_verify_ookla_speedtest", []))
-    def test_othr_verify_ookla_speedtest(self, cfg: dict):
-        gw = pytest.gw
-
-        with step("Preparation of testcase parameters"):
-            testid = randrange(100, 1000)
-            test_args = gw.get_command_arguments(
-                testid,
-            )
-
-        with step("Ensure WAN connectivity"):
-            assert gw.check_wan_connectivity()
-        with step("Test case"):
-            assert gw.execute_with_logging("tests/dm/othr_verify_ookla_speedtest", test_args)[0] == ExpectedShellResult
-
-    @allure.severity(allure.severity_level.NORMAL)
-    @pytest.mark.parametrize("cfg", othr_config.get("othr_verify_ookla_speedtest_bind_options", []))
-    def test_othr_verify_ookla_speedtest_bind_options(self, cfg: dict):
-        gw = pytest.gw
-
-        with step("Preparation of testcase parameters"):
-            testid = randrange(100, 1000)
-            test_args = gw.get_command_arguments(
-                testid,
-            )
-
-        with step("Ensure WAN connectivity"):
-            assert gw.check_wan_connectivity()
-        with step("Test case"):
-            assert (
-                gw.execute_with_logging("tests/dm/othr_verify_ookla_speedtest_bind_options", test_args)[0]
-                == ExpectedShellResult
-            )
-
-    @allure.severity(allure.severity_level.NORMAL)
-    @pytest.mark.parametrize("cfg", othr_config.get("othr_verify_ookla_speedtest_bind_reporting", []))
-    def test_othr_verify_ookla_speedtest_bind_reporting(self, cfg: dict):
-        gw = pytest.gw
-
-        with step("Preparation of testcase parameters"):
-            testid = randrange(100, 1000)
-            test_args = gw.get_command_arguments(
-                testid,
-            )
-
-        with step("Ensure WAN connectivity"):
-            assert gw.check_wan_connectivity()
-        with step("Test case"):
-            assert (
-                gw.execute_with_logging("tests/dm/othr_verify_ookla_speedtest_bind_reporting", test_args)[0]
-                == ExpectedShellResult
-            )
-
-    @allure.severity(allure.severity_level.NORMAL)
-    @pytest.mark.parametrize("cfg", othr_config.get("othr_verify_ookla_speedtest_sdn_endpoint_config", []))
-    def test_othr_verify_ookla_speedtest_sdn_endpoint_config(self, cfg: dict):
-        gw = pytest.gw
-
-        with step("Preparation of testcase parameters"):
-            # Arguments from test case configuration
-            speedtest_config_path = cfg.get("speedtest_config_path")
-            test_args = gw.get_command_arguments(
-                speedtest_config_path,
-            )
-
-        with step("Ensure WAN connectivity"):
-            assert gw.check_wan_connectivity()
-        with step("Test case"):
-            assert (
-                gw.execute_with_logging("tests/dm/othr_verify_ookla_speedtest_sdn_endpoint_config", test_args)[0]
-                == ExpectedShellResult
-            )
-
-    @allure.severity(allure.severity_level.NORMAL)
-    @pytest.mark.parametrize("cfg", othr_config.get("othr_verify_samknows_process", []))
-    def test_othr_verify_samknows_process(self, cfg: dict):
-        gw = pytest.gw
-
-        try:
-            with step("Test case"):
-                assert gw.execute_with_logging("tests/dm/othr_verify_samknows_process")[0] == ExpectedShellResult
-        finally:
-            with step("Cleanup"):
-                assert gw.execute_with_logging("tests/dm/othr_samknows_process_cleanup")[0] == ExpectedShellResult
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", othr_config.get("othr_verify_vif_iface_wifi_master_state", []))
@@ -617,9 +501,7 @@ class TestOthr:
         gw = pytest.gw
 
         with step("Check device if WANO enabled"):
-            check_kconfig_wano_args = gw.get_command_arguments("CONFIG_MANAGER_WANO", "y")
-            check_kconfig_wano_ec = gw.execute("tools/device/check_kconfig_option", check_kconfig_wano_args)[0]
-            if check_kconfig_wano_ec == 0:
+            if "WANO" in gw.get_kconfig_managers():
                 pytest.skip("If WANO is enabled, there should be no WAN bridge")
 
         with step("Preparation of testcase parameters"):
@@ -637,7 +519,7 @@ class TestOthr:
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", othr_config.get("othr_wifi_disabled_after_removing_ap", []))
     def test_othr_wifi_disabled_after_removing_ap(self, cfg: dict):
-        fut_configurator, gw, w1 = pytest.fut_configurator, pytest.gw, pytest.w1
+        gw, w1 = pytest.gw, pytest.w1
 
         with step("Preparation of testcase parameters"):
             # Arguments from test case configuration
@@ -646,7 +528,6 @@ class TestOthr:
             radio_band = cfg.get("radio_band")
             encryption = cfg["encryption"]
             device_mode = cfg.get("device_mode", "router")
-            wifi_security_type = cfg.get("wifi_security_type", "wpa")
             client_retry = cfg.get("client_retry", 2)
 
             # GW specific arguments
@@ -658,22 +539,18 @@ class TestOthr:
             wlan_if_name = w1.device_config.get("wlan_if_name")
             w1_mac = w1.device_api.get_mac(if_name=wlan_if_name)
 
-            # Constant arguments
-            ssid, psk = fut_configurator.base_ssid, fut_configurator.base_psk
+            # GW interface creation
+            gw.create_interface_object(
+                channel=channel,
+                ht_mode=ht_mode,
+                radio_band=radio_band,
+                encryption=encryption,
+                interface_role="home_ap",
+            )
 
-            # GW AP arguments
-            gw_ap_vif_args = {
-                "channel": channel,
-                "ht_mode": ht_mode,
-                "radio_band": radio_band,
-                "wpa_psk": psk,
-                "wifi_security_type": wifi_security_type,
-                "encryption": encryption,
-                "ssid": ssid,
-                "reset_vif": True,
-            }
-
-            gw.ap_args = gw_ap_vif_args
+            # Retrieve AP SSID and PSK values
+            ssid = gw.interfaces["home_ap"].ssid_raw
+            psk = gw.interfaces["home_ap"].psk_raw
 
             remove_home_ap_vif_radio_args = gw.get_command_arguments(
                 f"-if_name {gw_phy_radio_name}",
@@ -688,9 +565,13 @@ class TestOthr:
             with step(f"Put GW into {device_mode} mode"):
                 assert gw.configure_device_mode(device_mode=device_mode)
             with step("GW AP creation"):
-                assert gw.configure_radio_vif_and_network()
+                assert gw.interfaces["home_ap"].configure_interface() == ExpectedShellResult
             with step("Client connection"):
-                w1.device_api.connect(ssid=ssid, psk=psk, retry=client_retry)
+                w1.device_api.connect(
+                    ssid=ssid,
+                    psk=psk,
+                    retry=client_retry,
+                )
             with step("Verify client connection"):
                 assert w1_mac in gw.device_api.get_wifi_associated_clients()[0]
             with step("GW AP destruction"):
@@ -699,11 +580,20 @@ class TestOthr:
                     == ExpectedShellResult
                 )
             with step("Client connection"):
-                assert w1.device_api.connect(ssid=ssid, psk=psk, retry=client_retry, skip_exception=True) == ""
+                assert (
+                    w1.device_api.connect(
+                        ssid=ssid,
+                        psk=psk,
+                        retry=client_retry,
+                        skip_exception=True,
+                    )
+                    == ""
+                )
             with step("Testcase"):
                 # Verify GW has no associated clients
                 assert not gw.device_api.get_wifi_associated_clients()
         finally:
             with step("Clenaup"):
+                gw.interfaces["home_ap"].vif_reset()
                 gw.execute("tests/dm/othr_cleanup", othr_cleanup_args)
                 gw.configure_device_mode(device_mode="router")

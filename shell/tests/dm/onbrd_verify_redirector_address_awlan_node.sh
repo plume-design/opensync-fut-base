@@ -30,11 +30,13 @@ case "${1}" in
 esac
 
 trap '
-fut_info_dump_line
-print_tables AWLAN_Node
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    print_tables AWLAN_Node
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 log_title "onbrd/onbrd_verify_redirector_address_awlan_node.sh: ONBRD test - Verify redirector address"
 
@@ -46,5 +48,5 @@ print_tables AWLAN_Node
 
 [ "${check_pass}" = true ] &&
     log "onbrd/onbrd_verify_redirector_address_awlan_node.sh: AWLAN_Node::redirector_addr is populated - Success" ||
-    raise "FAIL: AWLAN_Node::redirector_addr is not populated" -l "onbrd/onbrd_verify_redirector_address_awlan_node.sh" -tc
+    raise "AWLAN_Node::redirector_addr is not populated" -l "onbrd/onbrd_verify_redirector_address_awlan_node.sh" -tc
 pass

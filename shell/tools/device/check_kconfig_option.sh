@@ -14,8 +14,8 @@ cat << usage_string
 tools/device/check_kconfig_option.sh [-h] arguments
 Description:
     - Script checks device Kconfig option value
-    - If kconfig_option value is equal to kconfig_value script exits with exit code 0
-    - If kconfig_option value is not equal to kconfig_value script exits with exit code 1
+    - If kconfig_option value is equal to kconfig_value script returns exit code 0
+    - If kconfig_option value is not equal to kconfig_value script returns exit code 1
 Arguments:
     -h  show this help message
     - \$1 (kconfig_option) : Kconfig option to check : (string)(required)
@@ -35,11 +35,3 @@ kconfig_option=${1}
 kconfig_value=${2}
 
 check_kconfig_option "${kconfig_option}" "${kconfig_value}"
-# shellcheck disable=SC2181
-if [ $? -eq 0 ]; then
-    log "tools/device/check_kconfig_option.sh: kconfig option is equal to expected: ${kconfig_option}==${kconfig_value}"
-    exit 0
-else
-    log "tools/device/check_kconfig_option.sh: kconfig option is NOT equal to expected: ${kconfig_option}==${kconfig_value}"
-    exit 1
-fi

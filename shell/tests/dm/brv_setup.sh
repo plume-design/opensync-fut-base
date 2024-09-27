@@ -5,9 +5,3 @@ source /tmp/fut-base/shell/config/default_shell.sh
 source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
 [ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
 [ -e "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
-
-brv_setup_env &&
-    log "brv/brv_setup.sh: brv_setup_env - Success" ||
-    raise "FAIL: brv_setup_env" -l "brv/brv_setup.sh" -ds
-
-exit 0

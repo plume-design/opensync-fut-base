@@ -34,15 +34,9 @@ esac
 NARGS=0
 [ $# -ne ${NARGS} ] && usage && raise "Requires exactly ${NARGS} input argument(s)" -l "vpnm/vpnm_ipsec_vpn_healthcheck.sh" -arg
 
-trap '
-fut_info_dump_line
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
-
 check_ovsdb_table_exist VPN_Tunnel &&
     log "vpnm/vpnm_ipsec_vpn_healthcheck.sh: VPN_Tunnel table exists in ovsdb - Success" ||
-    raise "FAIL: VPN_Tunnel table does not exist in ovsdb" -l "vpnm/vpnm_ipsec_vpn_healthcheck.sh" -s
+    raise "VPN_Tunnel table does not exist in ovsdb" -l "vpnm/vpnm_ipsec_vpn_healthcheck.sh" -s
 
 empty_ovsdb_table VPN_Tunnel
 empty_ovsdb_table IPSec_Config
@@ -58,7 +52,7 @@ insert_ovsdb_entry VPN_Tunnel \
     -i healthcheck_interval 5 \
     -i healthcheck_timeout 30 &&
         log "vpnm/vpnm_ipsec_vpn_healthcheck.sh: insert_ovsdb_entry - VPN_Tunnel - Success" ||
-        raise "FAIL: insert_ovsdb_entry - VPN_Tunnel" -l "vpnm/vpnm_ipsec_vpn_healthcheck.sh" -oe
+        raise "insert_ovsdb_entry - VPN_Tunnel" -l "vpnm/vpnm_ipsec_vpn_healthcheck.sh" -fc
 
 log "vpnm/vpnm_ipsec_vpn_healthcheck.sh: Checking if VPN Healthcheck up and running"
 
@@ -66,6 +60,6 @@ wait_ovsdb_entry VPN_Tunnel \
     -w name "verify-healthcheck" \
     -is healthcheck_status "ok" &&
         log "vpnm/vpnm_ipsec_vpn_healthcheck.sh: VPN Healthcheck running - Success" ||
-        raise "FAIL: VPN Healthcheck NOT initiated" -l "vpnm/vpnm_ipsec_vpn_healthcheck.sh" -oe
+        raise "VPN Healthcheck NOT initiated" -l "vpnm/vpnm_ipsec_vpn_healthcheck.sh" -fc
 
 pass

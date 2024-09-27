@@ -14,8 +14,7 @@ customize the input parameters for every specific device model.
 ## Generating the test case configuration parameters from configuration inputs
 
 The generic test case configuration generator uses a template structure to define the test case generator inputs. The
-**DefaultGen** class is used by default for all test case parameter generation. Optional **ModuleGen** files are used to
-generate test case parameters in cases where additional logic is required and not supported by default generation.
+**DefaultGen** class is used by default for all test case parameter generation.
 
 The generic inputs are located in `config/test_case/generic/MODULE_inputs.py` files and are used in all cases, unless
 specifics exist in platform specific `config/test_case/platform/MODULE_inputs.py` files or model specific
@@ -92,8 +91,8 @@ Generated **configuration parameters**:
 
 ### Using the default key
 
-To add arguments to the test case inputs, use the `args_mapping` option. This is a list of keys to which the values in
-the `inputs` are mapped when generating configuration parameters.
+To add the same arguments to all the test case inputs, use the `default` option. This is a dict of key value pairs, that
+is directly appended to the generated configuration parameters at the very end of the process.
 
 Configuration **inputs**:
 
@@ -137,7 +136,7 @@ Generated **configuration parameters**:
 ### Using fixed dictionaries
 
 To define parameters for each individual test case configuration explicitly, provide a **list of dictionaries** to the
-`inputs` key without using the `args_mapping` key. This is sometimes used for more fine grained control over individual
+`inputs` key without using the `args_mapping` key. This is sometimes used for more fine-grained control over individual
 test case configurations, for example when ignoring something for specific platforms or models.
 
 Configuration **inputs**:
@@ -176,236 +175,6 @@ Generated **configuration parameters**:
 }
 ```
 
-### Custom generators
-
-Some test cases may require generation of test case parameters using only model_properties files, with empty test case
-configuration inputs. This would normally generate empty configuration parameters unless custom generators are used.
-
-To implement a custom generator for **TESTNAME**, we first need to create a file `framework/generators/MymoduleGen.py`
-for the suite of tests called `Mymodule`. A template file is provided, that should be copied and its content modified.
-
-```shell
-cp ./fut-base/framework/generators/TemplateGen.py ./fut-base/framework/generators/MymoduleGen.py
-```
-
-Change the `Template` and `template` inside **MymoduleGen.py** to match the test suite name `Mymodule` and `mymodule`:
-
-```python
-class MymoduleGen:
-
-    def gen_testname(self, inputs):
-        return inputs
-```
-
-In this example, the test case **testname** will use the custom generator function `gen_testname` to produce the
-configuration inputs. The function has no additional logic, but we can imagine a case, where a value is needed from the
-model_properties file, and used to produce the configuration inputs:
-
-```python
-def gen_testname (self, inputs):
-    configs = []
-    for mtu_type, mtu_value in self.gw_capabilities.get("mtu").items():
-        configs.append({
-            "mtu_type": mtu_type,
-            "mtu_value": mtu_value,
-        })
-    return configs
-```
-
-Generated **configuration parameters** for the test case **TESTNAME**:
-
-```python
-{
-    "TESTNAME": [
-        {
-            "mtu_type": "backhaul",
-            "mtu_value": 1600
-        },
-        {
-            "mtu_type": "uplink_gre",
-            "mtu_value": 1562
-        },
-        {
-            "mtu_type": "wan",
-            "mtu_value": 1500
-        }
-    ]
-}
-```
-
-### FutGen flags
-
-In some test cases, input values are needed based on the values from the model_properties file, or simply require
-additional parameter generation, that is useful across many test cases and is therefore reusable. For example interface
-names depend on the radio band, as well as the interface `role`, like `home_ap`, `onboard_ap` or `fhaul_ap`.
-
-To generate these values, the notation `FutGen|generator_function_name` is used as one of the values in the `inputs`
-list. that corresponds to the desired configuration parameter for this test case. The string from this notation is used
-to determine which part of the code defined in **\_parse_module_inputs()** method of the **ModuleGen** class is
-executed.
-
-Let us look at an example in the `NM` test suite. The `_parse_nm_inputs` method of the `NmGen` class implements several
-ways to generate test case inputs, based on the `FutGen` value. One of them is the
-`FutGen|primary-interface-if-name-type` which returns the interface name for either the primary `lan` or `wan` ethernet
-interface of that device from the model_properties file. This value is used in several test cases in the `NM` suite, but
-also elsewhere like the `ONBRD` suite.
-
-The generator function in this case looks very simple, since the implementation is done inside `_parse_nm_inputs`:
-
-```python
-def gen_testname (self, inputs):
-    inputs = self._parse_nm_inputs(inputs)
-    return self.default_gen(inputs)
-```
-
-Configuration **inputs**:
-
-```python
-test_inputs = {
-    "TESTNAME": {
-        "default": {
-            "broadcast": "10.10.10.255",
-        },
-        "inputs": [
-            {"FutGen|primary-interface-if-name-type": "lan"},
-            {"FutGen|primary-interface-if-name-type": "wan"},
-        ],
-    },
-}
-```
-
-Generated **configuration parameters** (example interface names):
-
-```python
-{
-    "TESTNAME": [
-        {
-            "broadcast": "10.10.10.255",
-            "if_name": "eth0",  # primary_lan_interface
-            "if_type": "eth",
-        },
-        {
-            "broadcast": "10.10.10.255",
-            "if_name": "eth1",  # primary_wan_interface
-            "if_type": "eth",
-        },
-    ],
-}
-```
-
-Here are configuration **inputs** for another example that uses `args_mapping`:
-
-```python
-test_inputs = {
-    "TESTNAME": {
-        "args_mapping": [
-            "channel", "ht_mode", "radio_band", "if_name", "if_type",
-        ],
-        "inputs": [
-            [1, "HT20", "24g", "FutGen|vif-home-ap-by-band-and-type"],
-            [1, "HT20", "6g", "FutGen|vif-bhaul-sta-by-band-and-type"],
-        ]
-    },
-}
-```
-
-Generated **configuration parameters** (example interface names):
-
-```python
-{
-    "TESTNAME": [
-        {
-            "channel": 1,
-            "ht_mode": "HT20",
-            "radio_band": "24g",
-            "if_name": "home-ap-24",
-            "if_type": "vif",
-        },
-        {
-            "channel": 1,
-            "ht_mode": "HT20",
-            "radio_band": "6g",
-            "if_name": "bhaul-sta-60",
-            "if_type": "vif",
-        },
-    ],
-}
-```
-
-### Using the additional_inputs key
-
-It is possible to define the configuration inputs in `platform` and `model` specific files in the same format as the
-files in the `generic` directory, and in that case, they are simply overwritten. The most common use case however is to
-**add the inputs** for that `platform` and `model` to the existing generic inputs with the `additional_inputs` key.
-
-Default configuration **inputs**:
-
-```python
-test_inputs = {
-    "TESTNAME": {
-        "args_mapping": [
-            "breakfast",
-        ],
-        "inputs": [
-            "apple",
-            "coffee",
-            "muffin",
-        ],
-    },
-}
-```
-
-Configuration **inputs** for model `MYMODEL`:
-
-```python
-test_inputs = {
-    "TESTNAME": {
-        "additional_inputs": [
-            "eggs",
-        ],
-    },
-}
-```
-
-The generated **configuration parameters** for a different model that does not have specific configuration inputs:
-
-```python
-{
-    "TESTNAME": [
-        {
-            "breakfast": "apple",
-        },
-        {
-            "breakfast": "coffee",
-        },
-        {
-            "breakfast": "muffin",
-        },
-    ],
-}
-```
-
-The generated **configuration parameters** for model `MYMODEL` contains the additional value:
-
-```python
-{
-    "TESTNAME": [
-        {
-            "breakfast": "apple",
-        },
-        {
-            "breakfast": "coffee",
-        },
-        {
-            "breakfast": "eggs",
-        },
-        {
-            "breakfast": "muffin",
-        },
-    ],
-}
-```
-
 ## Features
 
 The generic configuration inputs are sometimes defined for all possible combinations of device capabilities to be as
@@ -441,6 +210,7 @@ The configuration **inputs** for model `MYMODEL`:
         ],
         "inputs": [
             ["24g"],
+            ["5g"],
             ["5gl"],
             ["5gu"],
             ["6g"],
@@ -479,6 +249,7 @@ The configuration **inputs** for model `MYMODEL`:
         ],
         "inputs": [
             ["24g", 13],
+            ["5g", 40],
             ["5gl", 40],
             ["5gu", 10],
             ["6g", 1],
@@ -500,8 +271,8 @@ The generated **configuration parameters** for model `MYMODEL` contain only the 
 }
 ```
 
-In the above example, band `6g` is unsupported by `mymodel`, `channel 13` is invalid in the `US regulatory domain` and
-`channel 10` is invalid for the `5gu` band.
+In the above example, bands `5g` and `6g` are unsupported by `mymodel`, `channel 13` is invalid in the `US regulatory
+domain` and `channel 10` is invalid for the `5gu` band.
 
 ## Ignoring, skipping and marking tests with xfail
 
@@ -661,6 +432,239 @@ configurations that were marked with `xfail` will be marked as `skipped` if the 
             "xfail": True,
             "xfail_msg": "Test case may not pass"
         }
+    ]
+}
+```
+
+## Custom configuration keys
+
+The generators also support special keys that govern how the test case inputs are treated and used to create the test
+case configurations.
+
+### Sorting
+
+The `do_not_sort = True` key prevents sorting of the generated test case configurations. This is used when you wish to
+explicitly determine the order of test case execution, due to advantageous test precedence. For example changing
+channels and bandwidths between tests may be advantageous compared to changing bands for the same channel and bandwidth.
+
+The configuration **inputs** may look like this:
+
+```python
+test_inputs = {
+    "TESTNAME": {
+        "args_mapping": [
+            "channel", "ht_mode", "radio_band",
+        ],
+        "inputs": [
+            [6, "HT20", "24g"],
+            [44, "HT40", "5g"],
+            [44, "HT40", "5gl"],
+            [157, "HT40", "5gu"],
+            [5, "HT20", "6g"],
+        ],
+    },
+}
+```
+
+The generated **configuration parameters** for a tri-band device will be sorted by the values in order. This means that
+the `6g` config will be sorted first as its `channel` value is `5`, before the `24g` config with the `channel` value of
+`6`:
+
+```python
+{
+    "TESTNAME": [
+        {
+            "channel": 5,
+            "ht_mode": "HT40",
+            "radio_band": "6g"
+        },
+        {
+            "channel": 6,
+            "ht_mode": "HT20",
+            "radio_band": "24g"
+        },
+        {
+            "channel": 44,
+            "ht_mode": "HT40",
+            "radio_band": "5g"
+        }
+    ]
+}
+```
+
+However if the configuration **inputs** include `do_not_sort = True`:
+
+```python
+test_inputs = {
+    "TESTNAME": {
+        "args_mapping": [
+            "channel", "ht_mode", "radio_band",
+        ],
+        "do_not_sort": True,
+        "inputs": [
+            [6, "HT20", "24g"],
+            [44, "HT40", "5g"],
+            [44, "HT40", "5gl"],
+            [157, "HT40", "5gu"],
+            [5, "HT20", "6g"],
+        ],
+    },
+}
+```
+
+The generated **configuration parameters** for a tri-band device will not be sorted by values and the `6g` config will
+be configured last, as it appeared in the **inputs**:
+
+```python
+{
+    "TESTNAME": [
+        {
+            "channel": 6,
+            "ht_mode": "HT20",
+            "radio_band": "24g"
+        },
+        {
+            "channel": 44,
+            "ht_mode": "HT40",
+            "radio_band": "5g"
+        },
+        {
+            "channel": 5,
+            "ht_mode": "HT40",
+            "radio_band": "6g"
+        }
+    ]
+}
+```
+
+### Expanding permutations
+
+The `expand_permutations` key instructs the generators to create several test case **configurations** where individual
+test case **inputs** contain a `list` or `set` of values, or a `tuple` that indicates a `range` of values.
+
+**Note** that `tuples` should contain two elements for the start and end of the range, and both intervals are included
+in the range, also the end interval.
+
+The configuration **inputs** may look like this:
+
+```python
+test_inputs = {
+    "TESTNAME": {
+        "args_mapping": [
+            "channel", "ht_mode", "radio_band", "bcn_int",
+        ],
+        "expand_permutations": True,
+        "inputs": [
+            [6, "HT20", "24g", [100, 200, 400]],
+            [44, "HT40", "5g", [100, 200, 400]],
+            [44, "HT40", "5gl", [100, 200, 400]],
+            [157, "HT40", "5gu", [100, 200, 400]],
+            [5, "HT20", "6g", [100, 200, 400]],
+        ],
+    },
+}
+```
+
+The generated **configuration parameters** for a tri-band device will contain an entry for each item in the list of
+individual test inputs:
+
+```python
+{
+    "TESTNAME": [
+        {
+            "bcn_int": 100,
+            "channel": 6,
+            "ht_mode": "HT20",
+            "radio_band": "24g"
+        },
+        {
+            "bcn_int": 200,
+            "channel": 6,
+            "ht_mode": "HT20",
+            "radio_band": "24g"
+        },
+        {
+            "bcn_int": 400,
+            "channel": 6,
+            "ht_mode": "HT20",
+            "radio_band": "24g"
+        },
+        {
+            "bcn_int": 100,
+            "channel": 44,
+            "ht_mode": "HT40",
+            "radio_band": "5g"
+        }
+        ...
+    ]
+}
+```
+
+The configuration **inputs** can contain `tuples` indicating ranges of values, and can have several expandable values
+for each test case input:
+
+```python
+test_inputs = {
+    "TESTNAME": {
+        "args_mapping": [
+            "channel", "ht_mode", "radio_band", "number_of_clients", "encryption",
+        ],
+        "expand_permutations": True,
+        "inputs": [
+            [44, "HT40", "5g", (1, 3), {"WPA2", "WPA3"}],
+        ],
+    },
+}
+```
+
+The generated **configuration parameters** for a tri-band device will contain combinations of entries for each item in
+the list of individual test inputs and for each item in the range provided by the tuple:
+
+```python
+{
+    "TESTNAME": [
+        {
+            "channel": 44,
+            "encryption": "WPA2",
+            "ht_mode": "HT40",
+            "number_of_clients": 1,
+            "radio_band": "5g"
+        },
+        {
+            "channel": 44,
+            "encryption": "WPA2",
+            "ht_mode": "HT40",
+            "number_of_clients": 2
+            "radio_band": "5g"
+        },
+        {
+            "channel": 44,
+            "encryption": "WPA2",
+            "ht_mode": "HT40",
+            "number_of_clients": 3,
+            "radio_band": "5g"
+        },
+        {
+            "channel": 44,
+            "encryption": "WPA3",
+            "ht_mode": "HT40",
+            "number_of_clients": 1,
+            "radio_band": "5g"
+        },
+        {
+            "channel": 44,
+            "encryption": "WPA3",
+            "ht_mode": "HT40",
+            "number_of_clients": 2,
+            "radio_band": "5g"
+        },
+        {
+            "channel": 44,
+            "encryption": "WPA3",
+            "ht_mode": "HT40",
+            "number_of_clients": 3,
+            "radio_band": "5g"
+        },
     ]
 }
 ```

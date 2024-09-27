@@ -30,12 +30,14 @@ case "${1}" in
 esac
 
 trap '
-fut_info_dump_line
-print_tables Openflow_Config
-print_tables Flow_Service_Manager_Config FSM_Policy
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    print_tables Openflow_Config
+    print_tables Flow_Service_Manager_Config FSM_Policy
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 NARGS=4
 [ $# -lt ${NARGS} ] && usage && raise "Requires at least ${NARGS} input argument(s)" -arg
@@ -59,11 +61,11 @@ insert_ovsdb_entry Flow_Service_Manager_Config \
     -i handler "$handler" \
     -i plugin "$plugin" &&
         log "fsm/fsm_configure_fsm_tables.sh: Flow_Service_Manager_Config entry added - Success" ||
-        raise "FAIL: insert_ovsdb_entry - Failed to insert Flow_Service_Manager_Config entry" -l "fsm/fsm_configure_fsm_tables.sh" -oe
+        raise "insert_ovsdb_entry - Failed to insert Flow_Service_Manager_Config entry" -l "fsm/fsm_configure_fsm_tables.sh" -fc
 
 # Removing entry
 remove_ovsdb_entry Flow_Service_Manager_Config -w if_name "${tap_if_name}" &&
     log "fsm/fsm_configure_fsm_tables.sh: remove_ovsdb_entry - Removed entry for ${tap_if_name} from Flow_Service_Manager_Config - Success" ||
-    raise "FAIL: remove_ovsdb_entry - Failed to remove entry for ${tap_if_name} from Flow_Service_Manager_Config" -l "fsm/fsm_configure_fsm_tables.sh" -oe
+    raise "remove_ovsdb_entry - Failed to remove entry for ${tap_if_name} from Flow_Service_Manager_Config" -l "fsm/fsm_configure_fsm_tables.sh" -fc
 
 pass

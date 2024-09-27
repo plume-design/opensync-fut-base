@@ -16,14 +16,16 @@ def qm_setup():
     test_class_name = ["TestQm"]
     nodes, clients = determine_required_devices(test_class_name)
     log.info(f"Required devices for QM: {nodes + clients}")
-    for device in nodes:
-        if not hasattr(pytest, device):
-            raise RuntimeError(f"{device.upper()} handler is not set up correctly.")
-        try:
-            device_handler = getattr(pytest, device)
-            device_handler.fut_device_setup(test_suite_name="qm")
-        except Exception as exception:
-            raise RuntimeError(f"Unable to perform setup for the {device} device: {exception}")
+    for node in nodes:
+        if not hasattr(pytest, node):
+            raise RuntimeError(f"{node.upper()} handler is not set up correctly.")
+        node_handler = getattr(pytest, node)
+        if "QM" not in node_handler.get_kconfig_managers():
+            pytest.skip("QM not present on device")
+        node_handler.fut_device_setup(test_suite_name="qm")
+        service_status = node_handler.get_node_services_and_status()
+        if service_status["qm"]["status"] != "enabled":
+            pytest.skip("QM not enabled on device")
     # Set the baseline OpenSync PIDs used for reboot detection
     pytest.session_baseline_os_pids = pytest.gw.opensync_pid_retrieval(tracked_node_services=pytest.tracked_managers)
 

@@ -6,6 +6,7 @@ import argparse
 import signal
 import sys
 from statistics import mean
+from typing import Any, Literal
 
 from framework.lib.fut_lib import output_to_json
 from lib_testbed.generic.mqtt.mqtt_client import MqttClient
@@ -86,11 +87,16 @@ def parse_arguments():
     return input_args
 
 
-def extract_mqtt_data(data, value_list, data_key, simplify=False):
+def extract_mqtt_data(
+    data: dict | list,
+    value_list: list,
+    data_key: int | str | tuple,
+    simplify: bool = False,
+) -> list[Any]:
     """Extract data from the collected MQTT messages.
 
     Args:
-        data (dict): Data in a dictionary format
+        data (dict): Data in a dictionary or list format.
         value_list (list): Empty list used to store extracted data
         data_key (str): Define the key for which the values are extracted
         simplify (bool): If element is a list of type int the average value is calculated,
@@ -124,7 +130,11 @@ def extract_mqtt_data(data, value_list, data_key, simplify=False):
     return value_list
 
 
-def extract_mqtt_data_as_dict(data, data_keys, simplify=False):
+def extract_mqtt_data_as_dict(
+    data: dict,
+    data_keys: list[int | str | tuple],
+    simplify: bool = False,
+) -> dict[int | str | tuple, Any]:
     """Extract multiple values from the collected MQTT messages and output them in a dictionary format.
 
     Args:
@@ -134,15 +144,15 @@ def extract_mqtt_data_as_dict(data, data_keys, simplify=False):
     """
     extracted_data = []
     for data_key in data_keys:
-        value_list = []
+        value_list: list = []
         extracted_data.append(extract_mqtt_data(data, value_list, data_key, simplify))
         if not value_list:
-            raise Exception(f"Failed to extract data from the MQTT messages for the following key: {data_key}")
+            raise KeyError(f"Failed to extract data from the MQTT messages for the following key: {data_key}")
     extracted_data_dict = dict(zip(data_keys, extracted_data))
     return extracted_data_dict
 
 
-def signal_handler(sig, frame):
+def signal_handler(sig, frame) -> None:
     """Handle the signal.
 
     Args:
@@ -152,7 +162,7 @@ def signal_handler(sig, frame):
     sys.exit(0)
 
 
-def node_filter_func(self, message):
+def node_filter_func(obj, message: dict) -> tuple[None, Literal[False]] | tuple[dict, Literal[True]]:
     """Filter the received messages based on node ID."""
     input_args = parse_arguments()
     requested_node_id = input_args.node_filter

@@ -41,15 +41,15 @@ patch_w2h=${4:-false}
 patch_h2w=${5:-false}
 
 trap '
-fut_ec=$?
-fut_info_dump_line
-if [ $fut_ec -ne 0 ]; then 
-    print_tables Port Bridge Wifi_Route_State
-    check_restore_ovsdb_server
-fi
-fut_info_dump_line
-exit $fut_ec
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    if [ $fut_ec -ne 0 ]; then
+        print_tables Port Bridge Wifi_Route_State
+    fi
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 check_kconfig_option "CONFIG_MANAGER_WANO" "y" &&
     is_wano=0 ||

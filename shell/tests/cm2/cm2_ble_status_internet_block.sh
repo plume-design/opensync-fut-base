@@ -51,12 +51,13 @@ NARGS=1
 test_step=${1}
 
 trap '
-fut_info_dump_line
-print_tables AW_Bluetooth_Config
-check_restore_management_access || true
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    print_tables AW_Bluetooth_Config
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 log_title "cm2/cm2_ble_status_internet_block.sh: CM2 test - Observe BLE Status - $test_step"
 
@@ -67,7 +68,7 @@ case $test_step in
             log "cm2/cm2_ble_status_internet_block.sh: Checking AW_Bluetooth_Config::payload for $bit:00:00:00:00:00"
             wait_ovsdb_entry AW_Bluetooth_Config -is payload "$bit:00:00:00:00:00" &&
                 log "cm2/cm2_ble_status_internet_block.sh: wait_ovsdb_entry - AW_Bluetooth_Config::payload changed to $bit:00:00:00:00:00 - Success" ||
-                raise "FAIL: AW_Bluetooth_Config::payload failed to change to $bit:00:00:00:00:00" -l "cm2/cm2_ble_status_internet_block.sh" -tc
+                raise "AW_Bluetooth_Config::payload failed to change to $bit:00:00:00:00:00" -l "cm2/cm2_ble_status_internet_block.sh" -tc
         done
     ;;
     ${step_2_name})
@@ -76,11 +77,11 @@ case $test_step in
             log "cm2/cm2_ble_status_internet_block.sh: Checking AW_Bluetooth_Config::payload for $bit:00:00:00:00:00"
             wait_ovsdb_entry AW_Bluetooth_Config -is payload "$bit:00:00:00:00:00" &&
                 log "cm2/cm2_ble_status_internet_block.sh: wait_ovsdb_entry - AW_Bluetooth_Config::payload changed to $bit:00:00:00:00:00 - Success" ||
-                raise "FAIL: AW_Bluetooth_Config::payload failed to change to $bit:00:00:00:00:00" -l "cm2/cm2_ble_status_internet_block.sh" -tc
+                raise "AW_Bluetooth_Config::payload failed to change to $bit:00:00:00:00:00" -l "cm2/cm2_ble_status_internet_block.sh" -tc
         done
     ;;
     *)
-        raise "FAIL: Incorrect test_step provided" -l "cm2/cm2_ble_status_internet_block.sh" -arg
+        raise "Incorrect test_step provided" -l "cm2/cm2_ble_status_internet_block.sh" -arg
 esac
 
 pass

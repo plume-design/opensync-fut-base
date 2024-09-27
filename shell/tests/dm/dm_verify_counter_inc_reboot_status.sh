@@ -30,11 +30,13 @@ case "${1}" in
 esac
 
 trap '
-fut_info_dump_line
-print_tables Reboot_Status
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    print_tables Reboot_Status
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 NARGS=2
 [ $# -lt ${NARGS} ] && usage && raise "Requires at least ${NARGS} input argument(s)" -l "dm/dm_verify_counter_inc_reboot_status.sh" -arg
@@ -49,7 +51,7 @@ if [ $count_after_reboot -eq $count_to_check ]; then
     wait_for_function_response 0 "check_ovsdb_entry Reboot_Status -w count $count_after_reboot -w type 'USER'" &&
         log "dm/dm_verify_counter_inc_reboot_status.sh: Reboot counter incremented from ${count_before_reboot} to ${count_after_reboot} after reboot - Success"
 else
-    raise "FAIL: Reboot_Status::count field failed to increment ${count_before_reboot} -> ${count_after_reboot}" -l "dm/dm_verify_counter_inc_reboot_status.sh" -tc
+    raise "Reboot_Status::count field failed to increment ${count_before_reboot} -> ${count_after_reboot}" -l "dm/dm_verify_counter_inc_reboot_status.sh" -tc
 fi
 
 pass

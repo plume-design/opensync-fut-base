@@ -3,6 +3,7 @@ import pytest
 
 from framework.fut_configurator import FutConfigurator
 from framework.lib.fut_lib import determine_required_devices, step
+from lib_testbed.generic.util.common import compare_fw_versions
 from lib_testbed.generic.util.logger import log
 
 
@@ -16,19 +17,18 @@ def nm2_setup():
     test_class_name = ["TestNm2"]
     nodes, clients = determine_required_devices(test_class_name)
     log.info(f"Required devices for NM2: {nodes + clients}")
-    for device in nodes:
-        if not hasattr(pytest, device):
-            raise RuntimeError(f"{device.upper()} handler is not set up correctly.")
-        try:
-            device_handler = getattr(pytest, device)
-            if device_handler.device_type == "node":
-                phy_radio_ifnames = device_handler.capabilities.get_phy_radio_ifnames(return_type=list)
-                setup_args = device_handler.get_command_arguments(*phy_radio_ifnames)
-                device_handler.fut_device_setup(test_suite_name="nm2", setup_args=setup_args)
-            else:
-                device_handler.fut_device_setup(test_suite_name="nm2")
-        except Exception as exception:
-            raise RuntimeError(f"Unable to perform setup for the {device} device: {exception}")
+    for node in nodes:
+        if not hasattr(pytest, node):
+            raise RuntimeError(f"{node.upper()} handler is not set up correctly.")
+        node_handler = getattr(pytest, node)
+        if "NM" not in node_handler.get_kconfig_managers():
+            pytest.skip("NM not present on device")
+        phy_radio_ifnames = node_handler.capabilities.get_phy_radio_ifnames(return_type=list)
+        setup_args = node_handler.get_command_arguments(*phy_radio_ifnames)
+        node_handler.fut_device_setup(test_suite_name="nm2", setup_args=setup_args)
+        service_status = node_handler.get_node_services_and_status()
+        if service_status["nm"]["status"] != "enabled":
+            pytest.skip("NM not enabled on device")
     # Set the baseline OpenSync PIDs used for reboot detection
     pytest.session_baseline_os_pids = pytest.gw.opensync_pid_retrieval(tracked_node_services=pytest.tracked_managers)
 
@@ -69,10 +69,10 @@ class TestNm2:
 
         with step("Preparation of testcase parameters"):
             # Arguments from test case configuration
-            interface = cfg.get("interface")
+            if_name = cfg.get("if_name")
             if_type = cfg.get("if_type")
             test_args = gw.get_command_arguments(
-                interface,
+                if_name,
                 if_type,
             )
 
@@ -85,59 +85,51 @@ class TestNm2:
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", nm2_config.get("nm2_enable_disable_iface_network", []))
     def test_nm2_enable_disable_iface_network(self, cfg: dict):
-        fut_configurator, gw = pytest.fut_configurator, pytest.gw
+        gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
             # Arguments from test case configuration
-            channel = cfg.get("channel")
-            ht_mode = cfg.get("ht_mode")
-            radio_band = cfg.get("radio_band")
             if_name = cfg.get("if_name")
             if_type = cfg.get("if_type")
 
-            # Constant arguments
-            ssid, psk = fut_configurator.base_ssid, fut_configurator.base_psk
-
             if if_type == "vif":
-                with step("Determine encryption"):
-                    if radio_band == "6g":
-                        encryption = "WPA3"
-                    else:
-                        encryption = "WPA2"
-
                 # GW AP arguments
+                channel = cfg.get("channel")
+                ht_mode = cfg.get("ht_mode")
+                radio_band = cfg.get("radio_band")
+                encryption = cfg.get("encryption")
                 if_name = gw.capabilities.get_bhaul_ap_ifname(freq_band=radio_band)
 
-                gw_ap_vif_args = {
-                    "channel": channel,
-                    "ht_mode": ht_mode,
-                    "radio_band": radio_band,
-                    "wpa_psk": psk,
-                    "encryption": encryption,
-                    "ssid": ssid,
-                    "interface_type": "backhaul_ap",
-                    "reset_vif": True,
-                }
-                gw.ap_args = gw_ap_vif_args
+                # GW interface creation
+                gw.create_interface_object(
+                    channel=channel,
+                    ht_mode=ht_mode,
+                    radio_band=radio_band,
+                    encryption=encryption,
+                    interface_role="backhaul_ap",
+                )
+
+                with step("GW AP configuration"):
+                    assert gw.interfaces["backhaul_ap"].configure_interface() == ExpectedShellResult
 
             test_args = gw.get_command_arguments(
                 if_name,
                 if_type,
             )
 
-        if if_type == "vif":
-            with step("GW AP configuration"):
-                gw.configure_radio_vif_and_network()
         with step("Test Case"):
             assert (
                 gw.execute_with_logging("tests/nm2/nm2_enable_disable_iface_network", test_args)[0]
                 == ExpectedShellResult
             )
+        if if_type == "vif":
+            with step("Cleanup"):
+                gw.interfaces["backhaul_ap"].vif_reset()
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", nm2_config.get("nm2_ovsdb_configure_interface_dhcpd", []))
     def test_nm2_ovsdb_configure_interface_dhcpd(self, cfg: dict):
-        fut_configurator, gw = pytest.fut_configurator, pytest.gw
+        gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
             # Arguments from test case configuration
@@ -145,10 +137,6 @@ class TestNm2:
             if_type = cfg.get("if_type")
             start_pool = cfg.get("start_pool")
             end_pool = cfg.get("end_pool")
-            wifi_security_type = cfg.get("wifi_security_type", "wpa")
-
-            # Constant arguments
-            ssid, psk = fut_configurator.base_ssid, fut_configurator.base_psk
 
             if if_type == "vif":
                 channel = cfg.get("channel")
@@ -159,21 +147,17 @@ class TestNm2:
                 # GW AP arguments
                 if_name = gw.capabilities.get_home_ap_ifname(freq_band=radio_band)
 
-                gw_ap_vif_args = {
-                    "channel": channel,
-                    "ht_mode": ht_mode,
-                    "radio_band": radio_band,
-                    "wpa_psk": psk,
-                    "wifi_security_type": wifi_security_type,
-                    "encryption": encryption,
-                    "ssid": ssid,
-                    "reset_vif": True,
-                }
-
-                gw.ap_args = gw_ap_vif_args
+                # GW interface creation
+                gw.create_interface_object(
+                    channel=channel,
+                    ht_mode=ht_mode,
+                    radio_band=radio_band,
+                    encryption=encryption,
+                    interface_role="home_ap",
+                )
 
                 with step("GW AP creation"):
-                    assert gw.configure_radio_vif_and_network()
+                    assert gw.interfaces["home_ap"].configure_interface() == ExpectedShellResult
 
             test_args = gw.get_command_arguments(
                 if_name,
@@ -187,6 +171,9 @@ class TestNm2:
                 gw.execute_with_logging("tests/nm2/nm2_ovsdb_configure_interface_dhcpd", test_args)[0]
                 == ExpectedShellResult
             )
+        if if_type == "vif":
+            with step("Cleanup"):
+                gw.interfaces["home_ap"].vif_reset()
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", nm2_config.get("nm2_ovsdb_ip_port_forward", []))
@@ -195,22 +182,20 @@ class TestNm2:
 
         with step("Preparation of testcase parameters"):
             # Arguments from test case configuration
-            src_ifname = cfg.get("src_ifname")
+            if_name = cfg.get("if_name")
             src_port = cfg.get("src_port")
             dst_ipaddr = cfg.get("dst_ipaddr")
             dst_port = cfg.get("dst_port")
             protocol = cfg.get("protocol")
             pf_table = cfg.get("pf_table")
 
-            if src_ifname == gw.capabilities.get_wan_bridge_ifname():
+            if if_name == gw.capabilities.get_wan_bridge_ifname():
                 with step("Check device if WANO enabled"):
-                    check_kconfig_wano_args = gw.get_command_arguments("CONFIG_MANAGER_WANO", "y")
-                    check_kconfig_wano_ec = gw.execute("tools/device/check_kconfig_option", check_kconfig_wano_args)
-                    if check_kconfig_wano_ec == 0:
-                        pytest.skip(f"If WANO is enabled, there should be no WAN bridge {src_ifname}")
+                    if "WANO" in gw.get_kconfig_managers():
+                        pytest.skip(f"If WANO is enabled, there should be no WAN bridge {if_name}")
 
             test_args = gw.get_command_arguments(
-                src_ifname,
+                if_name,
                 src_port,
                 dst_ipaddr,
                 dst_port,
@@ -284,17 +269,13 @@ class TestNm2:
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", nm2_config.get("nm2_set_gateway", []))
     def test_nm2_set_gateway(self, cfg: dict):
-        fut_configurator, gw = pytest.fut_configurator, pytest.gw
+        gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
             # Arguments from test case configuration
             if_name = cfg.get("if_name")
             if_type = cfg.get("if_type")
             gateway = cfg.get("gateway")
-            wifi_security_type = cfg.get("wifi_security_type", "wpa")
-
-            # Constant arguments
-            ssid, psk = fut_configurator.base_ssid, fut_configurator.base_psk
 
             test_args = gw.get_command_arguments(
                 if_name,
@@ -308,24 +289,23 @@ class TestNm2:
                 radio_band = cfg.get("radio_band")
                 encryption = cfg["encryption"]
 
-                gw_ap_vif_args = {
-                    "channel": channel,
-                    "ht_mode": ht_mode,
-                    "radio_band": radio_band,
-                    "wpa_psk": psk,
-                    "wifi_security_type": wifi_security_type,
-                    "encryption": encryption,
-                    "ssid": ssid,
-                    "reset_vif": True,
-                }
+                # GW interface creation
+                gw.create_interface_object(
+                    channel=channel,
+                    ht_mode=ht_mode,
+                    radio_band=radio_band,
+                    encryption=encryption,
+                    interface_role="home_ap",
+                )
 
-                gw.ap_args = gw_ap_vif_args
-
-                with step("GW AP creation"):
-                    assert gw.configure_radio_vif_and_network()
+                with step("GW AP configuration"):
+                    assert gw.interfaces["home_ap"].configure_interface() == ExpectedShellResult
 
         with step("Test Case"):
             assert gw.execute_with_logging("tests/nm2/nm2_set_gateway", test_args)[0] == ExpectedShellResult
+        with step("Cleanup"):
+            if type == "vif":
+                gw.interfaces["home_ap"].vif_reset()
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", nm2_config.get("nm2_set_inet_addr", []))
@@ -349,20 +329,16 @@ class TestNm2:
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", nm2_config.get("nm2_set_ip_assign_scheme", []))
     def test_nm2_set_ip_assign_scheme(self, cfg: dict):
-        fut_configurator, gw = pytest.fut_configurator, pytest.gw
+        gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
             # Arguments from test case configuration
             radio_band = cfg.get("radio_band")
             channel = cfg.get("channel")
             ht_mode = cfg.get("ht_mode")
-            wifi_security_type = cfg.get("wifi_security_type", "wpa")
             if_type = cfg.get("if_type")
             if_name = cfg.get("if_name")
             ip_assign_scheme = cfg.get("ip_assign_scheme")
-
-            # Constant arguments
-            ssid, psk = fut_configurator.base_ssid, fut_configurator.base_psk
 
             # GW specific arguments
             gw_bhaul_interface_type = "backhaul_ap"
@@ -376,21 +352,16 @@ class TestNm2:
             if radio_band:
                 gw_bhaul_ap_if_name = gw.capabilities.get_ifname(freq_band=radio_band, iftype=gw_bhaul_interface_type)
                 encryption = cfg["encryption"]
-                # GW AP arguments
-                gw_ap_vif_args = {
-                    "channel": channel,
-                    "ht_mode": ht_mode,
-                    "radio_band": radio_band,
-                    "wpa_psk": psk,
-                    "wifi_security_type": wifi_security_type,
-                    "encryption": encryption,
-                    "ssid": ssid,
-                    "interface_type": "backhaul_ap",
-                    "bridge": False,
-                    "reset_vif": True,
-                }
 
-                gw.ap_args = gw_ap_vif_args
+                # GW interface creation
+                gw.create_interface_object(
+                    channel=channel,
+                    ht_mode=ht_mode,
+                    radio_band=radio_band,
+                    encryption=encryption,
+                    interface_role="backhaul_ap",
+                )
+
             else:
                 gw_bhaul_ap_if_name = "None"
 
@@ -408,9 +379,6 @@ class TestNm2:
                 == ExpectedShellResult
             )
 
-            wan_handling_args = gw.get_command_arguments("CONFIG_MANAGER_WANO", "y")
-            has_wano = gw.execute("tools/device/check_kconfig_option", wan_handling_args) == ExpectedShellResult
-
             gw_lan_br_inet_args_base = [
                 f"-if_name {lan_br_if_name}",
                 "-if_type bridge",
@@ -427,7 +395,7 @@ class TestNm2:
                     '-dhcpd \'["map",[["start","192.168.0.10"],["stop","192.168.0.200"]]]\'',
                 ]
             elif gw_in_bridge_mode:
-                ip_assign_scheme = "none" if has_wano else "dhcp"
+                ip_assign_scheme = "none" if "WANO" in gw.get_kconfig_managers() else "dhcp"
                 gw_lan_br_inet_args_base.append(f"-ip_assign_scheme {ip_assign_scheme}")
             else:
                 raise RuntimeError("Invalid device state.")
@@ -454,13 +422,14 @@ class TestNm2:
                     )
             if if_type in ["gre"]:
                 with step("GW AP creation"):
-                    assert gw.configure_radio_vif_and_network()
+                    assert gw.interfaces["backhaul_ap"].configure_interface() == ExpectedShellResult
             with step("Test case"):
                 assert (
                     gw.execute_with_logging("tests/nm2/nm2_set_ip_assign_scheme", test_args)[0] == ExpectedShellResult
                 )
         finally:
-            assert gw.execute("tools/device/vif_reset")[0] == ExpectedShellResult
+            with step("Cleanup"):
+                gw.interfaces["home_ap"].vif_reset()
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", nm2_config.get("nm2_set_mtu", []))
@@ -522,7 +491,14 @@ class TestNm2:
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", nm2_config.get("nm2_set_upnp_mode", []))
     def test_nm2_set_upnp_mode(self, cfg: dict):
-        fut_configurator, server, gw, w1 = pytest.fut_configurator, pytest.server, pytest.gw, pytest.w1
+        server, gw, w1 = pytest.server, pytest.gw, pytest.w1
+        required_opensync_version = "5.6.0.0"
+        opensync_version = gw.get_opensync_version()
+
+        if not compare_fw_versions(opensync_version, required_opensync_version, "<="):
+            pytest.skip(
+                f"Insufficient OpenSync version:{opensync_version}. Required {required_opensync_version} or lower.",
+            )
 
         with step("Put GW into router mode"):
             assert gw.configure_device_mode(device_mode="router")
@@ -533,14 +509,11 @@ class TestNm2:
             ht_mode = cfg.get("ht_mode")
             radio_band = cfg.get("radio_band")
             encryption = cfg["encryption"]
-            wifi_security_type = cfg.get("wifi_security_type", "wpa")
             client_retry = cfg.get("client_retry", 2)
 
             # GW specific arguments
             phy_radio_name = gw.capabilities.get_phy_radio_ifname(freq_band=radio_band)
-            eth_wan_ip_addr = server.wan_ip_dict.get("gw")
             device_type = gw.capabilities.get_device_type()
-            lan_ip_addr = gw.device_api.get_ips(iface="br-home")
 
             # W1 specific arguments
             network_namespace = w1.device_config.get("network_namespace")
@@ -548,33 +521,28 @@ class TestNm2:
             client_ip = w1.device_api.get_client_ips(interface=wlan_if_name)
 
             # Constant arguments
-            ssid, psk = fut_configurator.base_ssid, fut_configurator.base_psk
-            tcp_port = 5201
+            tcp_port = cfg.get("port", 5201)
 
-            with step("Validate retrieved LAN and W1 IP addresses"):
-                if client_ip is not False and lan_ip_addr is not False:
-                    log.info(f"Successfully retrieved the IP addresses -> CLIENT: {client_ip}, LAN: {lan_ip_addr}")
+            with step("Validate retrieved and W1 IP addresses"):
+                if client_ip is not False:
+                    log.info(f"Successfully retrieved the WI IP address: {client_ip}")
                 else:
-                    raise ValueError("Unable to retrieve client and LAN IP addresses.")
+                    raise ValueError("Unable to retrieve client IP addresses.")
 
-            # GW AP arguments
-            gw_ap_vif_args = {
-                "channel": channel,
-                "ht_mode": ht_mode,
-                "radio_band": radio_band,
-                "wpa_psk": psk,
-                "wifi_security_type": wifi_security_type,
-                "encryption": encryption,
-                "ssid": ssid,
-                "reset_vif": True,
-            }
+            # GW interface creation
+            gw.create_interface_object(
+                channel=channel,
+                ht_mode=ht_mode,
+                radio_band=radio_band,
+                encryption=encryption,
+                interface_role="home_ap",
+            )
 
-            gw.ap_args = gw_ap_vif_args
+            # Retrieve AP SSID and PSK values
+            ssid = gw.interfaces["home_ap"].ssid_raw
+            psk = gw.interfaces["home_ap"].psk_raw
 
-            wan_handling_args = gw.get_command_arguments("CONFIG_MANAGER_WANO", "y")
-            has_wano = gw.execute("tools/device/check_kconfig_option", wan_handling_args)[0] == ExpectedShellResult
-
-            if has_wano or device_type == "residential_gateway":
+            if "WANO" in gw.get_kconfig_managers() or device_type == "residential_gateway":
                 wan_if_name = gw.capabilities.get_primary_wan_iface()
             else:
                 wan_if_name = gw.capabilities.get_wan_bridge_ifname()
@@ -594,17 +562,6 @@ class TestNm2:
             client_upnp_args = w1.get_command_arguments(
                 network_namespace,
                 client_ip.get("ipv4"),
-                lan_ip_addr.get("ipv4"),
-                tcp_port,
-            )
-            upnp_mode_args = gw.get_command_arguments(
-                wan_if_name,
-                lan_br_if_name,
-                lan_ip_addr.get("ipv4"),
-                eth_wan_ip_addr,
-            )
-            check_traffic_args = server.get_command_arguments(
-                eth_wan_ip_addr,
                 tcp_port,
             )
             check_iptable_args = gw.get_command_arguments(
@@ -617,23 +574,37 @@ class TestNm2:
             )
 
         try:
+            with step("Determine GW WAN IP"):
+                gw_wan_iface = gw.capabilities.get_primary_wan_iface()
+                gw_wan_inet_addr = gw.device_api.get_ips(iface=gw_wan_iface)["ipv4"]
+                if gw_wan_inet_addr is not False:
+                    log.info(f"Successfully retrieved the IP addresses -> GW: {gw_wan_inet_addr}")
+                else:
+                    raise ValueError("Unable to retrieve GW WAN IP address.")
             with step("Set UPnP mode on GW"):
+                upnp_mode_args = gw.get_command_arguments(
+                    wan_if_name,
+                    lan_br_if_name,
+                    gw_wan_inet_addr,
+                )
                 assert gw.execute_with_logging("tests/nm2/nm2_set_upnp_mode", upnp_mode_args)[0] == ExpectedShellResult
             with step("GW AP creation"):
-                assert gw.configure_radio_vif_and_network()
+                assert gw.interfaces["home_ap"].configure_interface() == ExpectedShellResult
             with step("Check channel readiness"):
                 assert gw.execute("tools/device/check_channel_is_ready", check_chan_args)[0] == ExpectedShellResult
             with step("Client connection"):
-                security_args = gw.configure_wifi_security(return_as_dict=True)
                 w1.device_api.connect(
                     ssid=ssid,
                     psk=psk,
-                    key_mgmt=security_args["key_mgmt_mapping"],
                     retry=client_retry,
                 )
             with step("Verify client connectivity"):
                 assert w1.device_api.ping_check(ipaddr="192.168.7.1")
             with step("Testcase"):
+                check_traffic_args = server.get_command_arguments(
+                    gw_wan_inet_addr,
+                    tcp_port,
+                )
                 assert (
                     w1.execute("tools/client/run_upnp_client", client_upnp_args, as_sudo=True)[0] == ExpectedShellResult
                 )
@@ -648,7 +619,8 @@ class TestNm2:
         finally:
             with step("Cleanup"):
                 w1.execute("tools/client/stop_upnp_client", w1_cleanup_args, as_sudo=True)
-                gw.execute("tools/device/clear_port_forward_in_iptables")
+                gw.execute("tools/device/ovsdb/empty_ovsdb_table", "Netfilter")
+                gw.interfaces["home_ap"].vif_reset()
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", nm2_config.get("nm2_verify_linux_traffic_control_rules", []))
@@ -748,10 +720,10 @@ class TestNm2:
 
         with step("Preparation of testcase parameters"):
             # Arguments from test case configuration
-            parent_ifname = cfg.get("parent_ifname")
+            if_name = cfg.get("if_name")
             vlan_id = cfg.get("vlan_id")
             test_args = gw.get_command_arguments(
-                parent_ifname,
+                if_name,
                 vlan_id,
             )
 

@@ -55,7 +55,7 @@ wait_ovsdb_entry_remove Wifi_VIF_State -w if_name "${if_name}" &&
 log "onbrd/onbrd_cleanup.sh: Removing $if_name from bridge ${lan_bridge}"
 remove_port_from_bridge "${lan_bridge}" "${if_name}" &&
     log "onbrd/onbrd_cleanup.sh: remove_port_from_bridge - port $if_name removed from $lan_bridge - Success" ||
-    raise "FAIL: remove_port_from_bridge - port $if_name NOT removed from $lan_bridge" -l "onbrd/onbrd_cleanup.sh" -tc
+    raise "remove_port_from_bridge - port $if_name NOT removed from $lan_bridge" -l "onbrd/onbrd_cleanup.sh" -tc
 
 print_tables Wifi_Inet_Config
 print_tables Wifi_Inet_State

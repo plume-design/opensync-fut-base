@@ -28,11 +28,14 @@ case "${1}" in
 esac
 
 trap '
-fut_info_dump_line
-print_tables Openflow_Tag Openflow_Config
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    print_tables Openflow_Tag Openflow_Config
+    linux_native_bridge_enabled && ebtables -L || true
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 NARGS=0
 [ $# -ne ${NARGS} ] && usage && raise "Requires exactly ${NARGS} input arguments" -arg
@@ -40,16 +43,19 @@ NARGS=0
 log_title "othr/othr_connect_wifi_client_to_ap_unfreeze.sh: OTHR test - Delete the Openflow rules from the tables to unfreeze the client"
 
 log "othr/othr_connect_wifi_client_to_ap_unfreeze.sh: Removing client freeze rules from Openflow tables"
+
 remove_ovsdb_entry Openflow_Tag -w name "frozen" &&
     log "othr/othr_connect_wifi_client_to_ap_unfreeze.sh: Removed entry for name 'frozen' from Openflow_Tag table - Success" ||
-    raise "FAIL: Could not remove entry for name 'frozen' from Openflow_Tag table" -l "othr/othr_connect_wifi_client_to_ap_unfreeze.sh"
+    raise "Could not remove entry for name 'frozen' from Openflow_Tag table" -l "othr/othr_connect_wifi_client_to_ap_unfreeze.sh"
 
-remove_ovsdb_entry Openflow_Config -w token "${freeze_src_token}" &&
-    log "othr/othr_connect_wifi_client_to_ap_unfreeze.sh: Removed entry for token '${freeze_src_token}' from Openflow_Config table - Success" ||
-    raise "FAIL: Could not remove entry for token '${freeze_src_token}' from Openflow_Config table" -l "othr/othr_connect_wifi_client_to_ap_unfreeze.sh"
+if ! linux_native_bridge_enabled; then
+    remove_ovsdb_entry Openflow_Config -w token "${freeze_src_token}" &&
+        log "othr/othr_connect_wifi_client_to_ap_unfreeze.sh: Removed entry for token '${freeze_src_token}' from Openflow_Config table - Success" ||
+        raise "Could not remove entry for token '${freeze_src_token}' from Openflow_Config table" -l "othr/othr_connect_wifi_client_to_ap_unfreeze.sh"
 
-remove_ovsdb_entry Openflow_Config -w token "${freeze_dst_token}" &&
-    log "othr/othr_connect_wifi_client_to_ap_unfreeze.sh: Removed entry for token '${freeze_dst_token}' from Openflow_Config table - Success" ||
-    raise "FAIL: Could not remove entry for token '${freeze_dst_token}' from Openflow_Config table" -l "othr/othr_connect_wifi_client_to_ap_unfreeze.sh"
+    remove_ovsdb_entry Openflow_Config -w token "${freeze_dst_token}" &&
+        log "othr/othr_connect_wifi_client_to_ap_unfreeze.sh: Removed entry for token '${freeze_dst_token}' from Openflow_Config table - Success" ||
+        raise "Could not remove entry for token '${freeze_dst_token}' from Openflow_Config table" -l "othr/othr_connect_wifi_client_to_ap_unfreeze.sh"
+fi
 
 pass

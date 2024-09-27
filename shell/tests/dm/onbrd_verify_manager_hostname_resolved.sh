@@ -32,11 +32,13 @@ case "${1}" in
 esac
 
 trap '
-fut_info_dump_line
-print_tables AWLAN_Node Manager
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    print_tables AWLAN_Node Manager
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 NARGS=1
 [ $# -ne ${NARGS} ] && usage && raise "Requires exactly ${NARGS} input argument" -l "onbrd/onbrd_verify_manager_hostname_resolved.sh" -arg
@@ -62,29 +64,29 @@ sleep 30
 redirector_addr_none="ssl:none:443"
 wait_for_function_response 'notempty' "get_ovsdb_entry_value AWLAN_Node redirector_addr" &&
     redirector_addr=$(get_ovsdb_entry_value AWLAN_Node redirector_addr) ||
-    raise "FAIL: AWLAN_Node::redirector_addr is not set" -l "onbrd/onbrd_verify_manager_hostname_resolved.sh" -tc
+    raise "AWLAN_Node::redirector_addr is not set" -l "onbrd/onbrd_verify_manager_hostname_resolved.sh" -tc
 
 if [ $is_extender == "true" ]; then
     log "onbrd/onbrd_verify_manager_hostname_resolved.sh: Setting AWLAN_Node redirector_addr to ${redirector_addr_none}"
     update_ovsdb_entry AWLAN_Node -u redirector_addr "${redirector_addr_none}" &&
         log "onbrd/onbrd_verify_manager_hostname_resolved.sh: AWLAN_Node::redirector_addr updated - Success" ||
-        raise "FAIL: Could not update AWLAN_Node::redirector_addr" -l "onbrd/onbrd_verify_manager_hostname_resolved.sh" -oe
+        raise "Could not update AWLAN_Node::redirector_addr" -l "onbrd/onbrd_verify_manager_hostname_resolved.sh" -fc
 
     log "onbrd/onbrd_verify_manager_hostname_resolved.sh: Wait Manager target to clear"
     wait_for_function_response 'empty' "get_ovsdb_entry_value Manager target" &&
         log "onbrd/onbrd_verify_manager_hostname_resolved.sh: Manager::target is cleared - Success" ||
-        raise "FAIL: Manager::target is not cleared" -l "onbrd/onbrd_verify_manager_hostname_resolved.sh" -tc
+        raise "Manager::target is not cleared" -l "onbrd/onbrd_verify_manager_hostname_resolved.sh" -tc
 
     log "onbrd/onbrd_verify_manager_hostname_resolved.sh: Setting AWLAN_Node redirector_addr to ${redirector_addr}"
     update_ovsdb_entry AWLAN_Node -u redirector_addr "${redirector_addr}" &&
         log "onbrd/onbrd_verify_manager_hostname_resolved.sh: AWLAN_Node::redirector_addr updated - Success" ||
-        raise "FAIL: Could not update AWLAN_Node::redirector_addr" -l "onbrd/onbrd_verify_manager_hostname_resolved.sh" -oe
+        raise "Could not update AWLAN_Node::redirector_addr" -l "onbrd/onbrd_verify_manager_hostname_resolved.sh" -fc
 fi
 
 log "onbrd/onbrd_verify_manager_hostname_resolved.sh: Wait Manager target to resolve to address"
 wait_for_function_response 'notempty' "get_ovsdb_entry_value Manager target" &&
     log "onbrd/onbrd_verify_manager_hostname_resolved.sh: Manager::target is set - Success" ||
-    raise "FAIL: Manager::target is not set" -l "onbrd/onbrd_verify_manager_hostname_resolved.sh" -tc
+    raise "Manager::target is not set" -l "onbrd/onbrd_verify_manager_hostname_resolved.sh" -tc
 
 print_tables Manager
 pass

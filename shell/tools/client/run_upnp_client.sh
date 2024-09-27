@@ -20,8 +20,7 @@ Arguments:
     -h                        : Show this help message
     - \$1 (wlan_namespace)    : Interface namespace name                              : (string)(required)
     - \$2 (client_ip_address) : IP address to be assigned for the client interface    : (string)(required)
-    - \$3 (dut_ip_address)    : IP address of the DUT                                 : (string)(required)
-    - \$4 (port)              : Port number on which upnpc is run                     : (int)(optional)(default=${def_port})
+    - \$3 (port)              : Port number on which upnpc is run                     : (int)(optional)(default=${def_port})
 
 Script usage example:
     ./tools/client/run_upnp_client.sh nswifi1 10.10.10.20 10.10.10.30 5201
@@ -32,29 +31,35 @@ case "${1}" in
     -h | --help)  usage ; exit 0 ;;
 esac
 
-NARGS=3
+NARGS=2
 [ $# -lt ${NARGS} ] && usage && raise "Requires at least ${NARGS} input argument(s)" -l "tools/client/run_upnp_client.sh" -arg
 wlan_namespace=${1}
 client_ip_address=${2}
-dut_ip_address=${3}
-port=${4:-$def_port}
+port=${3:-$def_port}
 wlan_namespace_cmd="ip netns exec ${wlan_namespace} bash"
+
+trap '
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    [ -e /tmp/miniupnpd/mupnp_wan.leases ] && cat /tmp/miniupnpd/mupnp_wan.leases
+    ps aux | grep iperf3 || true
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 log_title "tools/client/run_upnp_client.sh: Run UPnP client on the device"
 
 if [[ "$EUID" -ne 0 ]]; then
-    raise "FAIL: Please run this function as root - sudo" -l "tools/client/run_upnp_client.sh"
+    raise "Please run this function as root - sudo" -l "tools/client/run_upnp_client.sh"
 fi
-
-log "tools/client/run_upnp_client.sh: Adding default route on client"
-${wlan_namespace_cmd} -c "ip route add default via ${dut_ip_address}"
 
 log "tools/client/run_upnp_client.sh: Starting UPnPC on client host"
 ${wlan_namespace_cmd} -c "/usr/bin/upnpc -a ${client_ip_address} ${port} ${port} ${protocol}"
 if [ $? -eq 0 ]; then
     log -deb "tools/client/run_upnp_client.sh: UPnP client started successfully on the device - Success"
 else
-    raise "FAIL: UPnP client failed to start on the device!" -l "tools/client/run_upnp_client.sh" -tc
+    raise "UPnP client failed to start on the device!" -l "tools/client/run_upnp_client.sh" -tc
 fi
 
 log "tools/client/run_upnp_client.sh: Running iperf server to check traffic"

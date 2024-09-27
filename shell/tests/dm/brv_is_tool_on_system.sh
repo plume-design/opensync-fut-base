@@ -44,7 +44,7 @@ if [ $rc == 0 ]; then
 elif [ $rc == 126 ]; then
     raise "Tool '${tool_path}' found on device but could not be invoked - Success" -l "brv/brv_is_tool_on_system.sh" -ec ${rc} -tc
 else
-    raise "FAIL: Tool '${tool_path}' could not be found on device" -l "brv/brv_is_tool_on_system.sh" -ec ${rc} -tc
+    raise "Tool '${tool_path}' could not be found on device" -l "brv/brv_is_tool_on_system.sh" -ec ${rc} -tc
 fi
 
 pass

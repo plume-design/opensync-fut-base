@@ -46,10 +46,13 @@ NARGS=36
 [ $# -ne ${NARGS} ] && usage && raise "Requires exactly ${NARGS} input argument(s)" -l "wm2/wm2_check_wpa3_with_wpa2_multi_psk.sh" -arg
 
 trap '
+    fut_ec=$?
+    trap - EXIT INT
     fut_info_dump_line
     print_tables Wifi_Radio_Config Wifi_Radio_State Wifi_VIF_Config Wifi_VIF_State
     fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    exit $fut_ec
+' EXIT INT TERM
 
 while [ -n "$1" ]; do
     option=$1
@@ -128,7 +131,7 @@ while [ -n "$1" ]; do
             shift
             ;;
         *)
-            raise "FAIL: Wrong option provided: $option" -l "wm2/wm2_check_wpa3_with_wpa2_multi_psk.sh" -arg
+            raise "Wrong option provided: $option" -l "wm2/wm2_check_wpa3_with_wpa2_multi_psk.sh" -arg
             ;;
     esac
 done
@@ -197,8 +200,8 @@ ovsdb-client transact "$ovsdb_client_command"
 
 wait_ovsdb_entry Wifi_VIF_State -w if_name "$secondary_vif_if_name" -is vif_radio_idx ${secondary_vif_radio_idx} -is ssid "${primary_ssid}" -is wpa_key_mgmt "$primary_wpa_key_mgmt" &&
     log -deb "wm2:wm2_check_wpa3_with_wpa2_multi_psk - Wifi_VIF_Config reflected to Wifi_VIF_State - Success" ||
-    raise "FAIL: Could not reflect Wifi_VIF_Config to Wifi_VIF_State" -l "wm2:wm2_check_wpa3_with_wpa2_multi_psk" -ow
+    raise "Could not reflect Wifi_VIF_Config to Wifi_VIF_State" -l "wm2:wm2_check_wpa3_with_wpa2_multi_psk" -fc
 
 wait_ovsdb_entry Wifi_VIF_State -w if_name "$primary_vif_if_name"  -is vif_radio_idx ${primary_vif_radio_idx} -is ssid "${secondary_ssid}" -is wpa_key_mgmt "$secondary_wpa_key_mgmt" &&
     log -deb "wm2:wm2_check_wpa3_with_wpa2_multi_psk - Wifi_VIF_Config reflected to Wifi_VIF_State - Success" ||
-    raise "FAIL: Could not reflect Wifi_VIF_Config to Wifi_VIF_State" -l "wm2:wm2_check_wpa3_with_wpa2_multi_psk" -ow
+    raise "Could not reflect Wifi_VIF_Config to Wifi_VIF_State" -l "wm2:wm2_check_wpa3_with_wpa2_multi_psk" -fc

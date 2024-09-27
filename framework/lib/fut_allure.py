@@ -3,6 +3,7 @@ import json
 import os
 import shutil
 from pathlib import Path
+from typing import Callable
 
 import pytest
 
@@ -57,20 +58,16 @@ def allure_environment(request, setup):
                 AllureUtil(cfg).add_environment("osrt_snapshot", snapshot)
 
 
-def _create_backup_dir(src_path):
+def _create_backup_dir(src_path: str) -> None:
     try:
         dst_path = Path(src_path).parent.joinpath(f"{Path(src_path).name}_bak")
         shutil.copytree(src_path, dst_path)
         print(f"Directory '{src_path}' successfully copied to '{dst_path}'.")
-    except shutil.Error as e:
-        print(f"Error copying directory: {e}")
-        raise
-    except Exception as e:
-        print(f"Unexpected error: {e}")
-        raise
+    except shutil.Error as exception:
+        raise exception(f"Error copying directory: {exception}")
 
 
-def search_files(directory, search_strings):
+def search_files(directory: str, search_strings: list[str]) -> list[str]:
     matching_files = []
     # Iterate over files in the target directory
     for root, _, files in os.walk(directory):
@@ -83,7 +80,7 @@ def search_files(directory, search_strings):
     return matching_files
 
 
-def create_processed_results(source_directory: str, removed_entries: list, create_backup=True):
+def create_processed_results(source_directory: str, removed_entries: list, create_backup: bool = True) -> None:
     """
     Process the test results directory based on the provided entries to be removed.
 
@@ -108,7 +105,7 @@ def create_processed_results(source_directory: str, removed_entries: list, creat
         )
 
 
-def data_from_report(dct):
+def data_from_report(dct: dict) -> dict | None:
     data = None
     try:
         data = {key: dct[key] for key in ["name", "status", "parameterValues"]}
@@ -117,7 +114,7 @@ def data_from_report(dct):
     return data
 
 
-def data_from_results(dct):
+def data_from_results(dct: dict) -> dict | None:
     data = None
     try:
         assert all(key in dct.keys() for key in ["name", "status", "parameters"])
@@ -128,7 +125,7 @@ def data_from_results(dct):
     return data
 
 
-def determine_mismatches(common_entries: list):
+def determine_mismatches(common_entries: list[dict]) -> list[dict]:
     """
     Compare the status for common tests from the current and reference test runs.
 
@@ -139,6 +136,7 @@ def determine_mismatches(common_entries: list):
             'parameterValues': {'param': 42, 'foo': 'bar'},
             'status': 'failed',
             'status_ref': 'passed',
+
     Returns:
         mismatches (list): A list containing tests from current test run whose status mismatch with the reference test run
     """
@@ -149,12 +147,12 @@ def determine_mismatches(common_entries: list):
     return mismatches
 
 
-def read_data_from_report(source_directory: str):
+def read_data_from_report(source_directory: str) -> list:
     res_data = read_json_data_from_files(source_directory, "data/test-cases/*.json", data_from_report, None)
     return res_data
 
 
-def read_data_from_results(source_directory: str):
+def read_data_from_results(source_directory: str) -> list:
     res_data = read_json_data_from_files(source_directory, "[0-9a-f-]*-result.json", None, data_from_results)
     return res_data
 
@@ -162,9 +160,9 @@ def read_data_from_results(source_directory: str):
 def read_json_data_from_files(
     source_directory: str,
     file_regex: str,
-    object_hook,
-    filter_function,
-):
+    object_hook: Callable | None,
+    filter_function: Callable | None,
+) -> list:
     """
     Extract the requested data from files in the source directory.
 
@@ -173,6 +171,7 @@ def read_json_data_from_files(
         file_regex (str): Regular expression for finding source files
         object_hook (function pointer or None): Function executed on any object literal decoded (dict)
         filter_function (function pointer or None): Function executed on the entire object literal decoded (dict)
+
     Returns:
         (list): A list containing the filtered data
     """
@@ -195,7 +194,7 @@ def read_json_data_from_files(
     return res_data
 
 
-def results_alignment(current_data: list, reference_data: list):
+def results_alignment(current_data: list, reference_data: list) -> tuple[list, list, list]:
     """
     Align the current data to the reference data in terms of name and parameter values.
 
@@ -243,7 +242,7 @@ def results_alignment(current_data: list, reference_data: list):
     return current_data_specific_entries, reference_data_specific_entries, common_entries
 
 
-def split_common_entries(common_entries: list):
+def split_common_entries(common_entries: list) -> tuple[list, list]:
     """
     Split the common tests based on the status of the reference test.
 
@@ -253,6 +252,7 @@ def split_common_entries(common_entries: list):
 
     Args:
         common_entries (list): A list containing the common tests.
+
     Returns:
         (tuple) filtered_entries, removed_entries
         WHERE

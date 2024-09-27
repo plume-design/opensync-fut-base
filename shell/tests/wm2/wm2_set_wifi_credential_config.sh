@@ -40,24 +40,26 @@ security=${2}
 onboard_type=${3}
 
 trap '
+    fut_ec=$?
+    trap - EXIT INT
     fut_info_dump_line
     print_tables Wifi_Credential_Config
-    check_restore_ovsdb_server
     fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    exit $fut_ec
+' EXIT INT TERM
 
 log_title "wm2/wm2_set_wifi_credential_config.sh: WM2 test - Set valid field values to Wifi_Credential_Config and verify fields are applied"
 
 check_kconfig_option "CONFIG_MANAGER_WM" "y" ||
-    raise "FAIL: CONFIG_MANAGER_WM != y - WM is not present on the device" -l "wm2/wm2_set_wifi_credential_config.sh" -tc
+    raise "CONFIG_MANAGER_WM != y - WM is not present on the device" -l "wm2/wm2_set_wifi_credential_config.sh" -tc
 
 log "wm2/wm2_set_wifi_credential_config.sh: Inserting ssid, security and onboard_type values into Wifi_Credential_Config"
 ${OVSH} i Wifi_Credential_Config ssid:="$ssid" security:="$security" onboard_type:="$onboard_type" &&
     log "wm2/wm2_set_wifi_credential_config.sh: insert_ovsdb_entry - Values inserted into Wifi_Credential_Config table - Success" ||
-    raise "FAIL: insert_ovsdb_entry - Failed to insert values into Wifi_Credential_Config" -l "wm2/wm2_set_wifi_credential_config.sh" -oe
+    raise "insert_ovsdb_entry - Failed to insert values into Wifi_Credential_Config" -l "wm2/wm2_set_wifi_credential_config.sh" -fc
 
 wait_ovsdb_entry Wifi_Credential_Config -w ssid $ssid -is security $security -is onboard_type $onboard_type &&
     log "wm2/wm2_set_wifi_credential_config.sh: Values applied into Wifi_Credential_Config - Success" ||
-    raise "FAIL: Could not apply values into Wifi_Credential_Config" -l "wm2/wm2_set_wifi_credential_config.sh" -tc
+    raise "Could not apply values into Wifi_Credential_Config" -l "wm2/wm2_set_wifi_credential_config.sh" -tc
 
 pass

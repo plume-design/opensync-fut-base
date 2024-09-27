@@ -10,24 +10,6 @@ echo "${FUT_TOPDIR}/shell/lib/override/qca_platform_override.sh sourced"
 
 ###############################################################################
 # DESCRIPTION:
-#   Function starts qca-hostapd.
-#   Uses qca-hostapd tool.
-# INPUT PARAMETER(S):
-#   None.
-# RETURNS:
-#   None.
-# USAGE EXAMPLE(S):
-#   start_qca_hostapd
-###############################################################################
-start_qca_hostapd()
-{
-    log -deb "qca_platform_override:start_qca_hostapd - Starting qca-hostapd"
-    /etc/init.d/qca-hostapd boot
-    sleep 2
-}
-
-###############################################################################
-# DESCRIPTION:
 #   Function checks if device supports WPA3
 # INPUT PARAMETER(S):
 #   None.
@@ -43,47 +25,9 @@ check_wpa3_compatibility()
     elif check_kconfig_option "CONFIG_PLATFORM_QCA_QSDK120" "y" ; then
         log -deb "qca_platform_override:check_wpa3_compatibility - WPA3 compatible"
     else
-        log -err "qca_platform_override:check_wpa3_compatibility - WPA3 incompatible"
+        log -deb "qca_platform_override:check_wpa3_compatibility - WPA3 incompatible"
+        return 1
     fi
-}
-
-###############################################################################
-# DESCRIPTION:
-#   Function starts qca-wpa-supplicant.
-#   Uses qca-wpa-supplicant tool.
-# INPUT PARAMETER(S):
-#   None.
-# RETURNS:
-#   None.
-# USAGE EXAMPLE(S):
-#   start_qca_wpa_supplicant
-###############################################################################
-start_qca_wpa_supplicant()
-{
-    log -deb "qca_platform_override:start_qca_wpa_supplicant - Starting qca-wpa-supplicant"
-    /etc/init.d/qca-wpa-supplicant boot
-    sleep 2
-}
-
-###############################################################################
-# DESCRIPTION:
-#   Function starts wireless driver on the device.
-# INPUT PARAMETER(S):
-#   None.
-# RETURNS:
-#   0   Wireless driver started on device.
-# USAGE EXAMPLE(S):
-#   start_wireless_driver
-###############################################################################
-start_wireless_driver()
-{
-    log "qca_platform_override:start_wireless_driver - Starting wireless driver"
-    start_qca_hostapd &&
-        log -deb "qca_platform_override:start_wireless_driver - start_qca_hostapd - Success" ||
-        raise "FAIL: start_qca_hostapd - Could not start qca host" -l "qca_platform_override:start_wireless_driver" -ds
-    start_qca_wpa_supplicant &&
-        log -deb "qca_platform_override:start_wireless_driver - start_qca_wpa_supplicant - Success" ||
-        raise "FAIL: start_qca_wpa_supplicant - Could not start wpa supplicant" -l "qca_platform_override:start_wireless_driver" -ds
 }
 
 ###############################################################################
@@ -148,7 +92,7 @@ check_tx_chainmask_at_os_level()
     if [ $? = 0 ]; then
         log -deb "qca_platform_override:check_tx_chainmask_at_os_level - Tx Chainmask '$tx_chainmask' is set at OS - LEVEL2 - Success"
     else
-        raise "FAIL: Tx Chainmask '$tx_chainmask' is not set at OS - LEVEL2" -l "qca_platform_override:check_tx_chainmask_at_os_level" -tc
+        raise "Tx Chainmask '$tx_chainmask' is not set at OS - LEVEL2" -l "qca_platform_override:check_tx_chainmask_at_os_level" -tc
     fi
 
     return 0
@@ -177,7 +121,7 @@ check_beacon_interval_at_os_level()
     log "qca_platform_override:check_beacon_interval_at_os_level - Checking Beacon interval at OS - LEVEL2"
     wait_for_function_response 0 "cfg80211tool $vif_if_name get_bintval | grep -F get_bintval:$bcn_int" &&
         log -deb "qca_platform_override:check_beacon_interval_at_os_level - Beacon interval '$bcn_int' for '$vif_if_name' is set at OS - LEVEL2 - Success" ||
-        raise "FAIL: Beacon interval '$bcn_int' for '$vif_if_name' is not set at OS - LEVEL2" -l "qca_platform_override:check_beacon_interval_at_os_level" -tc
+        raise "Beacon interval '$bcn_int' for '$vif_if_name' is not set at OS - LEVEL2" -l "qca_platform_override:check_beacon_interval_at_os_level" -tc
 
     return 0
 }
@@ -249,7 +193,7 @@ check_vlan_iface()
     log "qca_platform_override:check_vlan_iface: Checking for '${vlan_file}' existence - LEVEL2"
     wait_for_function_response 0 "[ -e ${vlan_file} ]" &&
         log "qca_platform_override:check_vlan_iface: LEVEL2 - PID '${vlan_file}' is runinng - Success" ||
-        raise "FAIL: LEVEL2 - PID ${vlan_file} is NOT running" -l "qca_platform_override:check_vlan_iface" -tc
+        raise "LEVEL2 - PID ${vlan_file} is NOT running" -l "qca_platform_override:check_vlan_iface" -tc
 
     log "qca_platform_override:check_vlan_iface: Output PID ${vlan_file} info:"
     cat "${vlan_file}"
@@ -257,44 +201,13 @@ check_vlan_iface()
     log "qca_platform_override:check_vlan_iface: Validating PID VLAN config - vlan_id == ${vlan_id} - LEVEL2"
     wait_for_function_response 0 "cat "${vlan_file}" | grep 'VID: ${vlan_id}'" &&
         log "qca_platform_override:check_vlan_iface: LEVEL2 - VID is set to 100 - Success" ||
-        raise "FAIL: LEVEL2 - VID is not set" -l "qca_platform_override:check_vlan_iface" -tc
+        raise "LEVEL2 - VID is not set" -l "qca_platform_override:check_vlan_iface" -tc
 
     log "qca_platform_override:check_vlan_iface: Check parent device for VLAN - LEVEL2"
     wait_for_function_response 0 "cat "${vlan_file}" | grep 'Device: ${parent_ifname}'" &&
         log "qca_platform_override:check_vlan_iface: LEVEL2 - Device is set to '${parent_ifname}' - Success" ||
-        raise "FAIL: LEVEL2 - Device is not set to '${parent_ifname}'" -l "qca_platform_override:check_vlan_iface" -tc
+        raise "LEVEL2 - Device is not set to '${parent_ifname}'" -l "qca_platform_override:check_vlan_iface" -tc
 
-    return 0
-}
-
-###############################################################################
-# DESCRIPTION:
-#   Function checks for CSA (Channel Switch Announcement) message on the leaf
-#   device, sent by the GW upon channel change.
-# INPUT PARAMETER(S):
-#   $1  MAC address of GW (string, required)
-#   $2  CSA channel GW switches to (int, required)
-#   $3  HT mode (channel bandwidth) (string, required)
-# RETURNS:
-#   0   CSA message is found in device logs.
-# USAGE EXAMPLE(S):
-#   check_sta_send_csa_message 1A:2B:3C:4D:5E:6F 6 HT20
-# EXAMPLE DEVICE LOG:
-#   Mar 18 10:29:06 WM[19842]: <INFO> TARGET: wifi0: csa rx to bssid d2:b4:f7:f0:23:26 chan 6 width 0MHz sec 0 cfreq2 0 valid 1 supported 1
-###############################################################################
-check_sta_send_csa_message()
-{
-    local NARGS=3
-    [ $# -ne ${NARGS} ] &&
-        raise "qca_platform_override:check_sta_send_csa_message requires ${NARGS} input argument(s), $# given" -arg
-    gw_vif_mac=$1
-    gw_csa_channel=$2
-    ht_mode=$3
-
-    wm_csa_log_grep="$LOGREAD | grep -i 'csa' | grep -i '${gw_vif_mac} chan ${gw_csa_channel}'"
-    wait_for_function_response 0 "${wm_csa_log_grep}" 30 &&
-        log "qca_platform_override:check_sta_send_csa_message : 'csa completed' message found in logs for channel:${gw_csa_channel} with HT mode: ${ht_mode} - Success" ||
-        raise "FAIL: Failed to find 'csa completed' message in logs for channel: ${gw_csa_channel} with HT mode: ${ht_mode}" -l "qca_platform_override:check_sta_send_csa_message" -tc
     return 0
 }
 
@@ -387,7 +300,7 @@ get_um_code()
             echo  "31"
             ;;
         *)
-            raise "FAIL: Unknown upgrade_identifier {given:=$upgrade_identifier}" -l "qca_platform_override:get_um_code" -arg
+            raise "Unknown upgrade_identifier {given:=$upgrade_identifier}" -l "qca_platform_override:get_um_code" -arg
             ;;
     esac
 }

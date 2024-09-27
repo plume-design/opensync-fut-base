@@ -44,7 +44,7 @@ tap_interface_list="mdns ndp dns dpi upnp l2uf tx dhcp http devdpi"
 
 for tap_name in $tap_interface_list; do
     tap_if_name="${lan_bridge_if_name}.${tap_name}"
-    remove_bridge_port "${lan_bridge_if_name}" "${tap_if_name}" &&
+    remove_port_from_bridge "${lan_bridge_if_name}" "${tap_if_name}" &&
         log "tools/device/remove_tap_interfaces.sh: TAP port ${tap_if_name} removed - Success" ||
         log -err "tools/device/remove_tap_interfaces.sh:  TAP port ${tap_if_name} remove - Failed"
     remove_ovsdb_entry Wifi_Inet_Config \

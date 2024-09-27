@@ -35,6 +35,7 @@ NARGS=1
 client_cert=${1}
 cert_file="${FUT_TOPDIR}/${client_cert}"
 
+chmod 644 ${cert_file}
 comm_name=$(openssl x509 -in $cert_file -noout -subject | sed 's/.*CN = //;s/,.*//' | tr '[:lower:]' '[:upper:]')
 [ -z ${comm_name} ] && raise "Could not parse CN from certificate ${cert_file}" -l "tools/server/get_common_name_from_certificate.sh" -fc
 echo -n "${comm_name}"

@@ -53,7 +53,7 @@ external_enabled=true
 
 log_title "tools/device/set_router_mode.sh: Putting device into router mode" ||
     log "tools/device/set_router_mode.sh: Removing bridge port ${external_if_name} from bridge ${internal_if_name} if present"
-remove_bridge_port "${internal_if_name}" "${external_if_name}" &&
+remove_port_from_bridge "${internal_if_name}" "${external_if_name}" &&
     log "tools/device/set_router_mode.sh: Bridge port removed or it did not existed in first place" ||
     raise "Removal of bridge port ${external_if_name} from bridge ${internal_if_name} - Failed" -l "tools/device/set_router_mode.sh" -tc
 

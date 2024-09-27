@@ -29,5 +29,5 @@ get_wireless_manager_name
 if [ $? -eq 0 ]; then
     exit 0
 else
-    raise "FAIL: Failed to get wireless manager name from device" -l "tools/device/get_wireless_manager_name.sh" -s
+    raise "Failed to get wireless manager name from device" -l "tools/device/get_wireless_manager_name.sh" -s
 fi

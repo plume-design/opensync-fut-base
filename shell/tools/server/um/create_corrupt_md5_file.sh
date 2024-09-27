@@ -36,5 +36,5 @@ um_fw_path=$1
 log "tools/server/um/create_corrupt_md5_file.sh - Creating $um_fw_path.md5"
 create_corrupt_md5_file "$um_fw_path" &&
     log -deb "tools/server/um/create_corrupt_md5_file.sh - Created md5 file - Success" ||
-    raise "FAIL: Could not create md5 file" -l "tools/server/um/create_corrupt_md5_file.sh" -ds
+    raise "Could not create md5 file" -l "tools/server/um/create_corrupt_md5_file.sh" -ds
 

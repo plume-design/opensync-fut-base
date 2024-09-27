@@ -25,15 +25,8 @@ esac
 
 device_init &&
     log -deb "ut/ut_setup.sh - Device initialized - Success" ||
-    raise "FAIL: device_init - Could not initialize device" -l "ut/ut_setup.sh" -ds
-
-start_openswitch &&
-    log -deb "ut/ut_setup.sh - OpenvSwitch started - Success" ||
-    raise "FAIL: start_openswitch - Could not start OpenvSwitch" -l "ut/ut_setup.sh" -ds
-
-restart_managers
-log -deb "ut/ut_setup.sh: Executed restart_managers, exit code: $?"
+    raise "device_init - Could not initialize device" -l "ut/ut_setup.sh" -ds
 
 empty_ovsdb_table AW_Debug &&
     log -deb "ut/ut_setup.sh - AW_Debug table emptied - Success" ||
-    raise "FAIL: empty_ovsdb_table AW_Debug - Could not empty AW_Debug table" -l "ut/ut_setup.sh" -ds
+    raise "empty_ovsdb_table AW_Debug - Could not empty AW_Debug table" -l "ut/ut_setup.sh" -ds

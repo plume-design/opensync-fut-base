@@ -32,24 +32,24 @@ bridge=${1}
 of_port=30001
 tap_ifname=${bridge}.dpi
 
-check_if_port_in_bridge "${tap_ifname}" "${bridge}"
+check_if_port_in_bridge "${bridge}" "${tap_ifname}"
 if [ $? = 0 ]; then
     log -deb "tools/device/configure_dpi_tap_interface.sh: Port '${tap_ifname}' exists in bridge '${bridge}', removing..."
-    ovs-vsctl del-port "${bridge}" "${tap_ifname}" &&
-        log -deb " tools/device/configure_dpi_tap_interface.sh: ovs-vsctl del-port ${bridge} ${tap_ifname} - Success" ||
-        raise "FAIL: Could not remove port '${tap_ifname}' from bridge '${bridge}'" -l  "tools/device/configure_dpi_tap_interface.sh" -ds
+    remove_port_from_bridge "${bridge}" "${tap_ifname}" &&
+        log -deb " tools/device/configure_dpi_tap_interface.sh: remove_port_from_bridge ${bridge} ${tap_ifname} - Success" ||
+        raise "Could not remove port '${tap_ifname}' from bridge '${bridge}'" -l  "tools/device/configure_dpi_tap_interface.sh" -ds
 fi
 
-wait_for_function_response 0 "ovs-vsctl add-port ${bridge} ${tap_ifname} -- set interface ${tap_ifname} type=internal -- set interface ${tap_ifname} ofport_request=${of_port}" &&
+wait_for_function_response 0 "add_tap_interface ${bridge} ${tap_ifname} ${of_port}" &&
     log "tools/device/configure_dpi_tap_interface.sh: Add port '${tap_ifname}' to bridge ${bridge} - Success" ||
-    raise "FAIL: Could not add port '${tap_ifname}' to bridge ${bridge}" -l "tools/device/configure_dpi_tap_interface.sh:" -tc
+    raise "Could not add port '${tap_ifname}' to bridge ${bridge}" -l "tools/device/configure_dpi_tap_interface.sh:" -tc
 
 wait_for_function_response 0 "ip link set ${tap_ifname} up" &&
     log "tools/device/configure_dpi_tap_interface.sh: Bring interface '${tap_ifname}' up - Success" ||
-    raise "FAIL: Could not bring interface '${tap_ifname}' up" -l "tools/device/configure_dpi_tap_interface.sh:" -tc
+    raise "Could not bring interface '${tap_ifname}' up" -l "tools/device/configure_dpi_tap_interface.sh:" -tc
 
-wait_for_function_response 0 "ovs-ofctl mod-port ${bridge} ${tap_ifname} no-flood" &&
+wait_for_function_response 0 "gen_no_flood_cmd ${bridge} ${tap_ifname}" &&
     log "tools/device/configure_dpi_tap_interface.sh: Set interface '${tap_ifname}' no-flood - Success" ||
-    raise "FAIL: Could not set interface '${tap_ifname}' no-flood" -l "tools/device/configure_dpi_tap_interface.sh:" -tc
+    raise "Could not set interface '${tap_ifname}' no-flood" -l "tools/device/configure_dpi_tap_interface.sh:" -tc
 
 exit 0

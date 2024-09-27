@@ -31,15 +31,15 @@ case "${1}" in
 esac
 
 trap '
-fut_ec=$?
-fut_info_dump_line
-if [ $fut_ec -ne 0 ]; then 
-    print_tables WAN_Config Wifi_Route_Config Wifi_Route_State
-    check_restore_ovsdb_server
-fi
-fut_info_dump_line
-exit $fut_ec
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    if [ $fut_ec -ne 0 ]; then
+        print_tables WAN_Config Wifi_Route_Config Wifi_Route_State
+    fi
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 n_ping=${1:-$def_n_ping}
 internet_check_ip=${2:-$def_ip}

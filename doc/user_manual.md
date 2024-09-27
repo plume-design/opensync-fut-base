@@ -123,10 +123,10 @@ There are three categories of configuration files used within FUT:
    (CRATOS), such as the testbed IP address, username and password, device models, client types, etc. You need to set
    these correctly once when initially setting up a new physical testbed.
 
-1. **Device configuration**: also referred to as **model properties files**. These are model or device-specific
+2. **Device configuration**: also referred to as **model properties files**. These are model or device-specific
    parameters, such as regulatory domain information, radio interface names, supported bands, model string, etc.
 
-1. **Test case configuration**: sometimes referred to as test case configuration generator inputs. These are a
+3. **Test case configuration**: sometimes referred to as test case configuration generator inputs. These are a
    combination of generic parameters and values, combined with platform-specific and model-specific ones, that serve as
    inputs to generators that expand them into input parameters for all suites of test cases. These govern how many tests
    are executed for a given model and which input parameters are used for those test cases. For more read the separate
@@ -184,11 +184,11 @@ executions as well as a web GUI with an Allure report generator.
 To build the Docker image and enter a `bash` environment inside the Docker container, run:
 
 ```bash
-./docker/dock-run bash
+./docker/dock-run
 ```
 
 After the command brings up and enters the Docker container, the default terminal prompt should be prepended with
-`(DOCKER:fut-extra)`. All test case execution options and usage of command line tools are now enabled.
+`(DOCKER:fut-extra)`.
 
 The first Docker image build time may take some time depending on your system. Once the image is built, any changes to
 the Docker recipe use the cache and are much faster. Docker containers also reuse the same image every time, so if there
@@ -202,18 +202,53 @@ container, which is started on your local machine. The machine needs to have acc
 Create and enter the interactive Docker environment. This will build the required Docker image, create an interactive
 container and enter that container.
 
-To finalize the environment setup, you need to specify details of the physical testbed by invoking the `pset` tool. This
-tool loads the testbed `location file`. The testbed name is the same as the location file name, without the `.yaml`
-suffix. To load the location file `config/locations/mytestbedname.yaml`, run:
+To finalize the environment setup, you need to specify details of the physical testbed by invoking the `osrt shell`
+tool. This tool loads the testbed `location file`. The testbed name is the same as the location filename, without the
+`.yaml` suffix. To load the location file `config/locations/mytestbedname.yaml`, run:
 
 ```bash
-pset mytestbedname
+osrt shell mytestbedname
 ```
 
-After this step, the FUT framework is invoked by calling `pytest` directly.
+All test case execution options and usage of command line tools are now enabled. The testbed toolset provides
+functionalities to control and manage various components of a testbed environment. Below is a summary of its main
+options and commands.
 
-To run `pytest` directly using all default settings, executing all possible test suites and providing a verbose output,
-run:
+| Option           | Description                                              |
+|------------------|----------------------------------------------------------|
+| --debug/-D       | Enable debug logs                                        |
+| --disable-colors | Disable colors across tool output to improve readability |
+| --help/-h        | Show help                                                |
+
+| Command            | Description                                                      |
+|--------------------|------------------------------------------------------------------|
+| client             | OSRT client tool: manage, connect and disconnect testbed clients |
+| config             | Configuration helper toolset (location)                          |
+| pod                | Pod tool: control testbed nodes                                  |
+| reserve            | Testbed reservation tool                                         |
+| rpower             | Rpower control tool                                              |
+| run                | Execute COMMAND for TESTBED_NAME                                 |
+| sanity             | Sanity checker tool                                              |
+| server             | OSRT server tool                                                 |
+| shell              | Launch new subshell for specified TESTBED_NAME                   |
+| switch             | Network switch control tool                                      |
+| testbed            | Testbed recovery and information tool                            |
+| validate-locations | Validate LOCATIONS config file/files                             |
+
+Tools are invoked using the following syntax:
+
+```bash
+osrt [OPTIONS] COMMAND [ARGS]
+```
+
+Further information about specific commands and their options can be acquired by utilizing the `--help` flag. Example:
+
+```bash
+osrt pod --help
+```
+
+After this step, the FUT framework is invoked by calling `pytest` directly. To run `pytest` directly using all default
+settings, executing all possible test suites and providing a verbose output, run:
 
 ```bash
 pytest test/ -v
@@ -237,8 +272,8 @@ pytest test/first_suite_test.py test/second_suite_test.py -v
 It is also possible to provide a single test case or a comma-separated list of test cases from any test suite:
 
 ```bash
-pytest test/ --run_test test_some_procedure -v
-pytest test/ --run_test test_my_procedure,test_another_procedure -v
+pytest --run_test test_some_procedure -v
+pytest --run_test test_my_procedure,test_another_procedure -v
 ```
 
 There is a feature built into the FUT framework that aborts testing altogether if OpenSync process restart is detected
@@ -321,7 +356,7 @@ and open the report in the default system web browser:
 
 ```bash
 allure generate allure-results/ -o allure-report
-allure open allure-report
+allure-show allure-report
 ```
 
 ## Shell files
@@ -340,7 +375,7 @@ user to use consistently and implement into any contribution.
 ### Testcases
 
 Shell test scripts are located in the `shell/tests` subdirectory but cannot all be guaranteed complete portability
-between device platforms and models. Specifically, the use of system tools is SDK and driver dependent. This is why
+between device platforms and models. Specifically, the use of system tools is SDK and driver-dependent. This is why
 override files are sourced after the common library files.
 
 ### Library override files
@@ -369,7 +404,7 @@ required to support FUT execution on a new device model:
 1. Add a model_properties configuration file `config/model_properties/reference/<my_model>.yaml`
 2. Add pod API support for the device platform `pod_lib.py` and model `<my_model>/pod_lib.py` to the framework in the
    `lib_testbed/generic/pod/<my_platform>/` directory.
-3. Add model and platform specific test case configuration generator inputs (optional) in
+3. Add model and platform-specific test case configuration generator inputs (optional) in
    `config/test_case/platform/<my_platform>/*_inputs.py` and `config/test_case/model/<my_model>/*_inputs.py`.
 4. Add model and platform specific shell library override files (optional) `<my_platform>_platform_override.sh` and
    `<my_model>_lib_override.sh` in the `shell/lib/override/` directory.

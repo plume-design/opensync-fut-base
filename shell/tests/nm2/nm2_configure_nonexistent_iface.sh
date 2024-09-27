@@ -43,11 +43,13 @@ if_type=$2
 ip_address=$3
 
 trap '
-fut_info_dump_line
-print_tables Wifi_Inet_Config Wifi_Inet_State
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    print_tables Wifi_Inet_Config Wifi_Inet_State
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 log_title "nm2/nm2_configure_nonexistent_iface.sh: NM2 test - Configure non-existent interface"
 
@@ -65,23 +67,17 @@ insert_ovsdb_entry Wifi_Inet_Config \
     -i parent_ifname eth1 \
     -i mtu 1500 &&
         log "nm2/nm2_configure_nonexistent_iface.sh: NONEXISTENT interface $if_name created - Success" ||
-        raise "FAIL: Failed to insert_ovsdb_entry for $if_name" -l "nm2/nm2_configure_nonexistent_iface.sh" -oe
+        raise "Failed to insert_ovsdb_entry for $if_name" -l "nm2/nm2_configure_nonexistent_iface.sh" -fc
 
 log "nm2/nm2_configure_nonexistent_iface.sh: Checking if NONEXISTENT interface $if_name was created"
 # Interface must be present in Wifi_Inet_State table...
 wait_ovsdb_entry Wifi_Inet_State -w if_name "$if_name" -is if_type "$if_type" &&
     log "nm2/nm2_configure_nonexistent_iface.sh: NONEXISTENT interface present in Wifi_Inet_State::if_name = $if_name - Success" ||
-    raise "FAIL: Wifi_Inet_State::if_name = $if_name not present" -l "nm2/nm2_configure_nonexistent_iface.sh" -ow
+    raise "Wifi_Inet_State::if_name = $if_name not present" -l "nm2/nm2_configure_nonexistent_iface.sh" -fc
 
 # ...but not on system.
 wait_for_function_response 1 "check_interface_exists $if_name" &&
     log "nm2/nm2_configure_nonexistent_iface.sh: Interface $if_name of type $if_type does not exist on system - Success" ||
-    raise "FAIL: Interface $if_name of type $if_type exists on system, but should NOT" -l "nm2/nm2_configure_nonexistent_iface.sh" -tc
-
-# Check if manager survived.
-manager_pid_file="${OPENSYNC_ROOTDIR}/bin/nm"
-wait_for_function_response 0 "check_manager_alive $manager_pid_file" &&
-    log "nm2/nm2_configure_nonexistent_iface.sh: NETWORK MANAGER is running - Success" ||
-    raise "FAIL: NETWORK MANAGER not running/crashed" -l "nm2/nm2_configure_nonexistent_iface.sh" -tc
+    raise "Interface $if_name of type $if_type exists on system, but should NOT" -l "nm2/nm2_configure_nonexistent_iface.sh" -tc
 
 pass

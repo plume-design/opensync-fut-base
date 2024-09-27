@@ -27,35 +27,24 @@ esac
 
 device_init &&
     log -deb "nm2/nm2_setup.sh - Device initialized - Success" ||
-    raise "FAIL: device_init Could not initialize device" -l "nm2/nm2_setup.sh" -ds
-
-start_openswitch &&
-    log -deb "nm2/nm2_setup.sh - OpenvSwitch started - Success" ||
-    raise "FAIL: start_openswitch - Could not start OpenvSwitch" -l "nm2/nm2_setup.sh" -ds
-
-start_wireless_driver &&
-    log -deb "nm2/nm2_setup.sh - Wireless driver started - Success" ||
-    raise "FAIL: start_wireless_driver - Could not start wireless driver" -l "nm2/nm2_setup.sh" -ds
-
-restart_managers
-log -deb "nm2/nm2_setup.sh - Executed restart_managers, exit code: $?"
+    raise "device_init Could not initialize device" -l "nm2/nm2_setup.sh" -ds
 
 empty_ovsdb_table AW_Debug  &&
     log -deb "nm2/nm2_setup.sh - AW_Debug table emptied - Success" ||
-    raise "FAIL: empty_ovsdb_table AW_Debug - Could not empty table" -l "nm2/nm2_setup.sh" -ds
+    raise "empty_ovsdb_table AW_Debug - Could not empty table" -l "nm2/nm2_setup.sh" -ds
 
 set_manager_log WM TRACE &&
     log -deb "nm2/nm2_setup.sh - Manager log for WM set to TRACE - Success" ||
-    raise "FAIL: set_manager_log WM TRACE - Could not set manager log severity" -l "nm2/nm2_setup.sh" -ds
+    raise "set_manager_log WM TRACE - Could not set manager log severity" -l "nm2/nm2_setup.sh" -ds
 
 set_manager_log NM TRACE &&
     log -deb "nm2/nm2_setup.sh - Manager log for NM set to TRACE - Success" ||
-    raise "FAIL: set_manager_log NM TRACE - Could not set manager log severity" -l "nm2/nm2_setup.sh" -ds
+    raise "set_manager_log NM TRACE - Could not set manager log severity" -l "nm2/nm2_setup.sh" -ds
 
 # Check if radio interfaces are created
 for if_name in "$@"
 do
     wait_ovsdb_entry Wifi_Radio_State -w if_name "$if_name" -is if_name "$if_name" &&
         log -deb "nm2/nm2_setup.sh - Wifi_Radio_State::if_name '$if_name' present - Success" ||
-        raise "FAIL: Wifi_Radio_State::if_name for '$if_name' does not exist" -l "nm2/nm2_setup.sh" -ds
+        raise "Wifi_Radio_State::if_name for '$if_name' does not exist" -l "nm2/nm2_setup.sh" -ds
 done

@@ -28,15 +28,12 @@ check_kconfig_option "CONFIG_MANAGER_QM" "y" ||
 
 device_init &&
     log -deb "qm/qm_setup.sh - Device initialized - Success" ||
-    raise "FAIL: device_init - Could not initialize device" -l "qm/qm_setup.sh" -ds
-
-start_openswitch &&
-    log -deb "qm/qm_setup.sh - OpenvSwitch started - Success" ||
-    raise "FAIL: start_openswitch - Could not start OpenvSwitch" -l "qm/qm_setup.sh" -ds
-
-restart_managers
-    log -deb "qm/qm_setup.sh - Executed restart_managers, exit code: $?"
+    raise "device_init - Could not initialize device" -l "qm/qm_setup.sh" -ds
 
 empty_ovsdb_table AW_Debug &&
     log -deb "qm/qm_setup.sh - AW_Debug table emptied - Success" ||
-    raise "FAIL: empty_ovsdb_table AW_Debug - Could not empty AW_Debug table" -l "qm/qm_setup.sh" -ds
+    raise "empty_ovsdb_table AW_Debug - Could not empty AW_Debug table" -l "qm/qm_setup.sh" -ds
+
+set_manager_log QM TRACE &&
+    log -deb "qm/qm_setup.sh - Manager log for QM set to TRACE - Success"||
+    raise "set_manager_log QM TRACE - Could not set manager log severity" -l "qm/qm_setup.sh" -ds

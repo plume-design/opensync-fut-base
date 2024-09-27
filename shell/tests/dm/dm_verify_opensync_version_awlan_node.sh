@@ -28,16 +28,18 @@ case "${1}" in
 esac
 
 trap '
-fut_info_dump_line
-print_tables AWLAN_Node
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    print_tables AWLAN_Node
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 log_title "dm/dm_verify_opensync_version_awlan_node.sh: DM test - Verify OpenSync version in AWLAN_Node"
 
 wait_for_function_response 0 "${OVSH} s AWLAN_Node -j | grep -q OPENSYNC" &&
     log "dm/dm_verify_opensync_version_awlan_node.sh: OpenSync version information exists - Success" ||
-    raise "FAIL: OpenSync version information does not exist in AWLAN_Node"  -l "dm/dm_verify_opensync_version_awlan_node.sh" -tc
+    raise "OpenSync version information does not exist in AWLAN_Node"  -l "dm/dm_verify_opensync_version_awlan_node.sh" -tc
 
 pass

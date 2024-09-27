@@ -1,49 +1,39 @@
-FUT_PASS_EXIT_CODE = 0
+opensync_service_name = ["cm", "fcm", "fsm", "nm", "om", "owm", "pm", "qm", "sm", "um", "wano", "wm"]
+opensync_service_kconfig = [f"CONFIG_MANAGER_{name.upper()}" for name in opensync_service_name]
 
-# Defaults for Device configuration
-FUT_DEFAULT_DUT_DEVICE_MODE_OF_OPERATION = "router"
+all_encryption_types = ["open", "WPA2", "WPA3", "WPA3-transition"]
 
-# Defaults for MQTT configuration and usage
-FUT_DEFAULT_LOCATION_ID = "FUT_DEFAULT_LOCATION_ID"
-FUT_DEFAULT_NODE_ID = "FUT_DEFAULT_NODE_ID"
-FUT_DEFAULT_MQTT_TOPIC = "FUT_DEFAULT_MQTT_TOPIC"
+radio_band_list = ["24g", "5g", "5gl", "5gu", "6g"]
+all_bandwidth_list = ["HT20", "HT40", "HT80", "HT160", "HT320"]
+all_channels = {
+    "24g": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
+    "5g": [36, 40, 44, 48, 52, 56, 60, 64]
+    + [100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144, 149, 153, 157, 161, 165]
+    + [169, 173, 177, 181],
+    "5gl": [36, 40, 44, 48, 52, 56, 60, 64],
+    "5gu": [100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144, 149, 153, 157, 161, 165],
+    "6g": [1, 5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45, 49, 53, 57, 61, 65, 69, 73, 77, 81, 85, 89, 93]
+    + [97, 101, 105, 109, 113]
+    + [117, 121, 125, 129, 133, 137, 141, 145, 149, 153, 157, 161, 165, 169, 173, 177, 181, 185]
+    + [189, 193, 197, 201, 205, 209, 213, 217, 221, 225, 229, 233],
+}
 
-# Defaults for AP creation
-FUT_DEFAULT_AP_BRIDGE = True
-FUT_DEFAULT_AP_BROADCAST_N = "255"
-FUT_DEFAULT_AP_CHANNEL_MODE = "manual"
-FUT_DEFAULT_AP_ENABLED = "true"
-FUT_DEFAULT_AP_ENCRYPTION = "WPA2"
-FUT_DEFAULT_AP_INET_ADDR_N = "130"
-FUT_DEFAULT_AP_INTERFACE_TYPE = "home_ap"
-FUT_DEFAULT_AP_IP_ASSIGN_SCHEME = "static"
-FUT_DEFAULT_AP_MODE = "ap"
-FUT_DEFAULT_AP_NAT = "false"
-FUT_DEFAULT_AP_NETMASK = "255.255.255.128"
-FUT_DEFAULT_AP_PSK = "FutDefaultApPsk"
-FUT_DEFAULT_AP_SKIP_INET_CREATION = False
-FUT_DEFAULT_AP_SSID_BROADCAST = "enabled"
-FUT_DEFAULT_AP_SSID_PREFIX = "FUT_AP_SSID_"
-FUT_DEFAULT_AP_VIF_RESET_DURING_CONFIGURATION = True
-FUT_DEFAULT_AP_WIFI_SECURITY_TYPE = "wpa"
+def_tx_power_range = (1, 24)
+def_tx_power_set = set(range(def_tx_power_range[0], def_tx_power_range[1] + 1))
 
-# Defaults for GW - LEAF connection / GRE tunnel
-FUT_DEFAULT_GW_BHAUL_BROADCAST_N = "255"
-FUT_DEFAULT_GW_BHAUL_ENABLED = "true"
-FUT_DEFAULT_GW_BHAUL_IF_TYPE = "vif"
-FUT_DEFAULT_GW_BHAUL_INET_ADDR_N = "129"
-FUT_DEFAULT_GW_BHAUL_INTERFACE_TYPE = "backhaul_ap"
-FUT_DEFAULT_GW_BHAUL_IP_ASSIGN_SCHEME = "static"
-FUT_DEFAULT_GW_BHAUL_MAC_LIST_TYPE = "whitelist"
-FUT_DEFAULT_GW_BHAUL_MODE = "ap"
-FUT_DEFAULT_GW_BHAUL_NAT = "false"
-FUT_DEFAULT_GW_BHAUL_NETMASK = "255.255.255.128"
-FUT_DEFAULT_GW_BHAUL_NETWORK = "true"
-FUT_DEFAULT_GW_BHAUL_PSK = "FutDefaultBhaulPsk"
-FUT_DEFAULT_GW_BHAUL_SSID_BROADCAST = "disabled"
-FUT_DEFAULT_GW_BHAUL_SSID_PREFIX = "FUT_BHAUL_SSID_"
-FUT_DEFAULT_LEAF_BHAUL_INTERFACE_TYPE = "backhaul_sta"
-FUT_DEFAULT_LEAF_ONBOARD_TYPE = "gre"
+def_bandwidth_list = ["HT40", "HT40", "HT40", "HT40", "HT40"]
+def_channel_list = [6, 44, 44, 157, 5]
+def_radio_type = ["2.4G", "5G", "5GL", "5GU", "6G"]
+sm_radio_types = dict(zip(radio_band_list, def_radio_type))
+
+def_wifi_args = ["channel", "ht_mode", "radio_band"]
+def_wifi_inputs = [[ch, bw, rb] for ch, bw, rb in zip(def_channel_list, def_bandwidth_list, radio_band_list)]
+
+all_pytest_flags = ["skip", "xfail"]
+
+modifiers = ["gw", "leaf", "l1", "l2", "alt", "custom", "A", "B"]
+radio_band_keywords = {f"{mod}_radio_band" for mod in modifiers} | {"radio_band"}
+channel_keywords = {f"{mod}_channel" for mod in modifiers} | {"channel"}
 
 # Unit test specific variables
 unit_test_exec_name = "unit"

@@ -1,4 +1,6 @@
+import time
 from itertools import cycle
+from pathlib import Path
 
 import allure
 import pytest
@@ -7,10 +9,11 @@ from framework.fut_configurator import FutConfigurator
 from framework.lib.fut_lib import (
     allure_attach_to_report,
     determine_required_devices,
-    get_str_hash,
     multi_device_script_execution,
     step,
 )
+from lib_testbed.generic.util import sniffing_utils
+from lib_testbed.generic.util.common import compare_fw_versions
 from lib_testbed.generic.util.logger import log
 
 
@@ -24,24 +27,27 @@ def wm2_setup():
     test_class_name = ["TestWm2"]
     nodes, clients = determine_required_devices(test_class_name)
     log.info(f"Required devices for WM2: {nodes + clients}")
-    for device in nodes:
-        if not hasattr(pytest, device):
-            raise RuntimeError(f"{device.upper()} handler is not set up correctly.")
-        try:
-            device_handler = getattr(pytest, device)
-            wireless_manager_name = device_handler.get_wireless_manager_name()
-            device_handler.fut_device_setup(test_suite_name="wm2", setup_args=wireless_manager_name)
-        except Exception as exception:
-            raise RuntimeError(f"Unable to perform setup for the {device} device: {exception}")
+    for node in nodes:
+        if not hasattr(pytest, node):
+            raise RuntimeError(f"{node.upper()} handler is not set up correctly.")
+        node_handler = getattr(pytest, node)
+        wireless_manager_name = node_handler.get_wireless_manager_name()
+        if wireless_manager_name.upper() not in node_handler.get_kconfig_managers():
+            pytest.skip(f"{wireless_manager_name.upper()} not present on device")
+        node_handler.fut_device_setup(test_suite_name="wm2", setup_args=wireless_manager_name)
+        service_status = node_handler.get_node_services_and_status()
+        if service_status[wireless_manager_name.lower()]["status"] != "enabled":
+            pytest.skip(f"{wireless_manager_name.upper()} not enabled on device")
     # L1: configure an AP with the purpose of lowering the default TX power level for the 6GHz radio (if applicable)
     if "6G" in pytest.l1.capabilities.get_supported_bands():
-        l1_ap_vif_args = {
-            "channel": 5,
-            "ht_mode": "HT40",
-            "radio_band": "6g",
-        }
-        pytest.l1.ap_args = l1_ap_vif_args
-        pytest.l1.configure_radio_vif_and_network()
+        pytest.l1.create_interface_object(
+            channel=5,
+            ht_mode="HT40",
+            radio_band="6g",
+            encryption="WPA3",
+            interface_role="home_ap",
+        )
+        assert pytest.l1.interfaces["home_ap"].configure_interface() == ExpectedShellResult
     # Set the baseline OpenSync PIDs used for reboot detection
     pytest.session_baseline_os_pids = pytest.gw.opensync_pid_retrieval(tracked_node_services=pytest.tracked_managers)
 
@@ -63,6 +69,7 @@ class TestWm2:
             channel = cfg.get("channel")
             ht_mode = cfg.get("ht_mode")
             radio_band = cfg.get("radio_band")
+            ping_check_wan_ip = cfg.get("ping_check_wan_ip", "1.1.1.1")
 
             with step("Testcase compatibility check"):
                 if radio_band == "6g":
@@ -71,106 +78,118 @@ class TestWm2:
             if w1.model not in ["linux", "debian"]:
                 pytest.skip("A WiFi6 client is required for this testcase, skipping.")
 
-            # Common VAP arguments
-            common_vap_configuration_args = {
-                "channel": channel,
-                "ht_mode": ht_mode,
-                "radio_band": radio_band,
-                "wifi_security_type": "wpa",
-            }
-
-            # Primary VAP arguments
-            primary_vap_configuration_args = common_vap_configuration_args | {
-                "encryption": "WPA3",
-                "interface_type": "home_ap",
-                "wpa_psk": "FUT_primary_PSK",
-                "ssid": "FUT_primary_SSID",
-                "reset_vif": True,
-            }
-
-            # Secondary VAP arguments
-            secondary_vap_configuration_args = common_vap_configuration_args | {
-                "encryption": "WPA2",
-                "interface_type": "fhaul_ap",
-                "wpa_psk": ["FUT_secondary_PSK0", "FUT_secondary_PSK1"],
-                "ssid": "FUT_secondary_SSID",
-            }
+            if not gw.get_wpa3_support():
+                pytest.skip(f"Device {gw.name} does not support WPA3.")
 
             # Constant arguments
             client_retry = 3
+            secondary_vap_psks = ["FUT_secondary_PSK0", "FUT_secondary_PSK1"]
 
-            # VAP and security arguments
-            gw.ap_args = primary_vap_configuration_args
-            primary_vap_args = gw.configure_radio_vif_interface(return_as_dict=True)
-            gw.ap_args = secondary_vap_configuration_args
-            secondary_vap_args = gw.configure_radio_vif_interface(return_as_dict=True)
+            # Primary VAP arguments
+            gw.create_interface_object(
+                channel=channel,
+                ht_mode=ht_mode,
+                radio_band=radio_band,
+                encryption="WPA3",
+                interface_role="home_ap",
+            )
 
-            # Network arguments
-            secondary_vap_network_args = gw.configure_network_parameters()
+            # Secondary VAP arguments
+            gw.create_interface_object(
+                channel=channel,
+                ht_mode=ht_mode,
+                radio_band=radio_band,
+                encryption="WPA2",
+                interface_role="fhaul_ap",
+                wpa_psks=secondary_vap_psks,
+            )
+
+            # Extract VAP arguments and ensure they are compliant with the OVSDB format
+            primary_vap_ssid = gw.interfaces["home_ap"].ssid_raw
+            primary_vap_psk = gw.interfaces["home_ap"].psk_raw
+
+            secondary_vap_ssid = gw.interfaces["fhaul_ap"].ssid_raw
+
+            primary_vap_args = gw.interfaces["home_ap"].combined_args
+            secondary_vap_args = gw.interfaces["fhaul_ap"].combined_args
+
+            ovsdb_primary_vap_args = {
+                key: gw.ovsdb.python_value_to_ovsdb_value(value) for key, value in primary_vap_args.items()
+            }
+            ovsdb_secondary_vap_args = {
+                key: gw.ovsdb.python_value_to_ovsdb_value(value) for key, value in secondary_vap_args.items()
+            }
 
             test_args = gw.get_command_arguments(
-                f"-if_name {primary_vap_args['if_name']}",
-                f"-bridge {primary_vap_args['bridge']}",
-                f"-enabled {primary_vap_args['enabled']}",
-                f"-primary_vif_if_name {primary_vap_args['vif_if_name']}",
-                f"-secondary_vif_if_name {secondary_vap_args['vif_if_name']}",
-                f"-mode {primary_vap_args['mode']}",
-                f"-primary_ssid {primary_vap_args['ssid']}",
-                f"-secondary_ssid {secondary_vap_args['ssid']}",
-                f"-ssid_broadcast {primary_vap_args['ssid_broadcast']}",
-                f"-primary_vif_radio_idx {primary_vap_args['vif_radio_idx']}",
-                f"-secondary_vif_radio_idx {secondary_vap_args['vif_radio_idx']}",
-                f"-wpa {primary_vap_args['wpa']}",
-                f"-primary_wpa_key_mgmt {primary_vap_args['wpa_key_mgmt']}",
-                f"-secondary_wpa_key_mgmt {secondary_vap_args['wpa_key_mgmt']}",
-                f"-primary_wpa_psks {primary_vap_args['wpa_psks']}",
-                f"-secondary_wpa_psks {secondary_vap_args['wpa_psks']}",
-                f"-primary_wpa_oftags {primary_vap_args['wpa_oftags']}",
-                f"-secondary_wpa_oftags {secondary_vap_args['wpa_oftags']}",
+                f"-if_name {ovsdb_primary_vap_args['radio_if_name']}",
+                f"-bridge {ovsdb_primary_vap_args['bridge']}",
+                f"-enabled {ovsdb_primary_vap_args['enabled']}",
+                f"-primary_vif_if_name {ovsdb_primary_vap_args['vif_if_name']}",
+                f"-secondary_vif_if_name {ovsdb_secondary_vap_args['vif_if_name']}",
+                f"-mode {ovsdb_primary_vap_args['mode']}",
+                f"-primary_ssid {ovsdb_primary_vap_args['ssid']}",
+                f"-secondary_ssid {ovsdb_secondary_vap_args['ssid']}",
+                f"-ssid_broadcast {ovsdb_primary_vap_args['ssid_broadcast']}",
+                f"-primary_vif_radio_idx {ovsdb_primary_vap_args['vif_radio_idx']}",
+                f"-secondary_vif_radio_idx {ovsdb_secondary_vap_args['vif_radio_idx']}",
+                "-wpa true",
+                f"-primary_wpa_key_mgmt {ovsdb_primary_vap_args['wpa_key_mgmt']}",
+                f"-secondary_wpa_key_mgmt {ovsdb_secondary_vap_args['wpa_key_mgmt']}",
+                f"-primary_wpa_psks {ovsdb_primary_vap_args['wpa_psks']}",
+                f"-secondary_wpa_psks {ovsdb_secondary_vap_args['wpa_psks']}",
+                f"-primary_wpa_oftags {ovsdb_primary_vap_args['wpa_oftags']}",
+                f"-secondary_wpa_oftags {ovsdb_secondary_vap_args['wpa_oftags']}",
+            )
+
+            secondary_vap_network_args = gw.get_command_arguments(
+                f"-if_type {ovsdb_primary_vap_args['if_type']}",
+                f"-inet_enabled {ovsdb_primary_vap_args['inet_enabled']}",
+                f"-ip_assign_scheme {ovsdb_primary_vap_args['ip_assign_scheme']}",
+                f"-mtu {ovsdb_primary_vap_args['mtu']}",
+                f"-NAT {ovsdb_primary_vap_args['NAT']}",
+                f"-network {ovsdb_primary_vap_args['network']}",
+                f"-network_if_name {ovsdb_primary_vap_args['network_if_name']}",
+            )
+
+            add_port_to_bridge_args = gw.get_command_arguments(
+                ovsdb_primary_vap_args["bridge"],
+                ovsdb_secondary_vap_args["vif_if_name"],
             )
 
         try:
+            with step("GW: VIF reset"):
+                gw.vif_reset()
             with step("Configure primary VAP"):
-                gw.ap_args = primary_vap_configuration_args
-                assert gw.configure_radio_vif_and_network()
+                assert gw.interfaces["home_ap"].configure_interface() == ExpectedShellResult
             with step("Testcase"):
                 assert (
                     gw.execute_with_logging("tests/wm2/wm2_check_wpa3_with_wpa2_multi_psk", test_args)[0]
                     == ExpectedShellResult
                 )
             with step("Configure secondary VAP network"):
-                secondary_vap_network_args = gw.get_command_arguments(*secondary_vap_network_args)
                 assert (
                     gw.execute("tools/device/create_inet_interface", secondary_vap_network_args)[0]
                     == ExpectedShellResult
                 )
-                add_port_to_bridge_args = gw.get_command_arguments(
-                    primary_vap_args["bridge"],
-                    secondary_vap_args["vif_radio_idx"],
-                )
-                assert gw.execute("tools/device/add_bridge_port", add_port_to_bridge_args)[0] == ExpectedShellResult
+                assert gw.execute("tools/device/add_port_to_bridge", add_port_to_bridge_args)[0] == ExpectedShellResult
             with step("Client connectivity check - WPA2 encryption with multi-PSK"):
-                gw.ap_args = secondary_vap_configuration_args
-                security_args = gw.configure_wifi_security(return_as_dict=True)
-                for psk in secondary_vap_configuration_args["wpa_psk"]:
+                for psk in secondary_vap_psks:
                     w1.device_api.connect(
-                        ssid=secondary_vap_configuration_args["ssid"],
+                        ssid=secondary_vap_ssid,
                         psk=psk,
-                        key_mgmt=security_args["key_mgmt_mapping"],
                         retry=client_retry,
                     )
+                    assert w1.device_api.ping_check(ipaddr=ping_check_wan_ip)
             with step("Client connectivity check - WPA3 encryption"):
-                gw.ap_args = primary_vap_configuration_args
-                security_args = gw.configure_wifi_security(return_as_dict=True)
                 w1.device_api.connect(
-                    ssid=primary_vap_configuration_args["ssid"],
-                    psk=primary_vap_configuration_args["wpa_psk"],
-                    key_mgmt=security_args["key_mgmt_mapping"],
+                    ssid=primary_vap_ssid,
+                    psk=primary_vap_psk,
                     retry=client_retry,
                 )
+                assert w1.device_api.ping_check(ipaddr=ping_check_wan_ip)
         finally:
             with step("Cleanup"):
-                assert gw.execute("tools/device/vif_reset")[0] == ExpectedShellResult
+                gw.vif_reset()
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", wm2_config.get("wm2_check_wifi_credential_config", []))
@@ -183,7 +202,7 @@ class TestWm2:
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", wm2_config.get("wm2_connect_wpa3_client", []))
     def test_wm2_connect_wpa3_client(self, cfg: dict):
-        fut_configurator, gw, w1 = pytest.fut_configurator, pytest.gw, pytest.w1
+        gw, w1 = pytest.gw, pytest.w1
 
         with step("Preparation of testcase parameters"):
             # Arguments from test case configuration
@@ -193,48 +212,53 @@ class TestWm2:
             client_retry = cfg.get("client_retry", 2)
             encryption = cfg["encryption"]
 
-            # Constant arguments
-            ssid, psk = fut_configurator.base_ssid, fut_configurator.base_psk
-            wifi_security_type = "wpa"
-
             # W1 specific arguments
             wlan_if_name = w1.device_config.get("wlan_if_name")
             w1_mac = w1.device_api.get_mac(if_name=wlan_if_name)
 
-            # GW AP arguments
-            gw_ap_vif_args = {
-                "channel": channel,
-                "ht_mode": ht_mode,
-                "radio_band": radio_band,
-                "wpa_psk": psk,
-                "wifi_security_type": wifi_security_type,
-                "encryption": encryption,
-                "ssid": ssid,
-                "reset_vif": True,
-            }
-
-            gw.ap_args = gw_ap_vif_args
-
             if w1.model not in ["linux", "debian"]:
                 pytest.skip("A WiFi6 client is required for this testcase, skipping.")
 
-        with step("GW AP creation"):
-            assert gw.configure_radio_vif_and_network()
-        with step("Client connection"):
-            security_args = gw.configure_wifi_security(return_as_dict=True)
-            w1.device_api.connect(
-                ssid=ssid,
-                psk=psk,
-                key_mgmt=security_args["key_mgmt_mapping"],
-                retry=client_retry,
+            if not gw.get_wpa3_support():
+                pytest.skip(f"Device {gw.name} does not support WPA3.")
+
+            # GW interface creation
+            gw.create_interface_object(
+                channel=channel,
+                ht_mode=ht_mode,
+                radio_band=radio_band,
+                encryption=encryption,
+                interface_role="home_ap",
             )
-        with step("Test case"):
-            assert w1_mac in gw.device_api.get_wifi_associated_clients()[0]
+
+            # Retrieve AP SSID and PSK values
+            ssid = gw.interfaces["home_ap"].ssid_raw
+            psk = gw.interfaces["home_ap"].psk_raw
+
+        try:
+            with step("GW AP creation"):
+                assert gw.interfaces["home_ap"].configure_interface() == ExpectedShellResult
+            with step("Client connection"):
+                w1.device_api.connect(
+                    ssid=ssid,
+                    psk=psk,
+                    retry=client_retry,
+                )
+            with step("Test case"):
+                assert w1_mac in gw.device_api.get_wifi_associated_clients()[0]
+        finally:
+            with step("Cleanup"):
+                gw.interfaces["home_ap"].vif_reset()
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", wm2_config.get("wm2_connect_wpa3_leaf", []))
     def test_wm2_connect_wpa3_leaf(self, cfg: dict):
         gw, l1 = pytest.gw, pytest.l1
+
+        if not gw.get_wpa3_support():
+            pytest.skip(f"Device {gw.name} does not support WPA3.")
+        if not l1.get_wpa3_support():
+            pytest.skip(f"Device {l1.name} does not support WPA3.")
 
         with step("Preparation of testcase parameters"):
             # Arguments from test case configuration
@@ -244,38 +268,32 @@ class TestWm2:
             device_mode = cfg.get("device_mode", "router")
             encryption = cfg["encryption"]
 
-            # Constant arguments
-            wifi_security_type = "wpa"
-
             # L1 specific arguments
             l1_radio_band = l1.get_radio_band_from_remote_channel_and_band(channel, gw_radio_band)
             l1_bhaul_sta_if_name = l1.device_api.capabilities.get_bhaul_sta_ifname(freq_band=l1_radio_band)
             l1_mac = l1.device_api.iface.get_vif_mac(l1_bhaul_sta_if_name)[0]
 
         try:
-            with step("VIF reset"):
-                multi_device_script_execution(devices=[gw, l1], script="tools/device/vif_reset")
             with step(f"Put GW into {device_mode} mode"):
                 assert gw.configure_device_mode(device_mode=device_mode)
             with step("GW AP and L1 STA creation"):
-                assert gw.create_and_configure_bhaul_connection_gw_leaf(
+                assert gw.create_and_configure_backhaul(
                     channel=channel,
                     leaf_device=l1,
-                    gw_radio_band=gw_radio_band,
-                    leaf_radio_band=l1_radio_band,
+                    radio_band=gw_radio_band,
                     ht_mode=ht_mode,
-                    wifi_security_type=wifi_security_type,
                     encryption=encryption,
-                    skip_gre=True,
+                    mesh_type=None,
                 )
             with step("Test case"):
                 assert l1_mac in gw.device_api.get_wifi_associated_clients()[0]
         finally:
             with step("Cleanup"):
-                multi_device_script_execution(devices=[gw, l1], script="tools/device/vif_reset")
+                gw.interfaces["backhaul_ap"].vif_reset()
+                l1.interfaces["backhaul_sta"].vif_reset()
 
     @allure.severity(allure.severity_level.NORMAL)
-    @pytest.mark.timeout(540)
+    @pytest.mark.timeout(720)
     @pytest.mark.parametrize("cfg", wm2_config.get("wm2_create_all_aps_per_radio", []))
     def test_wm2_create_all_aps_per_radio(self, cfg: dict):
         gw, l1, w1 = pytest.gw, pytest.l1, pytest.w1
@@ -287,67 +305,65 @@ class TestWm2:
             radio_band = cfg.get("radio_band")
             if_list = cfg.get("if_list")
             encryption = cfg["encryption"]
-            wifi_security_type = cfg.get("wifi_security_type", "wpa")
             client_retry = cfg.get("client_retry", None)
-
-            # L1 specific arguments
-            l1_radio_band = l1.get_radio_band_from_remote_channel_and_band(channel, radio_band)
 
             # W1 specific arguments
             wlan_if_name = w1.device_config.get("wlan_if_name")
             w1_mac = w1.device_api.get_mac(if_name=wlan_if_name)
 
-        with step("VIF reset"):
-            assert gw.execute("tools/device/vif_reset")[0] == ExpectedShellResult
-        with step("Test case"):
-            for interface in if_list:
-                if interface == "backhaul_ap":
-                    assert gw.create_and_configure_bhaul_connection_gw_leaf(
-                        channel=channel,
-                        leaf_device=l1,
-                        gw_radio_band=radio_band,
-                        leaf_radio_band=l1_radio_band,
-                        ht_mode=ht_mode,
-                        wifi_security_type=wifi_security_type,
-                        encryption=encryption,
-                        skip_gre=True,
-                    )
-                else:
-                    ssid, psk = f"FUT_ssid_{interface}", f"FUT_psk_{interface}"
-                    gw_ap_vif_args = {
-                        "channel": channel,
-                        "ht_mode": ht_mode,
-                        "radio_band": radio_band,
-                        "wpa_psk": psk,
-                        "wifi_security_type": wifi_security_type,
-                        "encryption": encryption,
-                        "ssid": ssid,
-                        "interface_type": interface,
-                    }
-                    gw.ap_args = gw_ap_vif_args
-                    with step(f"GW AP creation - {interface}"):
-                        assert gw.configure_radio_vif_and_network()
-                    with step("Client connection"):
-                        security_args = gw.configure_wifi_security(return_as_dict=True)
-                        w1.device_api.connect(
+        try:
+            with step("Test case"):
+                for interface in if_list:
+                    if interface == "backhaul_ap":
+                        assert gw.create_and_configure_backhaul(
+                            channel=channel,
+                            leaf_device=l1,
+                            radio_band=radio_band,
+                            ht_mode=ht_mode,
+                            encryption=encryption,
+                            mesh_type=None,
+                        )
+                    else:
+                        ssid, psk = f"FUT_ssid_{interface}", f"FUT_psk_{interface}"
+                        gw.create_interface_object(
+                            channel=channel,
+                            ht_mode=ht_mode,
+                            radio_band=radio_band,
+                            encryption=encryption,
+                            interface_role=interface,
                             ssid=ssid,
-                            psk=psk,
-                            key_mgmt=security_args["key_mgmt_mapping"],
-                            retry=client_retry,
+                            wpa_psks=psk,
                         )
-                    with step("Verify client connection"):
-                        assert (
-                            gw.execute(
-                                "tools/device/ovsdb/wait_ovsdb_entry",
-                                f"Wifi_Associated_Clients -w mac {w1_mac}",
-                            )[0]
-                            == ExpectedShellResult
-                        )
+                        with step(f"GW AP creation - {interface}"):
+                            assert gw.interfaces[interface].configure_interface() == ExpectedShellResult
+                        with step("Client connection"):
+                            w1.device_api.connect(
+                                ssid=ssid,
+                                psk=psk,
+                                retry=client_retry,
+                            )
+                        with step("Verify client connection"):
+                            client_connection_args = {
+                                "state": "active",
+                            }
+                            assert (
+                                gw.ovsdb.wait_for_value(
+                                    table="Wifi_Associated_Clients",
+                                    value=client_connection_args,
+                                    where=f"mac=={w1_mac}",
+                                )[0]
+                                == ExpectedShellResult
+                            )
+        finally:
+            with step("Cleanup"):
+                gw.vif_reset()
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", wm2_config.get("wm2_create_wpa3_ap", []))
     def test_wm2_create_wpa3_ap(self, cfg: dict):
-        fut_configurator, gw = pytest.fut_configurator, pytest.gw
+        gw = pytest.gw
+        if not gw.get_wpa3_support():
+            pytest.skip(f"Device {gw.name} does not support WPA3.")
 
         with step("Preparation of testcase parameters"):
             # Arguments from test case configuration
@@ -357,28 +373,26 @@ class TestWm2:
             interface_type = cfg.get("interface_type")
             encryption = cfg["encryption"]
 
-            # Constant arguments
-            ssid, psk = fut_configurator.base_ssid, fut_configurator.base_psk
+            # GW interface creation
+            gw.create_interface_object(
+                channel=channel,
+                ht_mode=ht_mode,
+                radio_band=radio_band,
+                encryption=encryption,
+                interface_role=interface_type,
+            )
 
-            # GW AP arguments
-            gw_ap_vif_args = {
-                "channel": channel,
-                "ht_mode": ht_mode,
-                "radio_band": radio_band,
-                "wpa_psk": psk,
-                "encryption": encryption,
-                "ssid": ssid,
-                "interface_type": interface_type,
-            }
-            gw.ap_args = gw_ap_vif_args
-
-        with step("Test case"):
-            assert gw.configure_radio_vif_and_network()
+        try:
+            with step("Test case"):
+                assert gw.interfaces[interface_type].configure_interface() == ExpectedShellResult
+        finally:
+            with step("Cleanup"):
+                gw.interfaces[interface_type].vif_reset()
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", wm2_config.get("wm2_dfs_cac_aborted", []))
     def test_wm2_dfs_cac_aborted(self, cfg: dict):
-        fut_configurator, gw = pytest.fut_configurator, pytest.gw
+        gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
             # Arguments from test case configuration
@@ -387,57 +401,49 @@ class TestWm2:
             ht_mode = cfg.get("ht_mode")
             radio_band = cfg.get("radio_band")
             encryption = cfg["encryption"]
-            wifi_security_type = cfg.get("wifi_security_type", "wpa")
-
-            # Constant arguments
-            ssid, psk = fut_configurator.base_ssid, fut_configurator.base_psk
-            interface_type = "home_ap"
-            mode = "ap"
 
             # GW specific arguments
-            if_name = gw.capabilities.get_ifname(freq_band=radio_band, iftype=interface_type)
-            vif_radio_idx = gw.capabilities.get_iftype_vif_radio_idx(iftype=interface_type)
             channels = gw.capabilities.get_supported_radio_channels(freq_band=radio_band)
-            phy_radio_name = gw.capabilities.get_phy_radio_ifname(freq_band=radio_band)
             hw_mode = gw.capabilities.get_radio_hw_mode(freq_band=radio_band)
 
             if not {channel_A, channel_B}.issubset(channels):
                 pytest.skip(f"Channels {channel_A} and {channel_B} are not valid for the same radio.")
 
-            # GW AP arguments
-            gw_ap_vif_args = {
-                "channel": channel_A,
-                "ht_mode": ht_mode,
-                "radio_band": radio_band,
-                "wpa_psk": psk,
-                "encryption": encryption,
-                "wifi_security_type": wifi_security_type,
-                "ssid": ssid,
-                "interface_type": interface_type,
-            }
+            # GW interface creation
+            gw.create_interface_object(
+                channel=channel_A,
+                ht_mode=ht_mode,
+                radio_band=radio_band,
+                encryption=encryption,
+                interface_role="home_ap",
+            )
 
-            gw.ap_args = gw_ap_vif_args
+            # Extract AP arguments and ensure they are compliant with the OVSDB format
+            ssid = gw.interfaces["home_ap"].ssid_raw
+            ap_args = gw.interfaces["home_ap"].combined_args
+            ovsdb_ap_args = {key: gw.ovsdb.python_value_to_ovsdb_value(value) for key, value in ap_args.items()}
 
-            test_args_base = [
-                f"-if_name {phy_radio_name}",
-                f"-vif_if_name {if_name}",
-                f"-vif_radio_idx {vif_radio_idx}",
+            test_args = gw.get_command_arguments(
+                f"-radio_if_name {ovsdb_ap_args['radio_if_name']}",
+                f"-vif_if_name {ovsdb_ap_args['vif_if_name']}",
+                f"-vif_radio_idx {ovsdb_ap_args['vif_radio_idx']}",
                 f"-ssid '{ssid}'",
                 f"-channel_a {channel_A}",
                 f"-channel_b {channel_B}",
                 f"-ht_mode {ht_mode}",
                 f"-hw_mode {hw_mode}",
-                f"-mode {mode}",
+                f"-mode {ovsdb_ap_args['mode']}",
                 "-channel_mode manual",
                 "-enabled true",
-                f"-wifi_security_type {wifi_security_type}",
-            ]
-            test_args_base += gw.configure_wifi_security()
-            test_args = gw.get_command_arguments(*test_args_base)
+                "-wpa true",
+                f"-wpa_psks {ovsdb_ap_args['wpa_psks']}",
+                f"-wpa_oftags {ovsdb_ap_args['wpa_oftags']}",
+                f"-wpa_key_mgmt {ovsdb_ap_args['wpa_key_mgmt']}",
+            )
 
         with step("VIF reset"):
             if not pytest.test_wm2_dfs_cac_aborted_first_run:
-                assert gw.execute("tools/device/vif_reset")[0] == ExpectedShellResult
+                gw.vif_reset()
             pytest.test_wm2_dfs_cac_aborted_first_run = True
         with step("Test case"):
             assert gw.execute_with_logging("tests/wm2/wm2_dfs_cac_aborted", test_args)[0] == ExpectedShellResult
@@ -445,7 +451,7 @@ class TestWm2:
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", wm2_config.get("wm2_ht_mode_and_channel_iteration", []))
     def test_wm2_ht_mode_and_channel_iteration(self, cfg: dict):
-        fut_configurator, gw = pytest.fut_configurator, pytest.gw
+        gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
             # Arguments from test case configuration
@@ -453,52 +459,44 @@ class TestWm2:
             ht_mode = cfg.get("ht_mode")
             radio_band = cfg.get("radio_band")
             encryption = cfg["encryption"]
-            wifi_security_type = cfg.get("wifi_security_type", "wpa")
-
-            # Constant arguments
-            ssid, psk = fut_configurator.base_ssid, fut_configurator.base_psk
-            interface_type = "home_ap"
-            mode = "ap"
 
             # GW specific arguments
-            if_name = gw.capabilities.get_ifname(freq_band=radio_band, iftype=interface_type)
-            vif_radio_idx = gw.capabilities.get_iftype_vif_radio_idx(iftype=interface_type)
-            phy_radio_name = gw.capabilities.get_phy_radio_ifname(freq_band=radio_band)
             hw_mode = gw.capabilities.get_radio_hw_mode(freq_band=radio_band)
 
-            # GW AP arguments
-            gw_ap_vif_args = {
-                "channel": channel,
-                "ht_mode": ht_mode,
-                "radio_band": radio_band,
-                "wpa_psk": psk,
-                "encryption": encryption,
-                "wifi_security_type": wifi_security_type,
-                "ssid": ssid,
-                "interface_type": interface_type,
-            }
+            # GW interface creation
+            gw.create_interface_object(
+                channel=channel,
+                ht_mode=ht_mode,
+                radio_band=radio_band,
+                encryption=encryption,
+                interface_role="home_ap",
+            )
 
-            gw.ap_args = gw_ap_vif_args
+            # Extract AP arguments and ensure they are compliant with the OVSDB format
+            ssid = gw.interfaces["home_ap"].ssid_raw
+            ap_args = gw.interfaces["home_ap"].combined_args
+            ovsdb_ap_args = {key: gw.ovsdb.python_value_to_ovsdb_value(value) for key, value in ap_args.items()}
 
-            test_args_base = [
-                f"-if_name {phy_radio_name}",
-                f"-vif_if_name {if_name}",
-                f"-vif_radio_idx {vif_radio_idx}",
+            test_args = gw.get_command_arguments(
+                f"-radio_if_name {ovsdb_ap_args['radio_if_name']}",
+                f"-vif_if_name {ovsdb_ap_args['vif_if_name']}",
+                f"-vif_radio_idx {ovsdb_ap_args['vif_radio_idx']}",
                 f"-ssid '{ssid}'",
                 f"-channel {channel}",
                 f"-ht_mode {ht_mode}",
                 f"-hw_mode {hw_mode}",
-                f"-mode {mode}",
+                f"-mode {ovsdb_ap_args['mode']}",
                 "-channel_mode manual",
                 "-enabled true",
-                f"-wifi_security_type {wifi_security_type}",
-            ]
-            test_args_base += gw.configure_wifi_security()
-            test_args = gw.get_command_arguments(*test_args_base)
+                "-wpa true",
+                f"-wpa_psks {ovsdb_ap_args['wpa_psks']}",
+                f"-wpa_oftags {ovsdb_ap_args['wpa_oftags']}",
+                f"-wpa_key_mgmt {ovsdb_ap_args['wpa_key_mgmt']}",
+            )
 
         with step("VIF reset"):
             if pytest.wm2_last_channel_and_radio_band_used != (channel, radio_band):
-                assert gw.execute("tools/device/vif_reset")[0] == ExpectedShellResult
+                gw.vif_reset()
             pytest.wm2_last_channel_and_radio_band_used = (channel, radio_band)
         with step("Test case"):
             assert (
@@ -509,7 +507,7 @@ class TestWm2:
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", wm2_config.get("wm2_immutable_radio_freq_band", []))
     def test_wm2_immutable_radio_freq_band(self, cfg: dict):
-        fut_configurator, gw = pytest.fut_configurator, pytest.gw
+        gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
             # Arguments from test case configuration
@@ -517,54 +515,46 @@ class TestWm2:
             ht_mode = cfg.get("ht_mode")
             radio_band = cfg.get("radio_band")
             encryption = cfg["encryption"]
-            wifi_security_type = cfg.get("wifi_security_type", "wpa")
             freq_band = cfg.get("freq_band")
 
-            # Constant arguments
-            ssid, psk = fut_configurator.base_ssid, fut_configurator.base_psk
-            interface_type = "home_ap"
-            mode = "ap"
-
             # GW specific arguments
-            if_name = gw.capabilities.get_ifname(freq_band=radio_band, iftype=interface_type)
-            vif_radio_idx = gw.capabilities.get_iftype_vif_radio_idx(iftype=interface_type)
-            phy_radio_name = gw.capabilities.get_phy_radio_ifname(freq_band=radio_band)
             hw_mode = gw.capabilities.get_radio_hw_mode(freq_band=radio_band)
 
-            # GW AP arguments
-            gw_ap_vif_args = {
-                "channel": channel,
-                "ht_mode": ht_mode,
-                "radio_band": radio_band,
-                "wpa_psk": psk,
-                "encryption": encryption,
-                "wifi_security_type": wifi_security_type,
-                "ssid": ssid,
-                "interface_type": interface_type,
-            }
+            # GW interface creation
+            gw.create_interface_object(
+                channel=channel,
+                ht_mode=ht_mode,
+                radio_band=radio_band,
+                encryption=encryption,
+                interface_role="home_ap",
+            )
 
-            gw.ap_args = gw_ap_vif_args
+            # Extract AP arguments and ensure they are compliant with the OVSDB format
+            ssid = gw.interfaces["home_ap"].ssid_raw
+            ap_args = gw.interfaces["home_ap"].combined_args
+            ovsdb_ap_args = {key: gw.ovsdb.python_value_to_ovsdb_value(value) for key, value in ap_args.items()}
 
-            test_args_base = [
-                f"-if_name {phy_radio_name}",
-                f"-vif_if_name {if_name}",
-                f"-vif_radio_idx {vif_radio_idx}",
+            test_args = gw.get_command_arguments(
+                f"-radio_if_name {ovsdb_ap_args['radio_if_name']}",
+                f"-vif_if_name {ovsdb_ap_args['vif_if_name']}",
+                f"-vif_radio_idx {ovsdb_ap_args['vif_radio_idx']}",
                 f"-ssid '{ssid}'",
                 f"-channel {channel}",
                 f"-ht_mode {ht_mode}",
                 f"-hw_mode {hw_mode}",
-                f"-mode {mode}",
+                f"-mode {ovsdb_ap_args['mode']}",
                 "-channel_mode manual",
                 "-enabled true",
-                f"-wifi_security_type {wifi_security_type}",
                 f"-freq_band {freq_band}",
-            ]
-            test_args_base += gw.configure_wifi_security()
-            test_args = gw.get_command_arguments(*test_args_base)
+                "-wpa true",
+                f"-wpa_psks {ovsdb_ap_args['wpa_psks']}",
+                f"-wpa_oftags {ovsdb_ap_args['wpa_oftags']}",
+                f"-wpa_key_mgmt {ovsdb_ap_args['wpa_key_mgmt']}",
+            )
 
         with step("VIF reset"):
             if not pytest.test_wm2_immutable_radio_freq_band_first_run:
-                assert gw.execute("tools/device/vif_reset")[0] == ExpectedShellResult
+                gw.vif_reset()
             pytest.test_wm2_immutable_radio_freq_band_first_run = True
         with step("Test case"):
             assert (
@@ -574,7 +564,7 @@ class TestWm2:
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", wm2_config.get("wm2_immutable_radio_hw_mode", []))
     def test_wm2_immutable_radio_hw_mode(self, cfg: dict):
-        fut_configurator, gw = pytest.fut_configurator, pytest.gw
+        gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
             # Arguments from test case configuration
@@ -582,54 +572,46 @@ class TestWm2:
             ht_mode = cfg.get("ht_mode")
             radio_band = cfg.get("radio_band")
             encryption = cfg["encryption"]
-            wifi_security_type = cfg.get("wifi_security_type", "wpa")
             custom_hw_mode = cfg.get("custom_hw_mode")
 
-            # Constant arguments
-            ssid, psk = fut_configurator.base_ssid, fut_configurator.base_psk
-            interface_type = "home_ap"
-            mode = "ap"
-
             # GW specific arguments
-            if_name = gw.capabilities.get_ifname(freq_band=radio_band, iftype=interface_type)
-            vif_radio_idx = gw.capabilities.get_iftype_vif_radio_idx(iftype=interface_type)
-            phy_radio_name = gw.capabilities.get_phy_radio_ifname(freq_band=radio_band)
             hw_mode = gw.capabilities.get_radio_hw_mode(freq_band=radio_band)
 
-            # GW AP arguments
-            gw_ap_vif_args = {
-                "channel": channel,
-                "ht_mode": ht_mode,
-                "radio_band": radio_band,
-                "wpa_psk": psk,
-                "encryption": encryption,
-                "wifi_security_type": wifi_security_type,
-                "ssid": ssid,
-                "interface_type": interface_type,
-            }
+            # GW interface creation
+            gw.create_interface_object(
+                channel=channel,
+                ht_mode=ht_mode,
+                radio_band=radio_band,
+                encryption=encryption,
+                interface_role="home_ap",
+            )
 
-            gw.ap_args = gw_ap_vif_args
+            # Extract AP arguments and ensure they are compliant with the OVSDB format
+            ssid = gw.interfaces["home_ap"].ssid_raw
+            ap_args = gw.interfaces["home_ap"].combined_args
+            ovsdb_ap_args = {key: gw.ovsdb.python_value_to_ovsdb_value(value) for key, value in ap_args.items()}
 
-            test_args_base = [
-                f"-if_name {phy_radio_name}",
-                f"-vif_if_name {if_name}",
-                f"-vif_radio_idx {vif_radio_idx}",
+            test_args = gw.get_command_arguments(
+                f"-radio_if_name {ovsdb_ap_args['radio_if_name']}",
+                f"-vif_if_name {ovsdb_ap_args['vif_if_name']}",
+                f"-vif_radio_idx {ovsdb_ap_args['vif_radio_idx']}",
                 f"-ssid '{ssid}'",
                 f"-channel {channel}",
                 f"-ht_mode {ht_mode}",
                 f"-hw_mode {hw_mode}",
-                f"-mode {mode}",
+                f"-mode {ovsdb_ap_args['mode']}",
                 "-channel_mode manual",
                 "-enabled true",
-                f"-wifi_security_type {wifi_security_type}",
                 f"-custom_hw_mode {custom_hw_mode}",
-            ]
-            test_args_base += gw.configure_wifi_security()
-            test_args = gw.get_command_arguments(*test_args_base)
+                "-wpa true",
+                f"-wpa_psks {ovsdb_ap_args['wpa_psks']}",
+                f"-wpa_oftags {ovsdb_ap_args['wpa_oftags']}",
+                f"-wpa_key_mgmt {ovsdb_ap_args['wpa_key_mgmt']}",
+            )
 
         with step("VIF reset"):
             if not pytest.test_wm2_immutable_radio_hw_mode_first_run:
-                assert gw.execute("tools/device/vif_reset")[0] == ExpectedShellResult
+                gw.vif_reset()
             pytest.test_wm2_immutable_radio_hw_mode_first_run = True
         with step("Test case"):
             assert gw.execute_with_logging("tests/wm2/wm2_immutable_radio_hw_mode", test_args)[0] == ExpectedShellResult
@@ -637,7 +619,7 @@ class TestWm2:
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", wm2_config.get("wm2_immutable_radio_hw_type", []))
     def test_wm2_immutable_radio_hw_type(self, cfg: dict):
-        fut_configurator, gw = pytest.fut_configurator, pytest.gw
+        gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
             # Arguments from test case configuration
@@ -645,54 +627,46 @@ class TestWm2:
             ht_mode = cfg.get("ht_mode")
             radio_band = cfg.get("radio_band")
             encryption = cfg["encryption"]
-            wifi_security_type = cfg.get("wifi_security_type", "wpa")
             hw_type = cfg.get("hw_type")
 
-            # Constant arguments
-            ssid, psk = fut_configurator.base_ssid, fut_configurator.base_psk
-            interface_type = "home_ap"
-            mode = "ap"
-
             # GW specific arguments
-            if_name = gw.capabilities.get_ifname(freq_band=radio_band, iftype=interface_type)
-            vif_radio_idx = gw.capabilities.get_iftype_vif_radio_idx(iftype=interface_type)
-            phy_radio_name = gw.capabilities.get_phy_radio_ifname(freq_band=radio_band)
             hw_mode = gw.capabilities.get_radio_hw_mode(freq_band=radio_band)
 
-            # GW AP arguments
-            gw_ap_vif_args = {
-                "channel": channel,
-                "ht_mode": ht_mode,
-                "radio_band": radio_band,
-                "wpa_psk": psk,
-                "encryption": encryption,
-                "wifi_security_type": wifi_security_type,
-                "ssid": ssid,
-                "interface_type": interface_type,
-            }
+            # GW interface creation
+            gw.create_interface_object(
+                channel=channel,
+                ht_mode=ht_mode,
+                radio_band=radio_band,
+                encryption=encryption,
+                interface_role="home_ap",
+            )
 
-            gw.ap_args = gw_ap_vif_args
+            # Extract AP arguments and ensure they are compliant with the OVSDB format
+            ssid = gw.interfaces["home_ap"].ssid_raw
+            ap_args = gw.interfaces["home_ap"].combined_args
+            ovsdb_ap_args = {key: gw.ovsdb.python_value_to_ovsdb_value(value) for key, value in ap_args.items()}
 
-            test_args_base = [
-                f"-if_name {phy_radio_name}",
-                f"-vif_if_name {if_name}",
-                f"-vif_radio_idx {vif_radio_idx}",
+            test_args = gw.get_command_arguments(
+                f"-radio_if_name {ovsdb_ap_args['radio_if_name']}",
+                f"-vif_if_name {ovsdb_ap_args['vif_if_name']}",
+                f"-vif_radio_idx {ovsdb_ap_args['vif_radio_idx']}",
                 f"-ssid '{ssid}'",
                 f"-channel {channel}",
                 f"-ht_mode {ht_mode}",
                 f"-hw_mode {hw_mode}",
-                f"-mode {mode}",
+                f"-mode {ovsdb_ap_args['mode']}",
                 "-channel_mode manual",
                 "-enabled true",
-                f"-wifi_security_type {wifi_security_type}",
                 f"-hw_type {hw_type}",
-            ]
-            test_args_base += gw.configure_wifi_security()
-            test_args = gw.get_command_arguments(*test_args_base)
+                "-wpa true",
+                f"-wpa_psks {ovsdb_ap_args['wpa_psks']}",
+                f"-wpa_oftags {ovsdb_ap_args['wpa_oftags']}",
+                f"-wpa_key_mgmt {ovsdb_ap_args['wpa_key_mgmt']}",
+            )
 
         with step("VIF reset"):
             if not pytest.test_wm2_immutable_radio_hw_type_first_run:
-                assert gw.execute("tools/device/vif_reset")[0] == ExpectedShellResult
+                gw.vif_reset()
             pytest.test_wm2_immutable_radio_hw_type_first_run = True
         with step("Test case"):
             assert gw.execute_with_logging("tests/wm2/wm2_immutable_radio_hw_type", test_args)[0] == ExpectedShellResult
@@ -709,7 +683,6 @@ class TestWm2:
             custom_ht_mode = cfg.get("custom_ht_mode")
             gw_radio_band = cfg.get("radio_band")
             encryption = cfg["encryption"]
-            wifi_security_type = cfg.get("wifi_security_type", "wpa")
             device_mode = cfg.get("device_mode", "router")
 
             with step("Device type checking"):
@@ -720,72 +693,69 @@ class TestWm2:
 
             # GW specific arguments
             gw_phy_radio_name = gw.capabilities.get_phy_radio_ifname(freq_band=gw_radio_band)
-            gw_bhaul_sta_if_name = gw.capabilities.get_bhaul_sta_ifname(freq_band=gw_radio_band)
 
             # L1 specific arguments
             l1_radio_band = l1.get_radio_band_from_remote_channel_and_band(channel, gw_radio_band)
+            l1_bhaul_sta_if_name = l1.capabilities.get_bhaul_sta_ifname(freq_band=l1_radio_band)
 
-            update_ht_mode_args = gw.get_command_arguments(
-                "Wifi_Radio_Config",
-                "-w",
-                "if_name",
-                gw_phy_radio_name,
-                "-u",
-                "ht_mode",
-                custom_ht_mode,
-            )
-            wait_ht_mode_args = gw.get_command_arguments(
-                "Wifi_Radio_State",
-                "-w",
-                "if_name",
-                gw_phy_radio_name,
-                "-is",
-                "ht_mode",
-                custom_ht_mode,
-            )
+            ht_mode_args = {
+                "ht_mode": custom_ht_mode,
+            }
+
             check_ht_mode_args = gw.get_command_arguments(
                 custom_ht_mode,
-                gw_bhaul_sta_if_name,
+                l1_bhaul_sta_if_name,
                 channel,
             )
 
         try:
             with step("VIF reset"):
-                multi_device_script_execution(devices=[gw, l1], script="tools/device/vif_reset")
+                gw.vif_reset()
+                l1.vif_reset()
             with step(f"Put GW into {device_mode} mode"):
                 assert gw.configure_device_mode(device_mode=device_mode)
             with step("Ensure WAN connectivity on GW"):
                 assert gw.check_wan_connectivity()
             with step("GW AP and L1 STA creation"):
-                assert gw.create_and_configure_bhaul_connection_gw_leaf(
+                assert gw.create_and_configure_backhaul(
                     channel=channel,
                     leaf_device=l1,
-                    gw_radio_band=gw_radio_band,
-                    leaf_radio_band=l1_radio_band,
+                    radio_band=gw_radio_band,
                     ht_mode=ht_mode,
-                    wifi_security_type=wifi_security_type,
                     encryption=encryption,
-                    skip_gre=False,
                 )
             with step("Ensure WAN connectivity on L1"):
                 assert l1.check_wan_connectivity()
             with step(f"Change HT Mode on GW from {ht_mode} to {custom_ht_mode}"):
                 assert (
-                    gw.execute("tools/device/ovsdb/update_ovsdb_entry", update_ht_mode_args)[0] == ExpectedShellResult
+                    gw.ovsdb.set_value(
+                        table="Wifi_Radio_Config",
+                        value=ht_mode_args,
+                        where=f"if_name=={gw_phy_radio_name}",
+                    )[0]
+                    == ExpectedShellResult
                 )
-                assert gw.execute("tools/device/ovsdb/wait_ovsdb_entry", wait_ht_mode_args)[0] == ExpectedShellResult
+                assert (
+                    gw.ovsdb.wait_for_value(
+                        table="Wifi_Radio_State",
+                        value=ht_mode_args,
+                        where=f"if_name=={gw_phy_radio_name}",
+                    )[0]
+                    == ExpectedShellResult
+                )
             with step("Test case"):
                 assert (
                     l1.execute("tools/device/check_ht_mode_at_os_level", check_ht_mode_args)[0] == ExpectedShellResult
                 )
         finally:
             with step("Cleanup"):
-                multi_device_script_execution(devices=[gw, l1], script="tools/device/vif_reset")
+                gw.vif_reset()
+                l1.vif_reset()
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", wm2_config.get("wm2_pre_cac_channel_change_validation", []))
     def test_wm2_pre_cac_channel_change_validation(self, cfg: dict):
-        fut_configurator, gw = pytest.fut_configurator, pytest.gw
+        gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
             # Arguments from test case configuration
@@ -794,58 +764,50 @@ class TestWm2:
             ht_mode = cfg.get("ht_mode")
             radio_band = cfg.get("radio_band")
             encryption = cfg["encryption"]
-            wifi_security_type = cfg.get("wifi_security_type", "wpa")
-
-            # Constant arguments
-            ssid, psk = fut_configurator.base_ssid, fut_configurator.base_psk
-            interface_type = "home_ap"
-            mode = "ap"
 
             # GW specific arguments
-            if_name = gw.capabilities.get_ifname(freq_band=radio_band, iftype=interface_type)
-            vif_radio_idx = gw.capabilities.get_iftype_vif_radio_idx(iftype=interface_type)
             channels = gw.capabilities.get_supported_radio_channels(freq_band=radio_band)
-            phy_radio_name = gw.capabilities.get_phy_radio_ifname(freq_band=radio_band)
             hw_mode = gw.capabilities.get_radio_hw_mode(freq_band=radio_band)
 
             if not {channel_A, channel_B}.issubset(channels):
                 pytest.skip(f"Channels {channel_A} and {channel_B} are not valid for the same radio.")
 
-            # GW AP arguments
-            gw_ap_vif_args = {
-                "channel": channel_A,
-                "ht_mode": ht_mode,
-                "radio_band": radio_band,
-                "wpa_psk": psk,
-                "encryption": encryption,
-                "wifi_security_type": wifi_security_type,
-                "ssid": ssid,
-                "interface_type": interface_type,
-            }
+            # GW interface creation
+            gw.create_interface_object(
+                channel=channel_A,
+                ht_mode=ht_mode,
+                radio_band=radio_band,
+                encryption=encryption,
+                interface_role="home_ap",
+            )
 
-            gw.ap_args = gw_ap_vif_args
+            # Extract AP arguments and ensure they are compliant with the OVSDB format
+            ssid = gw.interfaces["home_ap"].ssid_raw
+            ap_args = gw.interfaces["home_ap"].combined_args
+            ovsdb_ap_args = {key: gw.ovsdb.python_value_to_ovsdb_value(value) for key, value in ap_args.items()}
 
-            test_args_base = [
-                f"-if_name {phy_radio_name}",
-                f"-vif_if_name {if_name}",
-                f"-vif_radio_idx {vif_radio_idx}",
+            test_args = gw.get_command_arguments(
+                f"-radio_if_name {ovsdb_ap_args['radio_if_name']}",
+                f"-vif_if_name {ovsdb_ap_args['vif_if_name']}",
+                f"-vif_radio_idx {ovsdb_ap_args['vif_radio_idx']}",
                 f"-ssid '{ssid}'",
                 f"-channel_a {channel_A}",
                 f"-channel_b {channel_B}",
                 f"-ht_mode {ht_mode}",
                 f"-hw_mode {hw_mode}",
-                f"-mode {mode}",
+                f"-mode {ovsdb_ap_args['mode']}",
                 "-channel_mode manual",
                 "-enabled true",
                 f"-reg_domain {gw.regulatory_domain.upper()}",
-                f"-wifi_security_type {wifi_security_type}",
-            ]
-            test_args_base += gw.configure_wifi_security()
-            test_args = gw.get_command_arguments(*test_args_base)
+                "-wpa true",
+                f"-wpa_psks {ovsdb_ap_args['wpa_psks']}",
+                f"-wpa_oftags {ovsdb_ap_args['wpa_oftags']}",
+                f"-wpa_key_mgmt {ovsdb_ap_args['wpa_key_mgmt']}",
+            )
 
         with step("VIF reset"):
             if pytest.wm2_last_channel_and_radio_band_used != (channel_A, radio_band):
-                assert gw.execute("tools/device/vif_reset")[0] == ExpectedShellResult
+                gw.vif_reset()
             pytest.wm2_last_channel_and_radio_band_used = (channel_A, radio_band)
         with step("Test case"):
             assert (
@@ -856,7 +818,7 @@ class TestWm2:
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", wm2_config.get("wm2_pre_cac_ht_mode_change_validation", []))
     def test_wm2_pre_cac_ht_mode_change_validation(self, cfg: dict):
-        fut_configurator, gw = pytest.fut_configurator, pytest.gw
+        gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
             # Arguments from test case configuration
@@ -865,54 +827,46 @@ class TestWm2:
             ht_mode_b = cfg.get("ht_mode_b")
             radio_band = cfg.get("radio_band")
             encryption = cfg["encryption"]
-            wifi_security_type = cfg.get("wifi_security_type", "wpa")
-
-            # Constant arguments
-            ssid, psk = fut_configurator.base_ssid, fut_configurator.base_psk
-            interface_type = "home_ap"
-            mode = "ap"
 
             # GW specific arguments
-            if_name = gw.capabilities.get_ifname(freq_band=radio_band, iftype=interface_type)
-            vif_radio_idx = gw.capabilities.get_iftype_vif_radio_idx(iftype=interface_type)
-            phy_radio_name = gw.capabilities.get_phy_radio_ifname(freq_band=radio_band)
             hw_mode = gw.capabilities.get_radio_hw_mode(freq_band=radio_band)
 
-            # GW AP arguments
-            gw_ap_vif_args = {
-                "channel": channel,
-                "ht_mode": ht_mode_a,
-                "radio_band": radio_band,
-                "wpa_psk": psk,
-                "encryption": encryption,
-                "wifi_security_type": wifi_security_type,
-                "ssid": ssid,
-                "interface_type": interface_type,
-            }
+            # GW interface creation
+            gw.create_interface_object(
+                channel=channel,
+                ht_mode=ht_mode_a,
+                radio_band=radio_band,
+                encryption=encryption,
+                interface_role="home_ap",
+            )
 
-            gw.ap_args = gw_ap_vif_args
+            # Extract AP arguments and ensure they are compliant with the OVSDB format
+            ssid = gw.interfaces["home_ap"].ssid_raw
+            ap_args = gw.interfaces["home_ap"].combined_args
+            ovsdb_ap_args = {key: gw.ovsdb.python_value_to_ovsdb_value(value) for key, value in ap_args.items()}
 
-            test_args_base = [
-                f"-if_name {phy_radio_name}",
-                f"-vif_if_name {if_name}",
-                f"-vif_radio_idx {vif_radio_idx}",
+            test_args = gw.get_command_arguments(
+                f"-radio_if_name {ovsdb_ap_args['radio_if_name']}",
+                f"-vif_if_name {ovsdb_ap_args['vif_if_name']}",
+                f"-vif_radio_idx {ovsdb_ap_args['vif_radio_idx']}",
                 f"-ssid '{ssid}'",
                 f"-channel {channel}",
                 f"-ht_mode_a {ht_mode_a}",
                 f"-ht_mode_b {ht_mode_b}",
                 f"-hw_mode {hw_mode}",
-                f"-mode {mode}",
+                f"-mode {ovsdb_ap_args['mode']}",
                 "-channel_mode manual",
                 "-enabled true",
                 f"-reg_domain {gw.regulatory_domain.upper()}",
-                f"-wifi_security_type {wifi_security_type}",
-            ]
-            test_args_base += gw.configure_wifi_security()
-            test_args = gw.get_command_arguments(*test_args_base)
+                "-wpa true",
+                f"-wpa_psks {ovsdb_ap_args['wpa_psks']}",
+                f"-wpa_oftags {ovsdb_ap_args['wpa_oftags']}",
+                f"-wpa_key_mgmt {ovsdb_ap_args['wpa_key_mgmt']}",
+            )
 
         with step("VIF reset"):
             if pytest.wm2_last_channel_and_radio_band_used != (channel, radio_band):
-                assert gw.execute("tools/device/vif_reset")[0] == ExpectedShellResult
+                gw.vif_reset()
             pytest.wm2_last_channel_and_radio_band_used = (channel, radio_band)
         with step("Test case"):
             assert (
@@ -923,7 +877,7 @@ class TestWm2:
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", wm2_config.get("wm2_set_bcn_int", []))
     def test_wm2_set_bcn_int(self, cfg: dict):
-        fut_configurator, gw = pytest.fut_configurator, pytest.gw
+        gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
             # Arguments from test case configuration
@@ -931,40 +885,33 @@ class TestWm2:
             ht_mode = cfg.get("ht_mode")
             radio_band = cfg.get("radio_band")
             encryption = cfg["encryption"]
-            wifi_security_type = cfg.get("wifi_security_type", "wpa")
             bcn_int = cfg.get("bcn_int")
 
             # Constant arguments
-            ssid, psk = fut_configurator.base_ssid, fut_configurator.base_psk
             interface_type = "home_ap"
 
             # GW specific arguments
-            if_name = gw.capabilities.get_ifname(freq_band=radio_band, iftype=interface_type)
+            vif_if_name = gw.capabilities.get_ifname(freq_band=radio_band, iftype=interface_type)
             phy_radio_name = gw.capabilities.get_phy_radio_ifname(freq_band=radio_band)
 
-            # GW AP arguments
-            gw_ap_vif_args = {
-                "channel": channel,
-                "ht_mode": ht_mode,
-                "radio_band": radio_band,
-                "wpa_psk": psk,
-                "encryption": encryption,
-                "wifi_security_type": wifi_security_type,
-                "ssid": ssid,
-                "interface_type": interface_type,
-                "reset_vif": True,
-            }
+            # GW interface creation
+            gw.create_interface_object(
+                channel=channel,
+                ht_mode=ht_mode,
+                radio_band=radio_band,
+                encryption=encryption,
+                interface_role=interface_type,
+            )
 
-            gw.ap_args = gw_ap_vif_args
             test_args = gw.get_command_arguments(
                 phy_radio_name,
-                if_name,
+                vif_if_name,
                 bcn_int,
             )
 
         if pytest.wm2_last_channel_and_radio_band_used != (channel, radio_band):
             with step("GW AP configuration"):
-                assert gw.configure_radio_vif_and_network()
+                assert gw.interfaces[interface_type].configure_interface() == ExpectedShellResult
             pytest.wm2_last_channel_and_radio_band_used = (channel, radio_band)
         with step("Test case"):
             assert gw.execute_with_logging("tests/wm2/wm2_set_bcn_int", test_args)[0] == ExpectedShellResult
@@ -972,7 +919,7 @@ class TestWm2:
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", wm2_config.get("wm2_set_channel", []))
     def test_wm2_set_channel(self, cfg: dict):
-        fut_configurator, gw = pytest.fut_configurator, pytest.gw
+        gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
             # Arguments from test case configuration
@@ -980,52 +927,44 @@ class TestWm2:
             ht_mode = cfg.get("ht_mode")
             radio_band = cfg.get("radio_band")
             encryption = cfg["encryption"]
-            wifi_security_type = cfg.get("wifi_security_type", "wpa")
-
-            # Constant arguments
-            ssid, psk = fut_configurator.base_ssid, fut_configurator.base_psk
-            interface_type = "home_ap"
-            mode = "ap"
 
             # GW specific arguments
-            if_name = gw.capabilities.get_ifname(freq_band=radio_band, iftype=interface_type)
-            vif_radio_idx = gw.capabilities.get_iftype_vif_radio_idx(iftype=interface_type)
-            phy_radio_name = gw.capabilities.get_phy_radio_ifname(freq_band=radio_band)
             hw_mode = gw.capabilities.get_radio_hw_mode(freq_band=radio_band)
 
-            # GW AP arguments
-            gw_ap_vif_args = {
-                "channel": channel,
-                "ht_mode": ht_mode,
-                "radio_band": radio_band,
-                "wpa_psk": psk,
-                "encryption": encryption,
-                "wifi_security_type": wifi_security_type,
-                "ssid": ssid,
-                "interface_type": interface_type,
-            }
+            # GW interface creation
+            gw.create_interface_object(
+                channel=channel,
+                ht_mode=ht_mode,
+                radio_band=radio_band,
+                encryption=encryption,
+                interface_role="home_ap",
+            )
 
-            gw.ap_args = gw_ap_vif_args
+            # Extract AP arguments and ensure they are compliant with the OVSDB format
+            ssid = gw.interfaces["home_ap"].ssid_raw
+            ap_args = gw.interfaces["home_ap"].combined_args
+            ovsdb_ap_args = {key: gw.ovsdb.python_value_to_ovsdb_value(value) for key, value in ap_args.items()}
 
-            test_args_base = [
-                f"-if_name {phy_radio_name}",
-                f"-vif_radio_idx {vif_radio_idx}",
+            test_args = gw.get_command_arguments(
+                f"-radio_if_name {ovsdb_ap_args['radio_if_name']}",
+                f"-vif_if_name {ovsdb_ap_args['vif_if_name']}",
+                f"-vif_radio_idx {ovsdb_ap_args['vif_radio_idx']}",
                 f"-ssid '{ssid}'",
                 f"-channel {channel}",
                 f"-ht_mode {ht_mode}",
                 f"-hw_mode {hw_mode}",
-                f"-mode {mode}",
-                f"-vif_if_name {if_name}",
+                f"-mode {ovsdb_ap_args['mode']}",
                 "-channel_mode manual",
                 "-enabled true",
-                f"-wifi_security_type {wifi_security_type}",
-            ]
-            test_args_base += gw.configure_wifi_security()
-            test_args = gw.get_command_arguments(*test_args_base)
+                "-wpa true",
+                f"-wpa_psks {ovsdb_ap_args['wpa_psks']}",
+                f"-wpa_oftags {ovsdb_ap_args['wpa_oftags']}",
+                f"-wpa_key_mgmt {ovsdb_ap_args['wpa_key_mgmt']}",
+            )
 
         with step("VIF reset"):
             if pytest.wm2_last_channel_and_radio_band_used != (channel, radio_band):
-                assert gw.execute("tools/device/vif_reset")[0] == ExpectedShellResult
+                gw.vif_reset()
             pytest.wm2_last_channel_and_radio_band_used = (channel, radio_band)
         with step("Test case"):
             assert gw.execute_with_logging("tests/wm2/wm2_set_channel", test_args)[0] == ExpectedShellResult
@@ -1033,7 +972,7 @@ class TestWm2:
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", wm2_config.get("wm2_set_channel_neg", []))
     def test_wm2_set_channel_neg(self, cfg: dict):
-        fut_configurator, gw = pytest.fut_configurator, pytest.gw
+        gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
             # Arguments from test case configuration
@@ -1041,50 +980,42 @@ class TestWm2:
             ht_mode = cfg.get("ht_mode")
             radio_band = cfg.get("radio_band")
             encryption = cfg["encryption"]
-            wifi_security_type = cfg.get("wifi_security_type", "wpa")
             mismatch_channel = cfg.get("mismatch_channel")
 
-            # Constant arguments
-            ssid, psk = fut_configurator.base_ssid, fut_configurator.base_psk
-            interface_type = "home_ap"
-            mode = "ap"
-
             # GW specific arguments
-            if_name = gw.capabilities.get_ifname(freq_band=radio_band, iftype=interface_type)
-            vif_radio_idx = gw.capabilities.get_iftype_vif_radio_idx(iftype=interface_type)
-            phy_radio_name = gw.capabilities.get_phy_radio_ifname(freq_band=radio_band)
             hw_mode = gw.capabilities.get_radio_hw_mode(freq_band=radio_band)
 
-            # GW AP arguments
-            gw_ap_vif_args = {
-                "channel": channel,
-                "ht_mode": ht_mode,
-                "radio_band": radio_band,
-                "wpa_psk": psk,
-                "encryption": encryption,
-                "wifi_security_type": wifi_security_type,
-                "ssid": ssid,
-                "interface_type": interface_type,
-            }
+            # GW interface creation
+            gw.create_interface_object(
+                channel=channel,
+                ht_mode=ht_mode,
+                radio_band=radio_band,
+                encryption=encryption,
+                interface_role="home_ap",
+            )
 
-            gw.ap_args = gw_ap_vif_args
+            # Extract AP arguments and ensure they are compliant with the OVSDB format
+            ssid = gw.interfaces["home_ap"].ssid_raw
+            ap_args = gw.interfaces["home_ap"].combined_args
+            ovsdb_ap_args = {key: gw.ovsdb.python_value_to_ovsdb_value(value) for key, value in ap_args.items()}
 
-            test_args_base = [
-                f"-if_name {phy_radio_name}",
-                f"-vif_radio_idx {vif_radio_idx}",
+            test_args = gw.get_command_arguments(
+                f"-radio_if_name {ovsdb_ap_args['radio_if_name']}",
+                f"-vif_if_name {ovsdb_ap_args['vif_if_name']}",
+                f"-vif_radio_idx {ovsdb_ap_args['vif_radio_idx']}",
                 f"-ssid '{ssid}'",
                 f"-channel {channel}",
+                f"-mismatch_channel {mismatch_channel}",
                 f"-ht_mode {ht_mode}",
                 f"-hw_mode {hw_mode}",
-                f"-mode {mode}",
-                f"-vif_if_name {if_name}",
-                f"-mismatch_channel {mismatch_channel}",
+                f"-mode {ovsdb_ap_args['mode']}",
                 "-channel_mode manual",
                 "-enabled true",
-                f"-wifi_security_type {wifi_security_type}",
-            ]
-            test_args_base += gw.configure_wifi_security()
-            test_args = gw.get_command_arguments(*test_args_base)
+                "-wpa true",
+                f"-wpa_psks {ovsdb_ap_args['wpa_psks']}",
+                f"-wpa_oftags {ovsdb_ap_args['wpa_oftags']}",
+                f"-wpa_key_mgmt {ovsdb_ap_args['wpa_key_mgmt']}",
+            )
 
         with step("Test case"):
             assert gw.execute_with_logging("tests/wm2/wm2_set_channel_neg", test_args)[0] == ExpectedShellResult
@@ -1092,7 +1023,7 @@ class TestWm2:
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", wm2_config.get("wm2_set_ht_mode", []))
     def test_wm2_set_ht_mode(self, cfg: dict):
-        fut_configurator, gw = pytest.fut_configurator, pytest.gw
+        gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
             # Arguments from test case configuration
@@ -1100,41 +1031,34 @@ class TestWm2:
             ht_mode = cfg.get("ht_mode")
             radio_band = cfg.get("radio_band")
             encryption = cfg["encryption"]
-            wifi_security_type = cfg.get("wifi_security_type", "wpa")
 
             # Constant arguments
-            ssid, psk = fut_configurator.base_ssid, fut_configurator.base_psk
             interface_type = "home_ap"
 
             # GW specific arguments
-            if_name = gw.capabilities.get_ifname(freq_band=radio_band, iftype=interface_type)
+            vif_if_name = gw.capabilities.get_ifname(freq_band=radio_band, iftype=interface_type)
             phy_radio_name = gw.capabilities.get_phy_radio_ifname(freq_band=radio_band)
 
-            # GW AP arguments
-            gw_ap_vif_args = {
-                "channel": channel,
-                "ht_mode": ht_mode,
-                "radio_band": radio_band,
-                "wpa_psk": psk,
-                "encryption": encryption,
-                "wifi_security_type": wifi_security_type,
-                "ssid": ssid,
-            }
+            # GW interface creation
+            gw.create_interface_object(
+                channel=channel,
+                ht_mode=ht_mode,
+                radio_band=radio_band,
+                encryption=encryption,
+                interface_role=interface_type,
+            )
 
-            gw.ap_args = gw_ap_vif_args
-
-            test_args_base = [
-                f"-if_name {phy_radio_name}",
+            test_args = gw.get_command_arguments(
+                f"-radio_if_name {phy_radio_name}",
                 f"-channel {channel}",
                 f"-ht_mode {ht_mode}",
-                f"-vif_if_name {if_name}",
-            ]
-            test_args = gw.get_command_arguments(*test_args_base)
+                f"-vif_if_name {vif_if_name}",
+            )
 
         with step("GW AP Configuration"):
             if pytest.wm2_last_channel_and_radio_band_used != (channel, radio_band):
                 assert gw.execute("tools/device/vif_reset")[0] == ExpectedShellResult
-                assert gw.configure_radio_vif_and_network()
+                assert gw.interfaces[interface_type].configure_interface() == ExpectedShellResult
             else:
                 allure_attach_to_report(
                     name="log_pod_gw",
@@ -1147,7 +1071,7 @@ class TestWm2:
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", wm2_config.get("wm2_set_ht_mode_neg", []))
     def test_wm2_set_ht_mode_neg(self, cfg: dict):
-        fut_configurator, gw = pytest.fut_configurator, pytest.gw
+        gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
             # Arguments from test case configuration
@@ -1155,50 +1079,45 @@ class TestWm2:
             ht_mode = cfg.get("ht_mode")
             radio_band = cfg.get("radio_band")
             encryption = cfg["encryption"]
-            wifi_security_type = cfg.get("wifi_security_type", "wpa")
             mismatch_ht_mode = cfg.get("mismatch_ht_mode")
-
-            # Constant arguments
-            ssid, psk = fut_configurator.base_ssid, fut_configurator.base_psk
-            interface_type = "home_ap"
-            mode = "ap"
+            max_ht_mode = int(gw.capabilities.get_max_channel_width(radio_band))
+            if int(mismatch_ht_mode.removeprefix("HT")) <= max_ht_mode:
+                pytest.skip(f"Bandwidth {mismatch_ht_mode} should be lower than {max_ht_mode} for {radio_band}.")
 
             # GW specific arguments
-            if_name = gw.capabilities.get_ifname(freq_band=radio_band, iftype=interface_type)
-            vif_radio_idx = gw.capabilities.get_iftype_vif_radio_idx(iftype=interface_type)
-            phy_radio_name = gw.capabilities.get_phy_radio_ifname(freq_band=radio_band)
             hw_mode = gw.capabilities.get_radio_hw_mode(freq_band=radio_band)
 
-            # GW AP arguments
-            gw_ap_vif_args = {
-                "channel": channel,
-                "ht_mode": ht_mode,
-                "radio_band": radio_band,
-                "wpa_psk": psk,
-                "encryption": encryption,
-                "wifi_security_type": wifi_security_type,
-                "ssid": ssid,
-                "interface_type": interface_type,
-            }
+            # GW interface creation
+            gw.create_interface_object(
+                channel=channel,
+                ht_mode=ht_mode,
+                radio_band=radio_band,
+                encryption=encryption,
+                interface_role="home_ap",
+            )
 
-            gw.ap_args = gw_ap_vif_args
+            # Extract AP arguments and ensure they are compliant with the OVSDB format
+            ssid = gw.interfaces["home_ap"].ssid_raw
+            ap_args = gw.interfaces["home_ap"].combined_args
+            ovsdb_ap_args = {key: gw.ovsdb.python_value_to_ovsdb_value(value) for key, value in ap_args.items()}
 
-            test_args_base = [
-                f"-if_name {phy_radio_name}",
-                f"-vif_radio_idx {vif_radio_idx}",
+            test_args = gw.get_command_arguments(
+                f"-radio_if_name {ovsdb_ap_args['radio_if_name']}",
+                f"-vif_if_name {ovsdb_ap_args['vif_if_name']}",
+                f"-vif_radio_idx {ovsdb_ap_args['vif_radio_idx']}",
                 f"-ssid '{ssid}'",
                 f"-channel {channel}",
                 f"-ht_mode {ht_mode}",
-                f"-hw_mode {hw_mode}",
-                f"-mode {mode}",
-                f"-vif_if_name {if_name}",
                 f"-mismatch_ht_mode {mismatch_ht_mode}",
+                f"-hw_mode {hw_mode}",
+                f"-mode {ovsdb_ap_args['mode']}",
                 "-channel_mode manual",
                 "-enabled true",
-                f"-wifi_security_type {wifi_security_type}",
-            ]
-            test_args_base += gw.configure_wifi_security()
-            test_args = gw.get_command_arguments(*test_args_base)
+                "-wpa true",
+                f"-wpa_psks {ovsdb_ap_args['wpa_psks']}",
+                f"-wpa_oftags {ovsdb_ap_args['wpa_oftags']}",
+                f"-wpa_key_mgmt {ovsdb_ap_args['wpa_key_mgmt']}",
+            )
 
         with step("Test case"):
             assert gw.execute_with_logging("tests/wm2/wm2_set_ht_mode_neg", test_args)[0] == ExpectedShellResult
@@ -1223,7 +1142,7 @@ class TestWm2:
 
         with step("VIF reset"):
             if not pytest.test_wm2_set_radio_country_first_run:
-                assert gw.execute("tools/device/vif_reset")[0] == ExpectedShellResult
+                gw.vif_reset()
             pytest.test_wm2_set_radio_country_first_run = True
         with step("Test case"):
             assert gw.execute_with_logging("tests/wm2/wm2_set_radio_country", test_args)[0] == ExpectedShellResult
@@ -1231,7 +1150,7 @@ class TestWm2:
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", wm2_config.get("wm2_set_radio_thermal_tx_chainmask", []))
     def test_wm2_set_radio_thermal_tx_chainmask(self, cfg: dict):
-        fut_configurator, gw = pytest.fut_configurator, pytest.gw
+        gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
             # Arguments from test case configuration
@@ -1239,7 +1158,6 @@ class TestWm2:
             ht_mode = cfg.get("ht_mode")
             radio_band = cfg.get("radio_band")
             encryption = cfg["encryption"]
-            wifi_security_type = cfg.get("wifi_security_type", "wpa")
 
             with step("Verify correct antenna settings"):
                 radio_antennas = gw.capabilities.get_radio_antenna(freq_band=radio_band)
@@ -1251,57 +1169,50 @@ class TestWm2:
                 valid_chainmasks = [(1 << x) - 1 for x in range(1, 5)]
                 assert all(x in valid_chainmasks for x in [thermal_tx_chainmask, tx_chainmask, radio_max_chainmask])
 
-            # Constant arguments
-            ssid, psk = fut_configurator.base_ssid, fut_configurator.base_psk
-            interface_type = "home_ap"
-            mode = "ap"
-
             # GW specific arguments
-            if_name = gw.capabilities.get_ifname(freq_band=radio_band, iftype=interface_type)
-            vif_radio_idx = gw.capabilities.get_iftype_vif_radio_idx(iftype=interface_type)
-            phy_radio_name = gw.capabilities.get_phy_radio_ifname(freq_band=radio_band)
             hw_mode = gw.capabilities.get_radio_hw_mode(freq_band=radio_band)
 
-            # GW AP arguments
-            gw_ap_vif_args = {
-                "channel": channel,
-                "ht_mode": ht_mode,
-                "radio_band": radio_band,
-                "wpa_psk": psk,
-                "encryption": encryption,
-                "wifi_security_type": wifi_security_type,
-                "ssid": ssid,
-                "interface_type": interface_type,
-            }
+            # GW interface creation
+            gw.create_interface_object(
+                channel=channel,
+                ht_mode=ht_mode,
+                radio_band=radio_band,
+                encryption=encryption,
+                interface_role="home_ap",
+            )
 
-            gw.ap_args = gw_ap_vif_args
+            # Extract AP arguments and ensure they are compliant with the OVSDB format
+            ssid = gw.interfaces["home_ap"].ssid_raw
+            ap_args = gw.interfaces["home_ap"].combined_args
+            ovsdb_ap_args = {key: gw.ovsdb.python_value_to_ovsdb_value(value) for key, value in ap_args.items()}
 
-            test_args_base = [
-                f"-if_name {phy_radio_name}",
-                f"-vif_radio_idx {vif_radio_idx}",
+            test_args = gw.get_command_arguments(
+                f"-radio_if_name {ovsdb_ap_args['radio_if_name']}",
+                f"-vif_if_name {ovsdb_ap_args['vif_if_name']}",
+                f"-vif_radio_idx {ovsdb_ap_args['vif_radio_idx']}",
+                f"-radio_band {radio_band.upper()}",
                 f"-ssid '{ssid}'",
                 f"-channel {channel}",
                 f"-ht_mode {ht_mode}",
                 f"-hw_mode {hw_mode}",
-                f"-mode {mode}",
-                f"-vif_if_name {if_name}",
-                f"-tx_chainmask {tx_chainmask}",
-                f"-thermal_tx_chainmask {thermal_tx_chainmask}",
-                f"-radio_band {radio_band.upper()}",
+                f"-mode {ovsdb_ap_args['mode']}",
                 "-channel_mode manual",
                 "-enabled true",
-                f"-wifi_security_type {wifi_security_type}",
-            ]
-            test_args_base += gw.configure_wifi_security()
-            test_args = gw.get_command_arguments(*test_args_base)
+                f"-tx_chainmask {tx_chainmask}",
+                f"-thermal_tx_chainmask {thermal_tx_chainmask}",
+                "-wpa true",
+                f"-wpa_psks {ovsdb_ap_args['wpa_psks']}",
+                f"-wpa_oftags {ovsdb_ap_args['wpa_oftags']}",
+                f"-wpa_key_mgmt {ovsdb_ap_args['wpa_key_mgmt']}",
+            )
 
             cleanup_args = gw.get_command_arguments(
-                phy_radio_name,
+                ovsdb_ap_args["radio_if_name"],
             )
 
         with step("VIF reset"):
             if pytest.wm2_last_channel_and_radio_band_used != (channel, radio_band):
-                assert gw.execute("tools/device/vif_reset")[0] == ExpectedShellResult
+                gw.vif_reset()
             pytest.wm2_last_channel_and_radio_band_used = (channel, radio_band)
         with step("Test case"):
             assert (
@@ -1317,7 +1228,7 @@ class TestWm2:
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", wm2_config.get("wm2_set_radio_tx_chainmask", []))
     def test_wm2_set_radio_tx_chainmask(self, cfg: dict):
-        fut_configurator, gw = pytest.fut_configurator, pytest.gw
+        gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
             # Arguments from test case configuration
@@ -1325,7 +1236,6 @@ class TestWm2:
             ht_mode = cfg.get("ht_mode")
             radio_band = cfg.get("radio_band")
             encryption = cfg["encryption"]
-            wifi_security_type = cfg.get("wifi_security_type", "wpa")
 
             with step("Verify correct antenna settings"):
                 radio_antennas = gw.capabilities.get_radio_antenna(freq_band=radio_band)
@@ -1335,48 +1245,32 @@ class TestWm2:
                 valid_chainmasks = [(1 << x) - 1 for x in range(1, 5)]
                 assert all(x in valid_chainmasks for x in [test_tx_chainmask, radio_max_chainmask])
 
-            # Constant arguments
-            ssid, psk = fut_configurator.base_ssid, fut_configurator.base_psk
-            interface_type = "home_ap"
-
             # GW specific arguments
             phy_radio_name = gw.capabilities.get_phy_radio_ifname(freq_band=radio_band)
 
-            default_tx_chainmask_args = gw.get_command_arguments(
-                "Wifi_Radio_State",
-                "tx_chainmask",
-                "-w",
-                "if_name",
-                phy_radio_name,
+            with step("Acquire default TX chainmask and thermal TX chainmask values"):
+                default_tx_chainmask = gw.ovsdb.get(
+                    table="Wifi_Radio_State",
+                    select="tx_chainmask",
+                    where=f"if_name=={phy_radio_name}",
+                )
+                assert default_tx_chainmask is not None and default_tx_chainmask != ""
+
+            # GW interface creation
+            gw.create_interface_object(
+                channel=channel,
+                ht_mode=ht_mode,
+                radio_band=radio_band,
+                encryption=encryption,
+                interface_role="home_ap",
             )
 
-            with step("Acquire default TX chainmask and thermal TX chainmask values"):
-                default_tx_chainmask_ec, default_tx_chainmask, tx_std_err = gw.execute(
-                    "tools/device/ovsdb/get_ovsdb_entry_value",
-                    default_tx_chainmask_args,
-                )
-                assert (
-                    default_tx_chainmask is not None
-                    and default_tx_chainmask != ""
-                    and default_tx_chainmask_ec == ExpectedShellResult
-                )
-
-            # GW AP arguments
-            gw_ap_vif_args = {
-                "channel": channel,
-                "ht_mode": ht_mode,
-                "radio_band": radio_band,
-                "wpa_psk": psk,
-                "encryption": encryption,
-                "wifi_security_type": wifi_security_type,
-                "ssid": ssid,
-                "interface_type": interface_type,
-            }
-
-            gw.ap_args = gw_ap_vif_args
+            # Extract AP arguments and ensure they are compliant with the OVSDB format
+            ap_args = gw.interfaces["home_ap"].combined_args
+            ovsdb_ap_args = {key: gw.ovsdb.python_value_to_ovsdb_value(value) for key, value in ap_args.items()}
 
             test_args = gw.get_command_arguments(
-                phy_radio_name,
+                ovsdb_ap_args["radio_if_name"],
                 radio_band,
                 test_tx_chainmask,
                 radio_max_chainmask,
@@ -1385,17 +1279,133 @@ class TestWm2:
 
         with step("VIF reset"):
             if pytest.wm2_last_channel_and_radio_band_used != (channel, radio_band):
-                assert gw.execute("tools/device/vif_reset")[0] == ExpectedShellResult
+                gw.vif_reset()
             pytest.wm2_last_channel_and_radio_band_used = (channel, radio_band)
         with step("GW AP creation"):
-            assert gw.configure_radio_vif_and_network()
+            assert gw.interfaces["home_ap"].configure_interface() == ExpectedShellResult
         with step("Test case"):
             assert gw.execute_with_logging("tests/wm2/wm2_set_radio_tx_chainmask", test_args)[0] == ExpectedShellResult
 
     @allure.severity(allure.severity_level.NORMAL)
+    @pytest.mark.parametrize("cfg", wm2_config.get("wm2_set_radio_tx_power", []))
+    def test_wm2_set_radio_tx_power(self, cfg: dict):
+        gw = pytest.gw
+        min_opensync_version = "6.4.0.0"
+        opensync_version = gw.get_opensync_version()
+        if compare_fw_versions(opensync_version, min_opensync_version, "<"):
+            pytest.skip(f"Insufficient OpenSync version:{opensync_version}. Required {min_opensync_version} or higher.")
+
+        with step("Preparation of testcase parameters"):
+            # Arguments from test case configuration
+            channel = cfg.get("channel")
+            ht_mode = cfg.get("ht_mode")
+            radio_band = cfg.get("radio_band")
+            encryption = cfg["encryption"]
+            tx_power = cfg.get("tx_power")
+
+            # GW specific arguments
+            hw_mode = gw.capabilities.get_radio_hw_mode(freq_band=radio_band)
+
+            # GW interface creation
+            gw.create_interface_object(
+                channel=channel,
+                ht_mode=ht_mode,
+                radio_band=radio_band,
+                encryption=encryption,
+                interface_role="home_ap",
+            )
+
+            # Extract AP arguments and ensure they are compliant with the OVSDB format
+            ssid = gw.interfaces["home_ap"].ssid_raw
+            ap_args = gw.interfaces["home_ap"].combined_args
+            ovsdb_ap_args = {key: gw.ovsdb.python_value_to_ovsdb_value(value) for key, value in ap_args.items()}
+
+            test_args = gw.get_command_arguments(
+                f"-radio_if_name {ovsdb_ap_args['radio_if_name']}",
+                f"-vif_if_name {ovsdb_ap_args['vif_if_name']}",
+                f"-vif_radio_idx {ovsdb_ap_args['vif_radio_idx']}",
+                f"-ssid '{ssid}'",
+                f"-channel {channel}",
+                f"-ht_mode {ht_mode}",
+                f"-hw_mode {hw_mode}",
+                f"-mode {ovsdb_ap_args['mode']}",
+                f"-tx_power {tx_power}",
+                "-channel_mode manual",
+                "-enabled true",
+                "-wpa true",
+                f"-wpa_psks {ovsdb_ap_args['wpa_psks']}",
+                f"-wpa_oftags {ovsdb_ap_args['wpa_oftags']}",
+                f"-wpa_key_mgmt {ovsdb_ap_args['wpa_key_mgmt']}",
+            )
+
+        with step("VIF reset"):
+            if pytest.wm2_last_channel_and_radio_band_used != (channel, radio_band):
+                gw.vif_reset()
+            pytest.wm2_last_channel_and_radio_band_used = (channel, radio_band)
+        with step("Test case"):
+            assert gw.execute_with_logging("tests/wm2/wm2_set_radio_tx_power", test_args)[0] == ExpectedShellResult
+
+    @allure.severity(allure.severity_level.NORMAL)
+    @pytest.mark.parametrize("cfg", wm2_config.get("wm2_set_radio_tx_power_neg", []))
+    def test_wm2_set_radio_tx_power_neg(self, cfg: dict):
+        gw = pytest.gw
+        min_opensync_version = "6.4.0.0"
+        opensync_version = gw.get_opensync_version()
+        if compare_fw_versions(opensync_version, min_opensync_version, "<"):
+            pytest.skip(f"Insufficient OpenSync version:{opensync_version}. Required {min_opensync_version} or higher.")
+
+        with step("Preparation of testcase parameters"):
+            # Arguments from test case configuration
+            channel = cfg.get("channel")
+            ht_mode = cfg.get("ht_mode")
+            radio_band = cfg.get("radio_band")
+            encryption = cfg["encryption"]
+            tx_power = cfg.get("tx_power")
+            mismatch_tx_power = cfg.get("mismatch_tx_power")
+
+            # GW specific arguments
+            hw_mode = gw.capabilities.get_radio_hw_mode(freq_band=radio_band)
+
+            # GW interface creation
+            gw.create_interface_object(
+                channel=channel,
+                ht_mode=ht_mode,
+                radio_band=radio_band,
+                encryption=encryption,
+                interface_role="home_ap",
+            )
+
+            # Extract AP arguments and ensure they are compliant with the OVSDB format
+            ssid = gw.interfaces["home_ap"].ssid_raw
+            ap_args = gw.interfaces["home_ap"].combined_args
+            ovsdb_ap_args = {key: gw.ovsdb.python_value_to_ovsdb_value(value) for key, value in ap_args.items()}
+
+            test_args = gw.get_command_arguments(
+                f"-radio_if_name {ovsdb_ap_args['radio_if_name']}",
+                f"-vif_if_name {ovsdb_ap_args['vif_if_name']}",
+                f"-vif_radio_idx {ovsdb_ap_args['vif_radio_idx']}",
+                f"-ssid '{ssid}'",
+                f"-channel {channel}",
+                f"-ht_mode {ht_mode}",
+                f"-hw_mode {hw_mode}",
+                f"-mode {ovsdb_ap_args['mode']}",
+                f"-tx_power {tx_power}",
+                f"-mismatch_tx_power {mismatch_tx_power}",
+                "-channel_mode manual",
+                "-enabled true",
+                "-wpa true",
+                f"-wpa_psks {ovsdb_ap_args['wpa_psks']}",
+                f"-wpa_oftags {ovsdb_ap_args['wpa_oftags']}",
+                f"-wpa_key_mgmt {ovsdb_ap_args['wpa_key_mgmt']}",
+            )
+
+        with step("Test case"):
+            assert gw.execute_with_logging("tests/wm2/wm2_set_radio_tx_power_neg", test_args)[0] == ExpectedShellResult
+
+    @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", wm2_config.get("wm2_set_radio_vif_configs", []))
     def test_wm2_set_radio_vif_configs(self, cfg: dict):
-        fut_configurator, gw = pytest.fut_configurator, pytest.gw
+        gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
             # Arguments from test case configuration
@@ -1404,49 +1414,41 @@ class TestWm2:
             radio_band = cfg.get("radio_band")
             ht_mode = cfg.get("ht_mode")
             encryption = cfg["encryption"]
-            wifi_security_type = cfg.get("wifi_security_type", "wpa")
-
-            # Constant arguments
-            ssid, psk = fut_configurator.base_ssid, fut_configurator.base_psk
-            interface_type = "home_ap"
-            mode = "ap"
 
             # GW specific arguments
-            if_name = gw.capabilities.get_ifname(freq_band=radio_band, iftype=interface_type)
-            vif_radio_idx = gw.capabilities.get_iftype_vif_radio_idx(iftype=interface_type)
-            phy_radio_name = gw.capabilities.get_phy_radio_ifname(freq_band=radio_band)
             hw_mode = gw.capabilities.get_radio_hw_mode(freq_band=radio_band)
 
-            # GW AP arguments
-            gw_ap_vif_args = {
-                "channel": channel,
-                "ht_mode": ht_mode,
-                "radio_band": radio_band,
-                "wpa_psk": psk,
-                "encryption": encryption,
-                "wifi_security_type": wifi_security_type,
-                "ssid": ssid,
-                "interface_type": interface_type,
-            }
+            # GW interface creation
+            gw.create_interface_object(
+                channel=channel,
+                ht_mode=ht_mode,
+                radio_band=radio_band,
+                encryption=encryption,
+                interface_role="home_ap",
+            )
 
-            gw.ap_args = gw_ap_vif_args
+            # Extract AP arguments and ensure they are compliant with the OVSDB format
+            ssid = gw.interfaces["home_ap"].ssid_raw
+            ap_args = gw.interfaces["home_ap"].combined_args
+            ovsdb_ap_args = {key: gw.ovsdb.python_value_to_ovsdb_value(value) for key, value in ap_args.items()}
 
-            test_args_base = [
-                f"-vif_radio_idx {vif_radio_idx}",
-                f"-if_name {phy_radio_name}",
+            test_args = gw.get_command_arguments(
+                f"-radio_if_name {ovsdb_ap_args['radio_if_name']}",
+                f"-vif_if_name {ovsdb_ap_args['vif_if_name']}",
+                f"-vif_radio_idx {ovsdb_ap_args['vif_radio_idx']}",
                 f"-ssid '{ssid}'",
                 f"-channel {channel}",
                 f"-ht_mode {ht_mode}",
                 f"-hw_mode {hw_mode}",
-                f"-mode {mode}",
-                f"-vif_if_name {if_name}",
+                f"-mode {ovsdb_ap_args['mode']}",
                 f"-custom_channel {custom_channel}",
                 "-channel_mode manual",
                 "-enabled true",
-                f"-wifi_security_type {wifi_security_type}",
-            ]
-            test_args_base += gw.configure_wifi_security()
-            test_args = gw.get_command_arguments(*test_args_base)
+                "-wpa true",
+                f"-wpa_psks {ovsdb_ap_args['wpa_psks']}",
+                f"-wpa_oftags {ovsdb_ap_args['wpa_oftags']}",
+                f"-wpa_key_mgmt {ovsdb_ap_args['wpa_key_mgmt']}",
+            )
 
         with step("Test case"):
             assert gw.execute_with_logging("tests/wm2/wm2_set_radio_vif_configs", test_args)[0] == ExpectedShellResult
@@ -1454,7 +1456,7 @@ class TestWm2:
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", wm2_config.get("wm2_set_ssid", []))
     def test_wm2_set_ssid(self, cfg: dict):
-        fut_configurator, gw = pytest.fut_configurator, pytest.gw
+        gw = pytest.gw
 
         with step("Preparation of testcase parameters"):
             # Arguments from test case configuration
@@ -1463,52 +1465,44 @@ class TestWm2:
             ht_mode = cfg.get("ht_mode")
             radio_band = cfg.get("radio_band")
             encryption = cfg["encryption"]
-            wifi_security_type = cfg.get("wifi_security_type", "wpa")
-
-            # Constant arguments
-            psk = fut_configurator.base_psk
-            interface_type = "home_ap"
-            mode = "ap"
 
             # GW specific arguments
-            if_name = gw.capabilities.get_ifname(freq_band=radio_band, iftype=interface_type)
-            vif_radio_idx = gw.capabilities.get_iftype_vif_radio_idx(iftype=interface_type)
-            phy_radio_name = gw.capabilities.get_phy_radio_ifname(freq_band=radio_band)
             hw_mode = gw.capabilities.get_radio_hw_mode(freq_band=radio_band)
 
-            # GW AP arguments
-            gw_ap_vif_args = {
-                "channel": channel,
-                "ht_mode": ht_mode,
-                "radio_band": radio_band,
-                "wpa_psk": psk,
-                "encryption": encryption,
-                "wifi_security_type": wifi_security_type,
-                "ssid": ssid,
-                "interface_type": interface_type,
-            }
+            # GW interface creation
+            gw.create_interface_object(
+                channel=channel,
+                ht_mode=ht_mode,
+                radio_band=radio_band,
+                encryption=encryption,
+                interface_role="home_ap",
+            )
 
-            gw.ap_args = gw_ap_vif_args
+            # Extract AP arguments and ensure they are compliant with the OVSDB format
+            ssid = gw.interfaces["home_ap"].ssid_raw
+            ap_args = gw.interfaces["home_ap"].combined_args
+            ovsdb_ap_args = {key: gw.ovsdb.python_value_to_ovsdb_value(value) for key, value in ap_args.items()}
 
-            test_args_base = [
-                f"-vif_radio_idx {vif_radio_idx}",
-                f"-if_name {phy_radio_name}",
+            test_args = gw.get_command_arguments(
+                f"-radio_if_name {ovsdb_ap_args['radio_if_name']}",
+                f"-vif_if_name {ovsdb_ap_args['vif_if_name']}",
+                f"-vif_radio_idx {ovsdb_ap_args['vif_radio_idx']}",
                 f"-ssid '{ssid}'",
                 f"-channel {channel}",
                 f"-ht_mode {ht_mode}",
                 f"-hw_mode {hw_mode}",
-                f"-mode {mode}",
-                f"-vif_if_name {if_name}",
+                f"-mode {ovsdb_ap_args['mode']}",
                 "-channel_mode manual",
                 "-enabled true",
-                f"-wifi_security_type {wifi_security_type}",
-            ]
-            test_args_base += gw.configure_wifi_security()
-            test_args = gw.get_command_arguments(*test_args_base)
+                "-wpa true",
+                f"-wpa_psks {ovsdb_ap_args['wpa_psks']}",
+                f"-wpa_oftags {ovsdb_ap_args['wpa_oftags']}",
+                f"-wpa_key_mgmt {ovsdb_ap_args['wpa_key_mgmt']}",
+            )
 
         with step("VIF reset"):
             if pytest.wm2_last_channel_and_radio_band_used != (channel, radio_band):
-                assert gw.execute("tools/device/vif_reset")[0] == ExpectedShellResult
+                gw.vif_reset()
             pytest.wm2_last_channel_and_radio_band_used = (channel, radio_band)
         with step("Test case"):
             assert gw.execute_with_logging("tests/wm2/wm2_set_ssid", test_args)[0] == ExpectedShellResult
@@ -1545,7 +1539,6 @@ class TestWm2:
             gw_channel = cfg.get("gw_channel")
             l2_channel = cfg.get("leaf_channel")
             ht_mode = cfg.get("ht_mode")
-            wifi_security_type = cfg.get("wifi_security_type", "wpa")
             gw_radio_band = cfg.get("gw_radio_band")
             l2_radio_band = cfg.get("leaf_radio_band")
 
@@ -1577,43 +1570,28 @@ class TestWm2:
                 else:
                     encryption = "WPA2"
 
-            # L1 STA arguments
-            l1_to_l2_sta_args = {
-                "vif_name": l1_to_l2_bhaul_sta_if_name,
-                "wpa_psk": psk,
-                "ssid": ssid,
-                "wifi_security_type": wifi_security_type,
-                "encryption": encryption,
-                "reset_vif": True,
-            }
-
-            # L2 AP arguments
-            l2_ap_args = {
-                "channel": l2_channel,
-                "ht_mode": ht_mode,
-                "radio_band": l2_radio_band,
-                "wpa_psk": psk,
-                "wifi_security_type": wifi_security_type,
-                "encryption": encryption,
-                "ssid": ssid,
-                "interface_type": "backhaul_ap",
-                "bridge": False,
-                "reset_vif": True,
-            }
-
-            l2.ap_args = l2_ap_args
+            # L2 interface creation
+            l2.create_interface_object(
+                channel=l2_channel,
+                ht_mode=ht_mode,
+                radio_band=l2_radio_band,
+                encryption=encryption,
+                interface_role="backhaul_ap",
+                ssid=ssid,
+                wpa_psks=psk,
+            )
 
         try:
             with step("GW AP and L1 STA creation"):
-                assert gw.create_and_configure_bhaul_connection_gw_leaf(
+                assert gw.create_and_configure_backhaul(
                     channel=gw_channel,
                     leaf_device=l1,
-                    gw_radio_band=gw_radio_band,
-                    leaf_radio_band=gw_radio_band,
+                    radio_band=gw_radio_band,
                     ht_mode=ht_mode,
-                    wifi_security_type=wifi_security_type,
                     encryption=encryption,
-                    skip_gre=True,
+                    mesh_type=None,
+                    ssid=ssid,
+                    wpa_psks=psk,
                 )
             with step("Determine L1 STA MAC at runtime"):
                 l1_sta_vif_mac = l1.device_api.iface.get_vif_mac(l1_to_gw_bhaul_sta_if_name)[0]
@@ -1625,15 +1603,24 @@ class TestWm2:
                     gw.execute("tools/device/check_wifi_client_associated", l1_sta_mac_args)[0] == ExpectedShellResult
                 )
             with step("L2 AP creation"):
-                assert l2.configure_radio_vif_and_network()
+                assert l2.interfaces["backhaul_ap"].configure_interface() == ExpectedShellResult
             with step("Determine L2 MAC at runtime"):
                 l2_ap_vif_mac = l2.device_api.iface.get_vif_mac(l2_bhaul_ap_if_name)[0]
                 if not l2_ap_vif_mac or l2_ap_vif_mac == "":
                     raise RuntimeError("Failed to retrieve L2 MAC address")
             with step("L1 STA configuration"):
-                l1_to_l2_sta_args.update({"parent": l2_ap_vif_mac})
-                l1.sta_args = l1_to_l2_sta_args
-                assert l1.configure_sta_interface()
+                # Channel and radio band used only as metadata in STA configuration, not pushed to the device
+                l1.create_interface_object(
+                    channel=l2_channel,
+                    ht_mode=ht_mode,
+                    radio_band=l1_to_l2_radio_band,
+                    encryption=encryption,
+                    interface_role="backhaul_sta",
+                    ssid=ssid,
+                    wpa_psks=psk,
+                    parent=l2_ap_vif_mac,
+                )
+                assert l1.interfaces["backhaul_sta"].configure_interface(vif_reset=True) == ExpectedShellResult
             with step("Determine L1 STA MAC at runtime"):
                 l1_sta_vif_mac = l1.device_api.iface.get_vif_mac(l1_to_l2_bhaul_sta_if_name)[0]
                 if not l1_sta_vif_mac or l1_sta_vif_mac == "":
@@ -1645,7 +1632,9 @@ class TestWm2:
                 )
         finally:
             with step("Cleanup"):
-                multi_device_script_execution(devices=[gw, l1, l2], script="tools/device/vif_reset")
+                gw.vif_reset()
+                l1.vif_reset()
+                l2.vif_reset()
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", wm2_config.get("wm2_topology_change_change_parent_same_band_change_channel", []))
@@ -1654,11 +1643,10 @@ class TestWm2:
 
         with step("Preparation of testcase parameters"):
             # Arguments from test case configuration
-            gw_channel = cfg.get("gw_channel")
+            gw_channel = cfg.get("channel")
             leaf_channel = cfg.get("leaf_channel")
             ht_mode = cfg.get("ht_mode")
             encryption = cfg["encryption"]
-            wifi_security_type = cfg.get("wifi_security_type", "wpa")
             gw_radio_band = cfg.get("radio_band")
 
             # Constant arguments
@@ -1682,33 +1670,28 @@ class TestWm2:
                 else:
                     log.info("6G radio band was not selected. The 6G radio band compatibility check is not necessary")
 
-            # L2 AP arguments
-            l2_ap_args = {
-                "channel": leaf_channel,
-                "ht_mode": ht_mode,
-                "radio_band": l2_radio_band,
-                "wpa_psk": psk,
-                "wifi_security_type": wifi_security_type,
-                "encryption": encryption,
-                "ssid": ssid,
-                "interface_type": "backhaul_ap",
-                "bridge": False,
-                "reset_vif": True,
-            }
-
-            l2.ap_args = l2_ap_args
+            # L2 interface creation
+            l2.create_interface_object(
+                channel=leaf_channel,
+                ht_mode=ht_mode,
+                radio_band=l2_radio_band,
+                encryption=encryption,
+                interface_role="backhaul_ap",
+                ssid=ssid,
+                wpa_psks=psk,
+            )
 
         try:
             with step("GW AP and L1 STA creation"):
-                assert gw.create_and_configure_bhaul_connection_gw_leaf(
+                assert gw.create_and_configure_backhaul(
                     channel=gw_channel,
                     leaf_device=l1,
-                    gw_radio_band=gw_radio_band,
-                    leaf_radio_band=l1_radio_band,
+                    radio_band=gw_radio_band,
                     ht_mode=ht_mode,
-                    wifi_security_type=wifi_security_type,
                     encryption=encryption,
-                    skip_gre=True,
+                    mesh_type=None,
+                    ssid=ssid,
+                    wpa_psks=psk,
                 )
             with step("Determine L1 STA MAC at runtime"):
                 l1_sta_vif_mac = l1.device_api.iface.get_vif_mac(l1_bhaul_sta_if_name)[0]
@@ -1720,7 +1703,7 @@ class TestWm2:
                     gw.execute("tools/device/check_wifi_client_associated", l1_sta_mac_args)[0] == ExpectedShellResult
                 )
             with step("L2 AP creation"):
-                assert l2.configure_radio_vif_and_network()
+                assert l2.interfaces["backhaul_ap"].configure_interface() == ExpectedShellResult
             with step("Determine L2 AP MAC at runtime"):
                 l2_ap_vif_mac = l2.device_api.iface.get_vif_mac(l2_bhaul_ap_if_name)[0]
                 if not l2_ap_vif_mac or l2_ap_vif_mac == "":
@@ -1740,7 +1723,9 @@ class TestWm2:
                 )
         finally:
             with step("Cleanup"):
-                multi_device_script_execution(devices=[gw, l1, l2], script="tools/device/vif_reset")
+                gw.vif_reset()
+                l1.vif_reset()
+                l2.vif_reset()
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", wm2_config.get("wm2_topology_change_change_parent_same_band_same_channel", []))
@@ -1753,7 +1738,6 @@ class TestWm2:
             ht_mode = cfg.get("ht_mode")
             gw_radio_band = cfg.get("radio_band")
             encryption = cfg["encryption"]
-            wifi_security_type = cfg.get("wifi_security_type", "wpa")
 
             # Constant arguments
             ssid, psk = fut_configurator.base_ssid, fut_configurator.base_psk
@@ -1776,33 +1760,28 @@ class TestWm2:
                 else:
                     log.info("6G radio band was not selected. The 6G radio band compatibility check is not necessary")
 
-            # L2 AP arguments
-            l2_ap_args = {
-                "channel": channel,
-                "ht_mode": ht_mode,
-                "radio_band": l2_radio_band,
-                "wpa_psk": psk,
-                "wifi_security_type": wifi_security_type,
-                "encryption": encryption,
-                "ssid": ssid,
-                "interface_type": "backhaul_ap",
-                "bridge": False,
-                "reset_vif": True,
-            }
-
-            l2.ap_args = l2_ap_args
+            # L2 interface creation
+            l2.create_interface_object(
+                channel=channel,
+                ht_mode=ht_mode,
+                radio_band=l2_radio_band,
+                encryption=encryption,
+                interface_role="backhaul_ap",
+                ssid=ssid,
+                wpa_psks=psk,
+            )
 
         try:
             with step("GW AP and L1 STA creation"):
-                assert gw.create_and_configure_bhaul_connection_gw_leaf(
+                assert gw.create_and_configure_backhaul(
                     channel=channel,
                     leaf_device=l1,
-                    gw_radio_band=gw_radio_band,
-                    leaf_radio_band=l1_radio_band,
+                    radio_band=gw_radio_band,
                     ht_mode=ht_mode,
-                    wifi_security_type=wifi_security_type,
                     encryption=encryption,
-                    skip_gre=True,
+                    mesh_type=None,
+                    ssid=ssid,
+                    wpa_psks=psk,
                 )
             with step("Determine L1 STA MAC at runtime"):
                 l1_sta_vif_mac = l1.device_api.iface.get_vif_mac(l1_bhaul_sta_if_name)[0]
@@ -1814,7 +1793,7 @@ class TestWm2:
                     gw.execute("tools/device/check_wifi_client_associated", l1_sta_mac_args)[0] == ExpectedShellResult
                 )
             with step("L2 AP creation"):
-                assert l2.configure_radio_vif_and_network()
+                assert l2.interfaces["backhaul_ap"].configure_interface() == ExpectedShellResult
             with step("Determine L2 AP MAC at runtime"):
                 l2_ap_vif_mac = l2.device_api.iface.get_vif_mac(l2_bhaul_ap_if_name)[0]
                 if not l2_ap_vif_mac or l2_ap_vif_mac == "":
@@ -1834,7 +1813,9 @@ class TestWm2:
                 )
         finally:
             with step("Cleanup"):
-                multi_device_script_execution(devices=[gw, l1, l2], script="tools/device/vif_reset")
+                gw.vif_reset()
+                l1.vif_reset()
+                l2.vif_reset()
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", wm2_config.get("wm2_validate_radio_mac_address", []))
@@ -1860,7 +1841,7 @@ class TestWm2:
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", wm2_config.get("wm2_verify_associated_clients", []))
     def test_wm2_verify_associated_clients(self, cfg: dict):
-        fut_configurator, gw, w1 = pytest.fut_configurator, pytest.gw, pytest.w1
+        gw, w1 = pytest.gw, pytest.w1
 
         with step("Preparation of testcase parameters"):
             # Arguments from test case configuration
@@ -1868,38 +1849,31 @@ class TestWm2:
             ht_mode = cfg.get("ht_mode")
             radio_band = cfg.get("radio_band")
             encryption = cfg["encryption"]
-            wifi_security_type = cfg.get("wifi_security_type", "wpa")
             client_retry = cfg.get("client_retry", 2)
-
-            # Constant arguments
-            ssid, psk = fut_configurator.base_ssid, fut_configurator.base_psk
 
             # W1 specific arguments
             wlan_if_name = w1.device_config.get("wlan_if_name")
             w1_mac = w1.device_api.get_mac(if_name=wlan_if_name)
 
-            # GW AP arguments
-            gw_ap_vif_args = {
-                "channel": channel,
-                "ht_mode": ht_mode,
-                "radio_band": radio_band,
-                "wpa_psk": psk,
-                "wifi_security_type": wifi_security_type,
-                "encryption": encryption,
-                "ssid": ssid,
-                "reset_vif": True,
-            }
+            # GW interface creation
+            gw.create_interface_object(
+                channel=channel,
+                ht_mode=ht_mode,
+                radio_band=radio_band,
+                encryption=encryption,
+                interface_role="home_ap",
+            )
 
-            gw.ap_args = gw_ap_vif_args
+            # Retrieve AP SSID and PSK values
+            ssid = gw.interfaces["home_ap"].ssid_raw
+            psk = gw.interfaces["home_ap"].psk_raw
 
         with step("GW AP creation"):
-            assert gw.configure_radio_vif_and_network()
+            assert gw.interfaces["home_ap"].configure_interface() == ExpectedShellResult
         with step("Client connection"):
-            security_args = gw.configure_wifi_security(return_as_dict=True)
             w1.device_api.connect(
                 ssid=ssid,
                 psk=psk,
-                key_mgmt=security_args["key_mgmt_mapping"],
                 retry=client_retry,
             )
         with step("Test case"):
@@ -1916,7 +1890,6 @@ class TestWm2:
             csa_channel = cfg.get("csa_channel")
             ht_mode = cfg.get("ht_mode")
             gw_radio_band = cfg.get("radio_band")
-            wifi_security_type = cfg.get("wifi_security_type", "wpa")
             device_mode = cfg.get("device_mode", "router")
             encryption = cfg["encryption"]
 
@@ -1931,33 +1904,13 @@ class TestWm2:
             # Constant arguments
             ping_log_file = f"/tmp/ping_{gw_radio_band}.txt"
 
-            gw_update_csa_channel_args = gw.get_command_arguments(
-                "Wifi_Radio_Config",
-                "-w",
-                "if_name",
-                gw_phy_radio_name,
-                "-u",
-                "channel",
-                csa_channel,
-            )
-            gw_wait_csa_channel_args = gw.get_command_arguments(
-                "Wifi_Radio_State",
-                "-w",
-                "if_name",
-                gw_phy_radio_name,
-                "-is",
-                "channel",
-                csa_channel,
-            )
-            l1_wait_csa_channel_args = gw.get_command_arguments(
-                "Wifi_Radio_State",
-                "-w",
-                "if_name",
-                l1_phy_radio_name,
-                "-is",
-                "channel",
-                csa_channel,
-            )
+            gw_csa_channel_args = {
+                "channel": csa_channel,
+            }
+
+            l1_csa_channel_args = {
+                "channel": csa_channel,
+            }
 
         try:
             with step("VIF reset"):
@@ -1965,15 +1918,13 @@ class TestWm2:
             with step(f"Put GW into {device_mode} mode"):
                 assert gw.configure_device_mode(device_mode=device_mode)
             with step("GW AP and L1 STA creation"):
-                assert gw.create_and_configure_bhaul_connection_gw_leaf(
+                assert gw.create_and_configure_backhaul(
                     channel=channel,
                     leaf_device=l1,
-                    gw_radio_band=gw_radio_band,
-                    leaf_radio_band=l1_radio_band,
+                    radio_band=gw_radio_band,
                     ht_mode=ht_mode,
-                    wifi_security_type=wifi_security_type,
                     encryption=encryption,
-                    skip_gre=False,
+                    mesh_type=None,
                 )
             with step("Retrieve L1 backhaul STA IP"):
                 l1_bhaul_sta_ip = l1.device_api.get_ips(iface=l1_bhaul_iface).get("ipv4")
@@ -1991,18 +1942,30 @@ class TestWm2:
                 )
             with step("Trigger CSA on GW"):
                 assert (
-                    gw.execute("tools/device/ovsdb/update_ovsdb_entry", gw_update_csa_channel_args)[0]
+                    gw.ovsdb.set_value(
+                        table="Wifi_Radio_Config",
+                        value=gw_csa_channel_args,
+                        where=f"if_name=={gw_phy_radio_name}",
+                    )[0]
                     == ExpectedShellResult
                 )
             with step("Wait for channel on GW"):
                 assert (
-                    gw.execute("tools/device/ovsdb/wait_ovsdb_entry", gw_wait_csa_channel_args)[0]
+                    gw.ovsdb.wait_for_value(
+                        table="Wifi_Radio_State",
+                        value=gw_csa_channel_args,
+                        where=f"if_name=={gw_phy_radio_name}",
+                    )[0]
                     == ExpectedShellResult
                 )
             with step("Test case"):
                 # L1: verify channel switch
                 assert (
-                    l1.execute("tools/device/ovsdb/wait_ovsdb_entry", l1_wait_csa_channel_args)[0]
+                    l1.ovsdb.wait_for_value(
+                        table="Wifi_Radio_State",
+                        value=l1_csa_channel_args,
+                        where=f"if_name=={l1_phy_radio_name}",
+                    )[0]
                     == ExpectedShellResult
                 )
                 # GW: stop pinging L1
@@ -2014,12 +1977,13 @@ class TestWm2:
             with step("Cleanup"):
                 # Kill ping again in case the command was not executed as part of the test case steps
                 gw.device_api.run_raw("pkill -f ping_check.sh")
-                multi_device_script_execution(devices=[gw, l1], script="tools/device/vif_reset")
+                gw.vif_reset()
+                l1.vif_reset()
 
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.parametrize("cfg", wm2_config.get("wm2_verify_gre_tunnel_gw_leaf", []))
     def test_wm2_verify_gre_tunnel_gw_leaf(self, cfg: dict):
-        fut_configurator, gw, l1, w1 = pytest.fut_configurator, pytest.gw, pytest.l1, pytest.w1
+        gw, l1, w1 = pytest.gw, pytest.l1, pytest.w1
 
         with step("Preparation of testcase parameters"):
             # Arguments from test case configuration
@@ -2027,7 +1991,6 @@ class TestWm2:
             ht_mode = cfg.get("ht_mode")
             gw_radio_band = cfg.get("radio_band")
             encryption = cfg["encryption"]
-            wifi_security_type = cfg.get("wifi_security_type", "wpa")
             ping_wan_ip = cfg.get("ping_wan_ip", "1.1.1.1")
             client_retry = cfg.get("client_retry", 2)
 
@@ -2038,48 +2001,40 @@ class TestWm2:
             wlan_if_name = w1.device_config.get("wlan_if_name")
             w1_mac = w1.device_api.get_mac(if_name=wlan_if_name)
 
-            # Constant arguments
-            ssid, psk = fut_configurator.base_ssid, fut_configurator.base_psk
-            l1_home_ap_ssid, l1_home_ap_psk = f"{ssid}_home", f"{psk}_home"
+            # L1 interface creation
+            l1.create_interface_object(
+                channel=channel,
+                ht_mode=ht_mode,
+                radio_band=l1_radio_band,
+                encryption=encryption,
+                interface_role="home_ap",
+            )
+
+            # Retrieve L1 AP SSID and PSK values
+            ssid = l1.interfaces["home_ap"].ssid_raw
+            psk = l1.interfaces["home_ap"].psk_raw
 
         with step("VIF reset"):
-            multi_device_script_execution(devices=[gw, l1], script="tools/device/vif_reset")
+            gw.vif_reset()
+            l1.vif_reset()
         with step("Put GW into router mode"):
             assert gw.configure_device_mode(device_mode="router")
         with step("Ensure WAN connectivity on GW"):
             assert gw.check_wan_connectivity()
         with step("GW AP and L1 STA creation"):
-            assert gw.create_and_configure_bhaul_connection_gw_leaf(
+            assert gw.create_and_configure_backhaul(
                 channel=channel,
                 leaf_device=l1,
-                gw_radio_band=gw_radio_band,
-                leaf_radio_band=l1_radio_band,
+                radio_band=gw_radio_band,
                 ht_mode=ht_mode,
-                wifi_security_type=wifi_security_type,
                 encryption=encryption,
-                skip_gre=False,
             )
         with step("L1 Home AP configuration"):
-            # L1 AP arguments
-            l1_ap_vif_args = {
-                "channel": channel,
-                "ht_mode": ht_mode,
-                "radio_band": l1_radio_band,
-                "wpa_psk": l1_home_ap_psk,
-                "wifi_security_type": wifi_security_type,
-                "encryption": encryption,
-                "ssid": l1_home_ap_ssid,
-                "reset_vif": False,
-            }
-
-            l1.ap_args = l1_ap_vif_args
-            assert l1.configure_radio_vif_and_network()
+            assert l1.interfaces["home_ap"].configure_interface() == ExpectedShellResult
         with step("Client connection to LEAF"):
-            security_args = l1.configure_wifi_security(return_as_dict=True)
             w1.device_api.connect(
-                ssid=l1_home_ap_ssid,
-                psk=l1_home_ap_psk,
-                key_mgmt=security_args["key_mgmt_mapping"],
+                ssid=ssid,
+                psk=psk,
                 retry=client_retry,
             )
         with step("Verify client connection to LEAF"):
@@ -2098,7 +2053,6 @@ class TestWm2:
             ht_mode = cfg.get("ht_mode")
             radio_band = cfg.get("radio_band")
             encryption = cfg["encryption"]
-            wifi_security_type = cfg.get("wifi_security_type", "wpa")
             client_retry = cfg.get("client_retry", 2)
 
             # GW specific arguments
@@ -2112,52 +2066,392 @@ class TestWm2:
             ssid = fut_configurator.base_ssid
             psk = None if encryption.casefold() == "open" else fut_configurator.base_psk
 
-            # GW AP arguments
-            gw_ap_vif_args = {
-                "channel": channel,
-                "ht_mode": ht_mode,
-                "radio_band": radio_band,
-                "wpa_psk": psk,
-                "encryption": encryption,
-                "wifi_security_type": wifi_security_type,
-                "ssid": ssid,
-                "reset_vif": False,
-            }
-
-            gw.ap_args = gw_ap_vif_args
-
-            check_ap_args = gw.get_command_arguments(
-                "Wifi_VIF_State",
-                "-w",
-                "if_name",
-                gw_home_ap_if_name,
-                "-is",
-                "enabled",
-                "true",
+            # GW interface creation
+            gw.create_interface_object(
+                channel=channel,
+                ht_mode=ht_mode,
+                radio_band=radio_band,
+                encryption=encryption,
+                interface_role="home_ap",
+                ssid=ssid,
+                wpa_psks=psk,
             )
 
+            check_ap_args = {
+                "enabled": True,
+            }
+
         with step("VIF reset"):
-            assert gw.execute("tools/device/vif_reset")[0] == ExpectedShellResult
+            gw.vif_reset()
         with step("GW AP creation"):
-            assert gw.configure_radio_vif_and_network()
+            assert gw.interfaces["home_ap"].configure_interface() == ExpectedShellResult
         with step("Test case"):
-            assert gw.execute("tools/device/ovsdb/wait_ovsdb_entry", check_ap_args)[0] == ExpectedShellResult
+            assert (
+                gw.ovsdb.wait_for_value(
+                    table="Wifi_VIF_State",
+                    value=check_ap_args,
+                    where=f"if_name=={gw_home_ap_if_name}",
+                )[0]
+                == ExpectedShellResult
+            )
         with step("Client connection"):
-            security_args = gw.configure_wifi_security(return_as_dict=True)
             w1.device_api.connect(
                 ssid=ssid,
                 psk=psk,
-                key_mgmt=security_args["key_mgmt_mapping"],
                 retry=client_retry,
             )
         with step("Verify client connection"):
             assert w1_mac in gw.device_api.get_wifi_associated_clients()[0]
 
     @allure.severity(allure.severity_level.NORMAL)
-    @pytest.mark.timeout(540)
+    @pytest.mark.parametrize("cfg", wm2_config.get("wm2_wds_backhaul_line_topology", []))
+    def test_wm2_wds_backhaul_line_topology(self, cfg: dict):
+        gw, l1, l2 = pytest.gw, pytest.l1, pytest.l2
+
+        with step("Preparation of testcase parameters"):
+            # Arguments from test case configuration
+            channel = cfg.get("channel")
+            ht_mode = cfg.get("ht_mode")
+            gw_radio_band = cfg.get("radio_band")
+            encryption = cfg.get("encryption", "WPA2")
+
+            # L1 specific arguments
+            l1_radio_band = l1.get_radio_band_from_remote_channel_and_band(channel, gw_radio_band)
+            l1_bhaul_sta_if_name = l1.device_api.capabilities.get_bhaul_sta_ifname(freq_band=l1_radio_band)
+            l1_mac = l1.device_api.iface.get_vif_mac(l1_bhaul_sta_if_name)[0]
+
+            # L2 specific arguments
+            l2_radio_band = l2.get_radio_band_from_remote_channel_and_band(channel, gw_radio_band)
+            l2_bhaul_sta_if_name = l2.device_api.capabilities.get_bhaul_sta_ifname(freq_band=l2_radio_band)
+            l2_mac = l2.device_api.iface.get_vif_mac(l2_bhaul_sta_if_name)[0]
+
+        try:
+            with step("GW-LEAF1-LEAF2 WDS backhaul configuration"):
+                assert gw.create_and_configure_backhaul(
+                    channel=channel,
+                    leaf_device=l1,
+                    radio_band=gw_radio_band,
+                    ht_mode=ht_mode,
+                    encryption=encryption,
+                    mesh_type="wds",
+                    second_leaf_device=l2,
+                    topology="line",
+                )
+            with step("Verify GW-LEAF1 WDS backhaul configuration"):
+                assert l1_mac in gw.device_api.get_wifi_associated_clients()
+            with step("Ensure WAN connectivity on L1"):
+                assert l1.check_wan_connectivity()
+            with step("Verify LEAF1-LEAF2 WDS backhaul configuration"):
+                assert l2_mac in l1.device_api.get_wifi_associated_clients()
+            with step("Ensure WAN connectivity on L2"):
+                assert l2.check_wan_connectivity()
+        finally:
+            with step("Cleanup"):
+                gw.vif_reset()
+                l1.vif_reset()
+                l2.vif_reset()
+
+    @allure.severity(allure.severity_level.NORMAL)
+    @pytest.mark.parametrize("cfg", wm2_config.get("wm2_wds_backhaul_star_toplogy", []))
+    def test_wm2_wds_backhaul_star_toplogy(self, cfg: dict):
+        gw, l1, l2 = pytest.gw, pytest.l1, pytest.l2
+
+        with step("Preparation of testcase parameters"):
+            # Arguments from test case configuration
+            channel = cfg.get("channel")
+            ht_mode = cfg.get("ht_mode")
+            gw_radio_band = cfg.get("radio_band")
+            encryption = cfg.get("encryption", "WPA2")
+
+            # L1 specific arguments
+            l1_radio_band = l1.get_radio_band_from_remote_channel_and_band(channel, gw_radio_band)
+            l1_bhaul_sta_if_name = l1.device_api.capabilities.get_bhaul_sta_ifname(freq_band=l1_radio_band)
+            l1_mac = l1.device_api.iface.get_vif_mac(l1_bhaul_sta_if_name)[0]
+
+            # L2 specific arguments
+            l2_radio_band = l2.get_radio_band_from_remote_channel_and_band(channel, gw_radio_band)
+            l2_bhaul_sta_if_name = l2.device_api.capabilities.get_bhaul_sta_ifname(freq_band=l2_radio_band)
+            l2_mac = l2.device_api.iface.get_vif_mac(l2_bhaul_sta_if_name)[0]
+
+        try:
+            with step("GW-LEAF1-LEAF2 WDS backhaul configuration"):
+                assert gw.create_and_configure_backhaul(
+                    channel=channel,
+                    leaf_device=l1,
+                    radio_band=gw_radio_band,
+                    ht_mode=ht_mode,
+                    encryption=encryption,
+                    mesh_type="wds",
+                    second_leaf_device=l2,
+                    topology="star",
+                )
+            with step("Verify GW-LEAF1 WDS backhaul configuration"):
+                assert l1_mac in gw.device_api.get_wifi_associated_clients()
+            with step("Ensure WAN connectivity on L1"):
+                assert l1.check_wan_connectivity()
+            with step("Verify GW-LEAF2 WDS backhaul configuration"):
+                assert l2_mac in gw.device_api.get_wifi_associated_clients()
+            with step("Ensure WAN connectivity on L2"):
+                assert l2.check_wan_connectivity()
+        finally:
+            with step("Cleanup"):
+                gw.vif_reset()
+                l1.vif_reset()
+                l2.vif_reset()
+
+    @allure.severity(allure.severity_level.NORMAL)
+    @pytest.mark.parametrize("cfg", wm2_config.get("wm2_wds_backhaul_topology_change", []))
+    def test_wm2_wds_backhaul_topology_change(self, cfg: dict):
+        gw, l1, l2 = pytest.gw, pytest.l1, pytest.l2
+
+        with step("Preparation of testcase parameters"):
+            # Arguments from test case configuration
+            gw_channel = cfg.get("gw_channel")
+            l2_channel = cfg.get("leaf_channel")
+            ht_mode = cfg.get("ht_mode")
+            gw_radio_band = cfg.get("gw_radio_band")
+            l2_radio_band = cfg.get("leaf_radio_band")
+
+            # GW-L1 specific arguments
+            gw_l1_radio_band = l1.get_radio_band_from_remote_channel_and_band(gw_channel, gw_radio_band)
+            gw_l1_bhaul_sta_if_name = l1.device_api.capabilities.get_bhaul_sta_ifname(freq_band=gw_l1_radio_band)
+            gw_l1_mac = l1.device_api.iface.get_vif_mac(gw_l1_bhaul_sta_if_name)[0]
+
+            # L2-L1 specific arguments
+            l2_l1_radio_band = l1.get_radio_band_from_remote_channel_and_band(l2_channel, l2_radio_band)
+            l2_l1_bhaul_sta_if_name = l1.device_api.capabilities.get_bhaul_sta_ifname(freq_band=l2_l1_radio_band)
+            l2_l1_mac = l1.device_api.iface.get_vif_mac(l2_l1_bhaul_sta_if_name)[0]
+
+            with step("6G radio band compatibility check"):
+                if gw_radio_band == "6g":
+                    for node in [gw, l1, l2]:
+                        if "6G" not in node.supported_radio_bands:
+                            pytest.skip(f"6G radio band is not supported on {node}")
+                        else:
+                            log.info("6G radio band is supported on all required devices")
+                else:
+                    log.info("6G radio band was not selected. The 6G radio band compatibility check is not necessary")
+
+        with step("Determine encryption"):
+            if gw_radio_band == "6g" or l2_radio_band == "6g":
+                encryption = "WPA3"
+            else:
+                encryption = "WPA2"
+
+        try:
+            with step("GW-LEAF1 WDS backhaul configuration"):
+                assert gw.create_and_configure_backhaul(
+                    channel=gw_channel,
+                    leaf_device=l1,
+                    radio_band=gw_radio_band,
+                    ht_mode=ht_mode,
+                    encryption=encryption,
+                    mesh_type="wds",
+                )
+            with step("Verify GW-LEAF1 WDS backhaul configuration"):
+                assert gw_l1_mac in gw.device_api.get_wifi_associated_clients()
+            with step("Ensure WAN connectivity on L1"):
+                assert l1.check_wan_connectivity()
+            with step("LEAF2-LEAF1 WDS backhaul configuration"):
+                assert l2.create_and_configure_backhaul(
+                    channel=l2_channel,
+                    leaf_device=l1,
+                    radio_band=l2_radio_band,
+                    ht_mode=ht_mode,
+                    encryption=encryption,
+                    mesh_type="wds",
+                )
+            with step("Verify GW-LEAF1 WDS backhaul configuration"):
+                assert l2_l1_mac in l2.device_api.get_wifi_associated_clients()
+            with step("Ensure WAN connectivity on L1"):
+                assert l1.check_wan_connectivity()
+        finally:
+            with step("Cleanup"):
+                gw.vif_reset()
+                l1.vif_reset()
+                l2.vif_reset()
+
+    @allure.severity(allure.severity_level.NORMAL)
+    @pytest.mark.parametrize("cfg", wm2_config.get("wm2_transmit_rate_boost", []))
+    def test_wm2_transmit_rate_boost(self, cfg: dict):
+        gw, w1 = pytest.gw, pytest.w1
+
+        min_opensync_version = "6.4.0.0"
+        opensync_version = gw.get_opensync_version()
+
+        if not compare_fw_versions(opensync_version, min_opensync_version, ">"):
+            pytest.skip(
+                f"Insufficient OpenSync version:{opensync_version}. Higher than {min_opensync_version} required.",
+            )
+
+        with step("Preparation of testcase parameters"):
+            # Arguments from test case configuration
+            channel = cfg.get("channel")
+            ht_mode = cfg.get("ht_mode")
+            radio_band = cfg.get("radio_band")
+            encryption = cfg.get("encryption", "WPA2")
+
+            # GW specific arguments
+            gw_phy_radio_if_name = gw.device_api.capabilities.get_phy_radio_ifname(freq_band=radio_band)
+            gw_home_ap_if_name = gw.device_api.capabilities.get_home_ap_ifname(freq_band=radio_band)
+            gw_home_ap_mac = gw.device_api.iface.get_mac(gw_home_ap_if_name)
+
+            # GW interface creation
+            gw.create_interface_object(
+                channel=channel,
+                ht_mode=ht_mode,
+                radio_band=radio_band,
+                encryption=encryption,
+                interface_role="home_ap",
+            )
+
+            # W1 specific arguments
+            w1_monitor_file_name = Path(f"/tmp/w1_monitor_{radio_band}")
+            w1_tcpdump_log_file = f"/tmp/w1_log_tcpdump_{radio_band}.txt"
+            if "5G" in radio_band.upper():
+                w1_sniffer_radio_band = "5G"
+            else:
+                w1_sniffer_radio_band = radio_band.upper()
+
+            # Test case arguments
+            set_transmit_rate_args = gw.get_command_arguments(
+                gw_phy_radio_if_name,
+            )
+            verify_transmit_rate_args = w1.get_command_arguments(
+                "5.5",
+                gw_home_ap_mac,
+                w1_tcpdump_log_file,
+            )
+
+        try:
+            with step("GW: increase transmit rate"):
+                assert (
+                    gw.execute_with_logging("tests/wm2/wm2_transmit_rate_boost", set_transmit_rate_args)[0]
+                    == ExpectedShellResult
+                )
+            with step("W1: start traffic capture"):
+                _sniff_file_name, remote_sniff_file_path = sniffing_utils.start_sniffer_on_client(
+                    client_obj=w1.device_api,
+                    channel=channel,
+                    band=w1_sniffer_radio_band,
+                    tcpdump_flags="-evln --print",
+                    tcpdump_log_file=w1_tcpdump_log_file,
+                )
+            with step("GW: Home AP configuration"):
+                assert gw.interfaces["home_ap"].configure_interface() == ExpectedShellResult
+                # Pause test execution to ensure traffic capture
+                time.sleep(5)
+            with step("W1: stop traffic capture"):
+                local_sniff_file_path = sniffing_utils.stop_sniffer_and_get_file(
+                    client_obj=w1.device_api,
+                    remote_sniff_file_path=remote_sniff_file_path,
+                    tmp_path=w1_monitor_file_name,
+                    check_file_size=True,
+                )
+            with step("W1: Analyze captured traffic"):
+                # Attach the PCAP file to the Allure report
+                sniffing_utils.attach_capture_file_to_allure(file_path=local_sniff_file_path)
+                assert (
+                    w1.execute("tests/wm2/wm2_check_transmit_rate", verify_transmit_rate_args, as_sudo=True)[0]
+                    == ExpectedShellResult
+                )
+        finally:
+            with step("Cleanup"):
+                # W1: revert client back to STA mode in case of test case failure
+                w1.device_api.wifi_station(skip_exception=True)
+                gw.vif_reset()
+
+    @allure.severity(allure.severity_level.NORMAL)
+    @pytest.mark.parametrize("cfg", wm2_config.get("wm2_wds_backhaul_traffic_capture", []))
+    def test_wm2_wds_backhaul_traffic_capture(self, cfg: dict):
+        gw, l1, w1 = pytest.gw, pytest.l1, pytest.w1
+
+        with step("Preparation of testcase parameters"):
+            # Arguments from test case configuration
+            channel = cfg.get("channel")
+            ht_mode = cfg.get("ht_mode")
+            gw_radio_band = cfg.get("radio_band")
+            encryption = cfg.get("encryption", "WPA2")
+
+            # GW specific arguments
+            gw_bhaul_ap_if_name = gw.device_api.capabilities.get_bhaul_ap_ifname(freq_band=gw_radio_band)
+            gw_mac = gw.device_api.iface.get_mac(gw_bhaul_ap_if_name)
+
+            # L1 specific arguments
+            l1_radio_band = l1.get_radio_band_from_remote_channel_and_band(channel, gw_radio_band)
+            l1_bhaul_sta_if_name = l1.device_api.capabilities.get_bhaul_sta_ifname(freq_band=l1_radio_band)
+            l1_mac = l1.device_api.iface.get_mac(l1_bhaul_sta_if_name)
+
+            # W1 specific arguments
+            w1_monitor_file_name = Path(f"/tmp/w1_monitor_{gw_radio_band}")
+            w1_tcpdump_log_file = f"/tmp/w1_log_tcpdump_{gw_radio_band}.txt"
+            if "5G" in gw_radio_band.upper():
+                w1_sniffer_radio_band = "5G"
+            else:
+                w1_sniffer_radio_band = gw_radio_band.upper()
+
+            # Test case arguments
+            receiver_mac = l1_mac
+            destination_mac = l1_mac
+            transmitter_mac = gw_mac
+            source_mac = gw_mac
+
+            traffic_args = w1.get_command_arguments(
+                receiver_mac,
+                destination_mac,
+                transmitter_mac,
+                source_mac,
+                w1_tcpdump_log_file,
+            )
+
+        try:
+            with step("W1: start traffic capture"):
+                _sniff_file_name, remote_sniff_file_path = sniffing_utils.start_sniffer_on_client(
+                    client_obj=w1.device_api,
+                    channel=channel,
+                    band=w1_sniffer_radio_band,
+                    tcpdump_flags="-evln --print",
+                    tcpdump_log_file=w1_tcpdump_log_file,
+                )
+            with step("GW-L1 WDS backhaul configuration"):
+                assert gw.create_and_configure_backhaul(
+                    channel=channel,
+                    leaf_device=l1,
+                    radio_band=gw_radio_band,
+                    ht_mode=ht_mode,
+                    encryption=encryption,
+                    mesh_type="wds",
+                )
+            with step("Verify GW-L1 WDS backhaul configuration"):
+                assert l1_mac in gw.device_api.get_wifi_associated_clients()
+            with step("L1: Ensure WAN connectivity"):
+                assert l1.check_wan_connectivity()
+            with step("W1: stop traffic capture"):
+                local_sniff_file_path = sniffing_utils.stop_sniffer_and_get_file(
+                    client_obj=w1.device_api,
+                    remote_sniff_file_path=remote_sniff_file_path,
+                    tmp_path=w1_monitor_file_name,
+                    check_file_size=True,
+                )
+            with step("Analyze captured traffic"):
+                assert (
+                    w1.execute("tests/wm2/wm2_wds_backhaul_traffic_capture", traffic_args, as_sudo=True)[0]
+                    == ExpectedShellResult
+                )
+                # Attach PCAP file to the Allure report
+                sniffing_utils.attach_capture_file_to_allure(file_path=local_sniff_file_path)
+        finally:
+            with step("Cleanup"):
+                # W1: revert client back to STA mode in case of test case failure
+                w1.device_api.wifi_station(skip_exception=True)
+                gw.vif_reset()
+                l1.vif_reset()
+
+    @allure.severity(allure.severity_level.NORMAL)
+    @pytest.mark.timeout(720)
     @pytest.mark.parametrize("cfg", wm2_config.get("wm2_wifi_security_mix_on_multiple_aps", []))
     def test_wm2_wifi_security_mix_on_multiple_aps(self, cfg: dict):
-        fut_configurator, gw, l1, w1 = pytest.fut_configurator, pytest.gw, pytest.l1, pytest.w1
+        gw, l1, w1 = pytest.gw, pytest.l1, pytest.w1
 
         with step("Preparation of testcase parameters"):
             # Arguments from test case configuration
@@ -2166,11 +2460,7 @@ class TestWm2:
             radio_band = cfg.get("radio_band")
             if_list = cfg.get("if_list")
             encryption_list = cfg["encryption_list"]
-            wifi_security_type = cfg.get("wifi_security_type", "wpa")
             client_retry = cfg.get("client_retry", None)
-
-            # Constant arguments
-            base_ssid, base_psk = fut_configurator.base_ssid, fut_configurator.base_psk
 
             # L1 specific arguments
             l1_radio_band = l1.get_radio_band_from_remote_channel_and_band(channel, radio_band)
@@ -2183,44 +2473,39 @@ class TestWm2:
             encryption_cycle = cycle(encryption_list)
 
         with step("VIF reset"):
-            assert gw.execute("tools/device/vif_reset")[0] == ExpectedShellResult
+            gw.vif_reset()
         with step("Test case"):
             for interface in if_list:
-                ssid, psk = get_str_hash(f"{base_ssid}_{interface}"), f"{base_psk}_{interface}"
                 encryption = next(encryption_cycle)
-
                 if interface == "backhaul_ap":
-                    assert gw.create_and_configure_bhaul_connection_gw_leaf(
+                    assert gw.create_and_configure_backhaul(
                         channel=channel,
                         leaf_device=l1,
-                        gw_radio_band=radio_band,
-                        leaf_radio_band=radio_band,
+                        radio_band=radio_band,
                         ht_mode=ht_mode,
-                        wifi_security_type=wifi_security_type,
                         encryption=encryption,
-                        skip_gre=True,
+                        mesh_type=None,
                     )
                     l1_mac = "".join(l1.device_api.iface.get_vif_mac(l1_bhaul_sta_if_name))
                     assert l1_mac in gw.device_api.get_wifi_associated_clients()
                 else:
-                    gw_ap_vif_args = {
-                        "channel": channel,
-                        "ht_mode": ht_mode,
-                        "radio_band": radio_band,
-                        "wpa_psk": psk,
-                        "wifi_security_type": wifi_security_type,
-                        "encryption": encryption,
-                        "ssid": ssid,
-                        "interface_type": interface,
-                    }
-                    gw.ap_args = gw_ap_vif_args
-                    assert gw.configure_radio_vif_and_network()
-
-                    security_args = gw.configure_wifi_security(return_as_dict=True)
+                    # GW interface creation
+                    gw.create_interface_object(
+                        channel=channel,
+                        ht_mode=ht_mode,
+                        radio_band=radio_band,
+                        encryption=encryption,
+                        interface_role=interface,
+                    )
+                    # Retrieve AP SSID and PSK values
+                    ssid = gw.interfaces[interface].ssid_raw
+                    psk = gw.interfaces[interface].psk_raw
+                    # GW AP creation
+                    assert gw.interfaces[interface].configure_interface() == ExpectedShellResult
+                    # W1 client connection
                     w1.device_api.connect(
                         ssid=ssid,
                         psk=psk,
-                        key_mgmt=security_args["key_mgmt_mapping"],
                         retry=client_retry,
                     )
                     assert w1_mac in gw.device_api.get_wifi_associated_clients()

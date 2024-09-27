@@ -28,36 +28,28 @@ Description:
     - Check if WIRELESS MANAGER is still running.
 Arguments:
     -h  show this help message
-    (if_name)         : Wifi_Radio_Config::if_name        : (string)(required)
-    (vif_if_name)     : Wifi_VIF_Config::if_name          : (string)(required)
-    (vif_radio_idx)   : Wifi_VIF_Config::vif_radio_idx    : (int)(required)
-    (ssid)            : Wifi_VIF_Config::ssid             : (string)(required)
-    (channel)         : Wifi_Radio_Config::channel        : (int)(required)
-    (ht_mode)         : Wifi_Radio_Config::ht_mode        : (string)(required)
-    (hw_mode)         : Wifi_Radio_Config::hw_mode        : (string)(required)
-    (mode)            : Wifi_VIF_Config::mode             : (string)(required)
-    (mismatch_ht_mode): mismatch ht_mode to verify        : (string)(required)
-    (channel_mode)    : Wifi_Radio_Config::channel_mode   : (string)(required)
-    (enabled)         : Wifi_Radio_Config::enabled        : (string)(required)
+    (radio_if_name)      : Wifi_Radio_Config::if_name        : (string)(required)
+    (vif_if_name)        : Wifi_VIF_Config::if_name          : (string)(required)
+    (vif_radio_idx)      : Wifi_VIF_Config::vif_radio_idx    : (int)(required)
+    (ssid)               : Wifi_VIF_Config::ssid             : (string)(required)
+    (channel)            : Wifi_Radio_Config::channel        : (int)(required)
+    (ht_mode)            : Wifi_Radio_Config::ht_mode        : (string)(required)
+    (hw_mode)            : Wifi_Radio_Config::hw_mode        : (string)(required)
+    (mode)               : Wifi_VIF_Config::mode             : (string)(required)
+    (mismatch_ht_mode)   : mismatch ht_mode to verify        : (string)(required)
+    (channel_mode)       : Wifi_Radio_Config::channel_mode   : (string)(required)
+    (enabled)            : Wifi_Radio_Config::enabled        : (string)(required)
     (wifi_security_type) : 'wpa' if wpa fields are used or 'legacy' if security fields are used: (string)(required)
+    (wpa)                : Wifi_VIF_Config::wpa              : (string)(required)
+    (wpa_key_mgmt)       : Wifi_VIF_Config::wpa_key_mgmt     : (string)(required)
+    (wpa_psks)           : Wifi_VIF_Config::wpa_psks         : (string)(required)
+    (wpa_oftags)         : Wifi_VIF_Config::wpa_oftags       : (string)(required)
 
-Wifi Security arguments(choose one or the other):
-    If 'wifi_security_type' == 'wpa' (preferred)
-    (wpa)             : Wifi_VIF_Config::wpa              : (string)(required)
-    (wpa_key_mgmt)    : Wifi_VIF_Config::wpa_key_mgmt     : (string)(required)
-    (wpa_psks)        : Wifi_VIF_Config::wpa_psks         : (string)(required)
-    (wpa_oftags)      : Wifi_VIF_Config::wpa_oftags       : (string)(required)
-                    (OR)
-    If 'wifi_security_type' == 'legacy' (deprecated)
-    (security)        : Wifi_VIF_Config::security         : (string)(required)
 Testcase procedure:
     - On DEVICE: Run: ./${manager_setup_file} (see ${manager_setup_file} -h)
-                 Run: ./wm2/wm2_set_ht_mode_neg.sh -if_name <IF_NAME> -vif_if_name <VIF_IF_NAME> -vif_radio_idx <VIF-RADIO-IDX> -ssid <SSID> -channel <CHANNEL> -ht_mode <HT_MODE> -hw_mode <HW_MODE> -mode <MODE> -channel_mode <CHANNEL_MODE> -enabled <ENABLED> -wifi_security_type <WIFI_SECURITY_TYPE> -wpa <WPA> -wpa_key_mgmt <WPA_KEY_MGMT> -wpa_psks <WPA_PSKS> -wpa_oftags <WPA_OFTAGS>
-                        (OR)
-                 Run: ./wm2/wm2_set_ht_mode_neg.sh -if_name <IF_NAME> -vif_if_name <VIF_IF_NAME> -vif_radio_idx <VIF-RADIO-IDX> -ssid <SSID> -channel <CHANNEL> -ht_mode <HT_MODE> -hw_mode <HW_MODE> -mode <MODE> -channel_mode <CHANNEL_MODE> -enabled <ENABLED> -wifi_security_type <WIFI_SECURITY_TYPE> -security <SECURITY>
+                 Run: ./wm2/wm2_set_ht_mode_neg.sh -radio_if_name <IF_NAME> -vif_if_name <VIF_IF_NAME> -vif_radio_idx <VIF-RADIO-IDX> -ssid <SSID> -channel <CHANNEL> -ht_mode <HT_MODE> -hw_mode <HW_MODE> -mode <MODE> -channel_mode <CHANNEL_MODE> -enabled <ENABLED> -wifi_security_type <WIFI_SECURITY_TYPE> -wpa <WPA> -wpa_key_mgmt <WPA_KEY_MGMT> -wpa_psks <WPA_PSKS> -wpa_oftags <WPA_OFTAGS>
 Script usage example:
-    ./wm2/wm2_set_ht_mode_neg.sh -if_name wifi2 -vif_if_name home-ap-u50 -vif_radio_idx 2 -ssid FUTssid -channel 108 -ht_mode HT40 -hw_mode 11ac -mode ap -mismatch_ht_mode HT160 -channel_mode manual -enabled "true" -wifi_security_type wpa -wpa "true" -wpa_key_mgmt "wpa-psk" -wpa_psks '["map",[["key","FutTestPSK"]]]' -wpa_oftags '["map",[["key","home--1"]]]'
-    ./wm2/wm2_set_ht_mode_neg.sh -if_name wifi1 -vif_if_name home-ap-l50 -vif_radio_idx 2 -ssid FUTssid -channel 36 -ht_mode HT20 -hw_mode 11ac -mode ap -mismatch_ht_mode HT160 -channel_mode manual -enabled "true" -wifi_security_type legacy -security '["map",[["encryption","WPA-PSK"],["key","FutTestPSK"]]]'
+    ./wm2/wm2_set_ht_mode_neg.sh -radio_if_name wifi2 -vif_if_name home-ap-u50 -vif_radio_idx 2 -ssid FUTssid -channel 108 -ht_mode HT40 -hw_mode 11ac -mode ap -mismatch_ht_mode HT160 -channel_mode manual -enabled "true"  -wpa "true" -wpa_key_mgmt "wpa-psk" -wpa_psks '["map",[["key","FutTestPSK"]]]' -wpa_oftags '["map",[["key","home--1"]]]'
 usage_string
 }
 
@@ -65,16 +57,18 @@ case "${1}" in
     -h | --help)  usage ; exit 0 ;;
 esac
 
-NARGS=24
+NARGS=30
 [ $# -lt ${NARGS} ] && usage && raise "Requires at least ${NARGS} input argument(s)" -l "wm2/wm2_set_ht_mode_neg.sh" -arg
 
 trap '
+    fut_ec=$?
+    trap - EXIT INT
     fut_info_dump_line
     print_tables Wifi_Radio_Config Wifi_Radio_State
     print_tables Wifi_VIF_Config Wifi_VIF_State
-    check_restore_ovsdb_server
     fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    exit $fut_ec
+' EXIT INT TERM
 
 # Parsing arguments passed to the script.
 while [ -n "$1" ]; do
@@ -89,9 +83,9 @@ while [ -n "$1" ]; do
             radio_vif_args="${radio_vif_args} -${option#?} ${1}"
             shift
             ;;
-        -if_name)
-            if_name=${1}
-            radio_vif_args="${radio_vif_args} -${option#?} ${if_name}"
+        -radio_if_name)
+            radio_if_name=${1}
+            radio_vif_args="${radio_vif_args} -${option#?} ${radio_if_name}"
             shift
             ;;
         -channel)
@@ -113,25 +107,15 @@ while [ -n "$1" ]; do
             mismatch_ht_mode=${1}
             shift
             ;;
-        -wifi_security_type)
-            wifi_security_type=${1}
-            shift
-            ;;
         -wpa | \
         -wpa_key_mgmt | \
         -wpa_psks | \
         -wpa_oftags)
-            [ "${wifi_security_type}" != "wpa" ] && raise "FAIL: Incorrect combination of WPA and legacy wifi security type provided" -l "wm2/wm2_set_ht_mode_neg.sh" -arg
             create_radio_vif_args="${create_radio_vif_args} -${option#?} ${1}"
             shift
             ;;
-        -security)
-            [ "${wifi_security_type}" != "legacy" ] && raise "FAIL: Incorrect combination of WPA and legacy wifi security type provided" -l "wm2/wm2_set_ht_mode_neg.sh" -arg
-            radio_vif_args="${radio_vif_args} -${option#?} ${1}"
-            shift
-            ;;
         *)
-            raise "FAIL: Wrong option provided: $option" -l "wm2/wm2_set_ht_mode_neg.sh" -arg
+            raise "Wrong option provided: $option" -l "wm2/wm2_set_ht_mode_neg.sh" -arg
             ;;
     esac
 done
@@ -147,39 +131,32 @@ check_radio_vif_state \
                 create_radio_vif_interface \
                     ${radio_vif_args} \
                     ${create_radio_vif_args} \
-                    -timeout ${channel_change_timeout} \
-                    -disable_cac &&
-                        log "wm2/wm2_set_ht_mode_neg.sh: create_radio_vif_interface - Interface $if_name created - Success"
+                    -timeout ${channel_change_timeout} &&
+                        log "wm2/wm2_set_ht_mode_neg.sh: create_radio_vif_interface - Interface $radio_if_name created - Success"
             ) ||
-        raise "FAIL: create_radio_vif_interface {$if_name, $channel} - Interface not created" -l "wm2/wm2_set_ht_mode_neg.sh" -ds
+        raise "create_radio_vif_interface {$radio_if_name, $channel} - Interface not created" -l "wm2/wm2_set_ht_mode_neg.sh" -ds
 
 # Update Wifi_Radio_Config with mismatched ht_mode
-update_ovsdb_entry Wifi_Radio_Config -w if_name "$if_name" -u ht_mode $mismatch_ht_mode &&
+update_ovsdb_entry Wifi_Radio_Config -w if_name "$radio_if_name" -u ht_mode $mismatch_ht_mode &&
     log "wm2/wm2_set_ht_mode_neg.sh: update_ovsdb_entry - Wifi_Radio_Config::ht_mode is $mismatch_ht_mode - Success" ||
-    raise "FAIL: update_ovsdb_entry - Wifi_Radio_Config::ht_mode is not $mismatch_ht_mode" -l "wm2/wm2_set_ht_mode_neg.sh" -oe
+    raise "update_ovsdb_entry - Wifi_Radio_Config::ht_mode is not $mismatch_ht_mode" -l "wm2/wm2_set_ht_mode_neg.sh" -fc
 
-wait_ovsdb_entry Wifi_Radio_State -w if_name "$if_name" -is ht_mode "$mismatch_ht_mode" -t ${channel_change_timeout} &&
-    raise "FAIL: wait_ovsdb_entry - Reflected Wifi_Radio_Config to Wifi_Radio_State::ht_mode is $mismatch_ht_mode" -l "wm2/wm2_set_ht_mode_neg.sh" -tc ||
+wait_ovsdb_entry Wifi_Radio_State -w if_name "$radio_if_name" -is ht_mode "$mismatch_ht_mode" -t ${channel_change_timeout} &&
+    raise "wait_ovsdb_entry - Reflected Wifi_Radio_Config to Wifi_Radio_State::ht_mode is $mismatch_ht_mode" -l "wm2/wm2_set_ht_mode_neg.sh" -tc ||
     log "wm2/wm2_set_ht_mode_neg.sh: wait_ovsdb_entry - Wifi_Radio_Config is not reflected to Wifi_Radio_State::ht_mode is not $mismatch_ht_mode - Success"
 
 # LEVEL2 check. Passes if system reports original ht_mode is still set.
 ht_mode_from_os=$(get_ht_mode_from_os "$vif_if_name" "$channel") ||
-    raise "FAIL: Error while fetching ht_mode from system" -l "wm2/wm2_set_ht_mode_neg.sh" -fc
+    raise "Error while fetching ht_mode from system" -l "wm2/wm2_set_ht_mode_neg.sh" -fc
 
 if [ "$ht_mode_from_os" = "" ]; then
-    raise "FAIL: Error while fetching ht_mode from system" -l "wm2/wm2_set_ht_mode_neg.sh" -fc
+    raise "Error while fetching ht_mode from system" -l "wm2/wm2_set_ht_mode_neg.sh" -fc
 else
     if [ "$ht_mode_from_os" != "$mismatch_ht_mode" ]; then
         log "wm2/wm2_set_ht_mode_neg.sh: ht_mode '$mismatch_ht_mode' not applied to system. System reports current ht_mode '$ht_mode_from_os' - Success"
     else
-        raise "FAIL: ht_mode '$mismatch_ht_mode' applied to system. System reports current ht_mode '$ht_mode_from_os'" -l "wm2/wm2_set_ht_mode_neg.sh" -tc
+        raise "ht_mode '$mismatch_ht_mode' applied to system. System reports current ht_mode '$ht_mode_from_os'" -l "wm2/wm2_set_ht_mode_neg.sh" -tc
     fi
 fi
-
-# Check if manager survived.
-manager_bin_file="${OPENSYNC_ROOTDIR}/bin/$(get_wireless_manager_name)"
-wait_for_function_response 0 "check_manager_alive $manager_bin_file" &&
-    log "wm2/wm2_set_ht_mode_neg.sh: WIRELESS MANAGER is running - Success" ||
-    raise "FAIL: WIRELESS MANAGER not running/crashed" -l "wm2/wm2_set_ht_mode_neg.sh" -tc
 
 pass

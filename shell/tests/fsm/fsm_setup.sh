@@ -11,19 +11,12 @@ check_kconfig_option "CONFIG_MANAGER_FSM" "y" ||
 
 device_init  &&
     log -deb "fsm/fsm_setup.sh - Device initialized - Success" ||
-    raise "FAIL: device_init - Could not initialize device" -l "fsm/fsm_setup.sh" -ds
-
-start_openswitch &&
-    log -deb "fsm/fsm_setup.sh - OpenvSwitch started - Success"  ||
-    raise "FAIL: start_openswitch - Could not start OpenvSwitch" -l "fsm/fsm_setup.sh" -ds
-
-restart_managers
-log -deb "fsm/fsm_setup.sh - Executed restart_managers, exit code: $?"
+    raise "device_init - Could not initialize device" -l "fsm/fsm_setup.sh" -ds
 
 empty_ovsdb_table AW_Debug &&
     log -deb "fsm/fsm_setup.sh - AW_Debug table emptied - Success"  ||
-    raise "FAIL: empty_ovsdb_table AW_Debug - Could not empty table" -l "fsm/fsm_setup.sh" -ds
+    raise "empty_ovsdb_table AW_Debug - Could not empty table" -l "fsm/fsm_setup.sh" -ds
 
 set_manager_log FSM TRACE &&
     log -deb "fsm/fsm_setup.sh - Manager log for FSM set to TRACE - Success"||
-    raise "FAIL: set_manager_log FSM TRACE - Could not set manager log severity" -l "fsm/fsm_setup.sh" -ds
+    raise "set_manager_log FSM TRACE - Could not set manager log severity" -l "fsm/fsm_setup.sh" -ds

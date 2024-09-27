@@ -16,15 +16,17 @@ def ltem_setup():
     test_class_name = ["TestLtem"]
     nodes, clients = determine_required_devices(test_class_name)
     log.info(f"Required devices for LTEM: {nodes + clients}")
-    for device in nodes:
-        if not hasattr(pytest, device):
-            raise RuntimeError(f"{device.upper()} handler is not set up correctly.")
-        try:
-            device_handler = getattr(pytest, device)
-            setup_args = device_handler.get_command_arguments("wwan0", "data.icore.name", "true")
-            device_handler.fut_device_setup(test_suite_name="ltem", setup_args=setup_args)
-        except Exception as exception:
-            raise RuntimeError(f"Unable to perform setup for the {device} device: {exception}")
+    for node in nodes:
+        if not hasattr(pytest, node):
+            raise RuntimeError(f"{node.upper()} handler is not set up correctly.")
+        node_handler = getattr(pytest, node)
+        if "LTEM" not in node_handler.get_kconfig_managers():
+            pytest.skip("LTEM not present on device")
+        setup_args = node_handler.get_command_arguments("wwan0", "data.icore.name", "true")
+        node_handler.fut_device_setup(test_suite_name="ltem", setup_args=setup_args)
+        service_status = node_handler.get_node_services_and_status()
+        if service_status["ltem"]["status"] != "enabled":
+            pytest.skip("LTEM not enabled on device")
     # Set the baseline OpenSync PIDs used for reboot detection
     pytest.session_baseline_os_pids = pytest.gw.opensync_pid_retrieval(tracked_node_services=pytest.tracked_managers)
 

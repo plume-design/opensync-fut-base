@@ -26,15 +26,15 @@ usage_string
 }
 
 trap '
-fut_ec=$?
-fut_info_dump_line
-if [ $fut_ec -ne 0 ]; then 
-    print_tables AWLAN_Node SSL
-    check_restore_ovsdb_server
-fi
-fut_info_dump_line
-exit $fut_ec
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    if [ $fut_ec -ne 0 ]; then
+        print_tables AWLAN_Node SSL
+    fi
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 case "${1}" in
     -h | --help)  usage ; exit 0 ;;
@@ -64,7 +64,7 @@ killall qm &&
 
 start_specific_manager qm &&
     log "tools/device/fut_configure_mqtt.sh: QM killed" ||
-    raise "FAIL: to start QM manager" -ds -l "tools/device/fut_configure_mqtt.sh"
+    raise "to start QM manager" -ds -l "tools/device/fut_configure_mqtt.sh"
 
 set_manager_log QM TRACE ||
-    raise "FAIL: set_manager_log QM TRACE" -l "tools/device/fut_configure_mqtt.sh" -ds
+    raise "set_manager_log QM TRACE" -l "tools/device/fut_configure_mqtt.sh" -ds

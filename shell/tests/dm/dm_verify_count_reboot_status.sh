@@ -34,17 +34,19 @@ case "${1}" in
 esac
 
 trap '
-fut_info_dump_line
-print_tables Reboot_Status
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    print_tables Reboot_Status
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 log_title "dm/dm_verify_count_reboot_status.sh: DM test - Verify 'count' field value in Reboot_Status table is greater than or equals to one."
 
 check_ovsdb_table_exist Reboot_Status &&
     log "dm/dm_verify_count_reboot_status.sh: Reboot_Status table exists in ovsdb - Success" ||
-    raise "FAIL: Reboot_Status table does not exist in ovsdb" -l "dm/dm_verify_count_reboot_status.sh" -s
+    raise "Reboot_Status table does not exist in ovsdb" -l "dm/dm_verify_count_reboot_status.sh" -s
 
 print_tables Reboot_Status
 
@@ -59,7 +61,7 @@ done
 if [ $reboot_count -ge 1 ]; then
     log "dm/dm_verify_count_reboot_status.sh: Valid Reboot_Status::count value (i.e, >= 1) found - Success"
 else
-    raise "FAIL: Invalid Reboot_Status::count value found" -l "dm/dm_verify_count_reboot_status.sh" -tc
+    raise "Invalid Reboot_Status::count value found" -l "dm/dm_verify_count_reboot_status.sh" -tc
 fi
 
 pass

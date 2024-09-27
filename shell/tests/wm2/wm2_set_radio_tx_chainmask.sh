@@ -43,61 +43,60 @@ trap '
     fut_info_dump_line
     print_tables Wifi_Radio_Config Wifi_Radio_State
     print_tables Wifi_VIF_Config Wifi_VIF_State
-    check_restore_ovsdb_server
     fut_info_dump_line
-' EXIT SIGINT SIGTERM
+' EXIT INT TERM
 
 actual_tx_chainmask=$(get_actual_chainmask $test_tx_chainmask "$freq_band")
 [ ${actual_tx_chainmask} -le 0 ] &&
-    raise "FAIL: Invalid tx_chainmask:'$actual_tx_chainmask', must be greater than zero" -l "wm2/wm2_set_radio_thermal_tx_chainmask.sh" -arg
+    raise "Invalid tx_chainmask:'$actual_tx_chainmask', must be greater than zero" -l "wm2/wm2_set_radio_thermal_tx_chainmask.sh" -arg
 
 actual_max_tx_chainmask=$(get_actual_chainmask $max_tx_chainmask "$freq_band")
 [ ${actual_max_tx_chainmask} -le 0 ] &&
-    raise "FAIL: Invalid tx_chainmask:'$actual_max_tx_chainmask', must be greater than zero" -l "wm2/wm2_set_radio_thermal_tx_chainmask.sh" -arg
+    raise "Invalid tx_chainmask:'$actual_max_tx_chainmask', must be greater than zero" -l "wm2/wm2_set_radio_thermal_tx_chainmask.sh" -arg
 
 # Set TX chainmask to MAX value
 log "wm2/wm2_set_radio_tx_chainmask.sh: Changing tx_chainmask to $actual_max_tx_chainmask"
 update_ovsdb_entry Wifi_Radio_Config -w if_name "$if_name" -u tx_chainmask "$actual_max_tx_chainmask" &&
     log "wm2/wm2_set_radio_tx_chainmask.sh: update_ovsdb_entry - Wifi_Radio_Config::tx_chainmask is $actual_max_tx_chainmask - Success" ||
-    raise "FAIL: update_ovsdb_entry - Wifi_Radio_Config::tx_chainmask is not $actual_max_tx_chainmask" -l "wm2/wm2_set_radio_tx_chainmask.sh" -oe
+    raise "update_ovsdb_entry - Wifi_Radio_Config::tx_chainmask is not $actual_max_tx_chainmask" -l "wm2/wm2_set_radio_tx_chainmask.sh" -fc
 
 wait_ovsdb_entry Wifi_Radio_State -w if_name "$if_name" -is tx_chainmask "$actual_max_tx_chainmask" &&
     log "wm2/wm2_set_radio_tx_chainmask.sh: wait_ovsdb_entry - Wifi_Radio_Config reflected to Wifi_Radio_State::tx_chainmask is $actual_max_tx_chainmask - Success" ||
-    raise "FAIL: wait_ovsdb_entry - Failed to reflect Wifi_Radio_Config to Wifi_Radio_State::tx_chainmask is not $actual_max_tx_chainmask" -l "wm2/wm2_set_radio_tx_chainmask.sh" -tc
+    raise "wait_ovsdb_entry - Failed to reflect Wifi_Radio_Config to Wifi_Radio_State::tx_chainmask is not $actual_max_tx_chainmask" -l "wm2/wm2_set_radio_tx_chainmask.sh" -tc
 
 log "wm2/wm2_set_radio_tx_chainmask.sh: Checking TX CHAINMASK $actual_max_tx_chainmask at system level - LEVEL2"
 check_tx_chainmask_at_os_level "$actual_max_tx_chainmask" "$if_name" &&
     log "wm2/wm2_set_radio_tx_chainmask.sh: LEVEL2 - check_tx_chainmask_at_os_level - TX CHAINMASK $actual_max_tx_chainmask set at system level - Success" ||
-    raise "FAIL: LEVEL2 - check_tx_chainmask_at_os_level - TX CHAINMASK $actual_max_tx_chainmask not set at system level" -l "wm2/wm2_set_radio_tx_chainmask.sh" -tc
+    raise "LEVEL2 - check_tx_chainmask_at_os_level - TX CHAINMASK $actual_max_tx_chainmask not set at system level" -l "wm2/wm2_set_radio_tx_chainmask.sh" -tc
 
 # Set TX chainmask to test value
 log "wm2/wm2_set_radio_tx_chainmask.sh: Changing tx_chainmask to $actual_tx_chainmask"
 update_ovsdb_entry Wifi_Radio_Config -w if_name "$if_name" -u tx_chainmask "$actual_tx_chainmask" &&
     log "wm2/wm2_set_radio_tx_chainmask.sh: update_ovsdb_entry - Wifi_Radio_Config::tx_chainmask is $actual_tx_chainmask - Success" ||
-    raise "FAIL: update_ovsdb_entry - Wifi_Radio_Config::tx_chainmask is not $actual_tx_chainmask" -l "wm2/wm2_set_radio_tx_chainmask.sh" -oe
+    raise "update_ovsdb_entry - Wifi_Radio_Config::tx_chainmask is not $actual_tx_chainmask" -l "wm2/wm2_set_radio_tx_chainmask.sh" -fc
 
 wait_ovsdb_entry Wifi_Radio_State -w if_name "$if_name" -is tx_chainmask "$actual_tx_chainmask" &&
     log "wm2/wm2_set_radio_tx_chainmask.sh: wait_ovsdb_entry - Wifi_Radio_Config reflected to Wifi_Radio_State::tx_chainmask is $actual_tx_chainmask - Success" ||
-    raise "FAIL: wait_ovsdb_entry - Failed to reflect Wifi_Radio_Config to Wifi_Radio_State::tx_chainmask is not $actual_tx_chainmask" -l "wm2/wm2_set_radio_tx_chainmask.sh" -tc
+    raise "wait_ovsdb_entry - Failed to reflect Wifi_Radio_Config to Wifi_Radio_State::tx_chainmask is not $actual_tx_chainmask" -l "wm2/wm2_set_radio_tx_chainmask.sh" -tc
 
 log "wm2/wm2_set_radio_tx_chainmask.sh: Checking TX CHAINMASK $actual_tx_chainmask at system level - LEVEL2"
 check_tx_chainmask_at_os_level "$actual_tx_chainmask" "$if_name" &&
     log "wm2/wm2_set_radio_tx_chainmask.sh: LEVEL2 - check_tx_chainmask_at_os_level - TX CHAINMASK $actual_tx_chainmask set at system level - Success" ||
-    raise "FAIL: LEVEL2 - check_tx_chainmask_at_os_level - TX CHAINMASK $actual_tx_chainmask not set at system level" -l "wm2/wm2_set_radio_tx_chainmask.sh" -tc
+    raise "LEVEL2 - check_tx_chainmask_at_os_level - TX CHAINMASK $actual_tx_chainmask not set at system level" -l "wm2/wm2_set_radio_tx_chainmask.sh" -tc
 
 # Set TX chainmask to pre-test default value
 log "wm2/wm2_set_radio_tx_chainmask.sh: Changing tx_chainmask to $default_tx_chainmask"
 update_ovsdb_entry Wifi_Radio_Config -w if_name "$if_name" -u tx_chainmask "$default_tx_chainmask" &&
     log "wm2/wm2_set_radio_tx_chainmask.sh: update_ovsdb_entry - Wifi_Radio_Config::tx_chainmask is $default_tx_chainmask - Success" ||
-    raise "FAIL: update_ovsdb_entry - Wifi_Radio_Config::tx_chainmask is not $default_tx_chainmask" -l "wm2/wm2_set_radio_tx_chainmask.sh" -oe
+    raise "update_ovsdb_entry - Wifi_Radio_Config::tx_chainmask is not $default_tx_chainmask" -l "wm2/wm2_set_radio_tx_chainmask.sh" -fc
 
 wait_ovsdb_entry Wifi_Radio_State -w if_name "$if_name" -is tx_chainmask "$default_tx_chainmask" &&
     log "wm2/wm2_set_radio_tx_chainmask.sh: wait_ovsdb_entry - Wifi_Radio_Config reflected to Wifi_Radio_State::tx_chainmask is $default_tx_chainmask - Success" ||
-    raise "FAIL: wait_ovsdb_entry - Failed to reflect Wifi_Radio_Config to Wifi_Radio_State::tx_chainmask is not $default_tx_chainmask" -l "wm2/wm2_set_radio_tx_chainmask.sh" -tc
+    raise "wait_ovsdb_entry - Failed to reflect Wifi_Radio_Config to Wifi_Radio_State::tx_chainmask is not $default_tx_chainmask" -l "wm2/wm2_set_radio_tx_chainmask.sh" -tc
 
 log "wm2/wm2_set_radio_tx_chainmask.sh: Checking TX CHAINMASK $default_tx_chainmask at system level - LEVEL2"
 check_tx_chainmask_at_os_level "$default_tx_chainmask" "$if_name" &&
     log "wm2/wm2_set_radio_tx_chainmask.sh: LEVEL2 - check_tx_chainmask_at_os_level - TX CHAINMASK $default_tx_chainmask set at system level - Success" ||
-    raise "FAIL: LEVEL2 - check_tx_chainmask_at_os_level - TX CHAINMASK $default_tx_chainmask not set at system level" -l "wm2/wm2_set_radio_tx_chainmask.sh" -tc
+    raise "LEVEL2 - check_tx_chainmask_at_os_level - TX CHAINMASK $default_tx_chainmask not set at system level" -l "wm2/wm2_set_radio_tx_chainmask.sh" -tc
 
 pass

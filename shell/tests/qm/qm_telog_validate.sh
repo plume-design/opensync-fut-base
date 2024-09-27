@@ -33,7 +33,7 @@ esac
 
 is_tool_on_system "telog" &&
     log "qm/qm_telog_validate.sh: 'telog' tool found on device - Success" ||
-    raise "FAIL: Tool 'telog' could not be found on device" -l "qm/qm_telog_validate.sh" -s
+    raise "Tool 'telog' could not be found on device" -l "qm/qm_telog_validate.sh" -s
 
 NARGS=2
 [ $# -ne ${NARGS} ] && usage && raise "Requires exactly ${NARGS} input argument(s), provided $#" -l "qm/qm_telog_validate.sh" -arg
@@ -43,7 +43,7 @@ log_tail_command=$2
 trap '
     kill $(jobs -p) >/dev/null 2>&1 || true
     rm -f ${logfile}
-' EXIT SIGINT SIGTERM
+' EXIT INT TERM
 
 log_title "qm/qm_telog_validate.sh: QM test - Verify telog messages"
 
@@ -64,7 +64,7 @@ for telog_step in $(seq 1 ${number_of_logs}); do
     if [ $? -eq 0 ]; then
         telog_sent=$((telog_sent+1))
     elif [ $? -ge 124 ]; then
-        raise "FAIL: 'telog' call ${telog_step} failed with timeout" -l "qm/qm_telog_validate.sh" -tc
+        raise "'telog' call ${telog_step} failed with timeout" -l "qm/qm_telog_validate.sh" -tc
     else
         # regular error is expected when log server is down
         telog_failed=$((telog_failed+1))
@@ -79,14 +79,13 @@ kill $(jobs -p) >/dev/null 2>&1 || true
 
 log "qm/qm_telog_validate.sh: Check the log file for time event logs."
 [ -e ${logfile} ] ||
-    raise "FAIL: Log file ${logfile} does not exist." -l "qm/qm_telog_validate.sh" -tc
+    raise "Log file ${logfile} does not exist." -l "qm/qm_telog_validate.sh" -tc
 
 telog_captured=$(wc -l ${logfile} | cut -d' ' -f1)
 logno_min=$((number_of_logs*95/100))
 log "qm/qm_telog_validate.sh: Logs issued: ${number_of_logs}, logs sent: ${telog_sent}, logs captured: ${telog_captured}, logs lost: ${telog_failed}."
-# TODO: fix logging, then test
 [ ${telog_sent} -eq ${telog_captured} ] &&
     log "qm/qm_telog_validate.sh: Number of logs sent: ${telog_sent} matches the number of logs captured: ${telog_captured} - Success" ||
-    raise "FAIL: Number of logs sent: ${telog_sent} does not match the number of logs captured: ${telog_captured}" -l "$tc_name" -tc
+    raise "Number of logs sent: ${telog_sent} does not match the number of logs captured: ${telog_captured}" -l "$tc_name" -tc
 
 pass

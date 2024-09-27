@@ -41,31 +41,33 @@ service=${1}
 kconfig_val=${2}
 
 trap '
-fut_info_dump_line
-print_tables Node_Services
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    print_tables Node_Services
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 log_title "dm/dm_verify_node_services.sh: DM test - Verify Node_Services table contains given service, respective enable field is set to true and is running"
 
 check_kconfig_option "$kconfig_val" "y" &&
     log "dm/dm_verify_node_services.sh: $kconfig_val = y - KCONFIG exists on the device - Success" ||
-    raise "FAIL: $kconfig_val - KCONFIG is not supported on the device" -l "dm/dm_verify_node_services.sh" -s
+    raise "$kconfig_val - KCONFIG is not supported on the device" -l "dm/dm_verify_node_services.sh" -s
 
 check_ovsdb_entry Node_Services -w service "$service" &&
     log "dm/dm_verify_node_services.sh: Node_Services table contains $service - Success" ||
-    raise "FAIL: Node_Services table does not contain $service" -l "dm/dm_verify_node_services.sh" -tc
+    raise "Node_Services table does not contain $service" -l "dm/dm_verify_node_services.sh" -tc
 
 if [ $(get_ovsdb_entry_value Node_Services enable -w service $service) == "true" ]; then
     log "dm/dm_verify_node_services.sh: $service from Node_Services table that have enable field set to true"
-    if [ -n $($(get_process_cmd) | grep /usr/opensync/bin/$service | grep -v 'grep' | wc -l) ]; then
+    if [ -n "$($(get_process_cmd) | grep /usr/opensync/bin/$service | grep -v 'grep' | wc -l)" ]; then
         log "dm/dm_verify_node_services.sh: $service from Node_Services table is running - Success"
     else
-        raise "FAIL: $service from Node_Services table is not running" -l "dm/dm_verify_node_services.sh" -tc
+        raise "$service from Node_Services table is not running" -l "dm/dm_verify_node_services.sh" -tc
     fi
 else
-    raise "FAIL: $service from Node_Services table that have enable field not set to true"
+    raise "$service from Node_Services table that have enable field not set to true"
 fi
 
 pass

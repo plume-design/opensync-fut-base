@@ -51,7 +51,7 @@ remove_ovsdb_entry Wifi_VIF_Config -w if_name "${if_name}" &&
 log "othr/othr_cleanup.sh: Removing $if_name from bridge ${lan_bridge}"
 remove_port_from_bridge "${lan_bridge}" "${if_name}" &&
     log "othr/othr_cleanup.sh: remove_port_from_bridge - port $if_name removed from $lan_bridge - Success" ||
-    raise "FAIL: remove_port_from_bridge - port $if_name NOT removed from $lan_bridge" -l "othr/othr_cleanup.sh" -tc
+    raise "remove_port_from_bridge - port $if_name NOT removed from $lan_bridge" -l "othr/othr_cleanup.sh" -tc
 
 print_tables Wifi_Inet_Config
 print_tables Wifi_Inet_State

@@ -36,36 +36,35 @@ NARGS=1
 lte_if_name=${1}
 
 trap '
-fut_info_dump_line
-print_tables Lte_Config Lte_State
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_info_dump_line
+    print_tables Lte_Config Lte_State
+    fut_info_dump_line
+' EXIT INT TERM
 
 check_ovsdb_table_exist Lte_Config &&
     log "ltem/ltem_force_lte.sh: Lte_Config table exists in OVSDB - Success" ||
-    raise "FAIL: Lte_Config table does not exist in OVSDB" -l "ltem/ltem_force_lte.sh" -s
+    raise "Lte_Config table does not exist in OVSDB" -l "ltem/ltem_force_lte.sh" -s
 
 update_ovsdb_entry Lte_Config -w if_name "$lte_if_name" \
     -u force_use_lte "true" &&
         log "ltem/ltem_force_lte.sh: update_ovsdb_entry - Lte_Config::force_use_lte set to 'true' - Success" ||
-        raise "FAIL: update_ovsdb_entry - Lte_Config::force_use_lte not set to 'true'" -l "ltem/ltem_force_lte.sh" -tc
+        raise "update_ovsdb_entry - Lte_Config::force_use_lte not set to 'true'" -l "ltem/ltem_force_lte.sh" -tc
 
 check_ovsdb_table_exist Lte_State &&
     log "ltem/ltem_force_lte.sh: Lte_State table exists in OVSDB - Success" ||
-    raise "FAIL: Lte_State table does not exist in OVSDB" -l "ltem/ltem_force_lte.sh" -s
+    raise "Lte_State table does not exist in OVSDB" -l "ltem/ltem_force_lte.sh" -s
 
 wait_ovsdb_entry Lte_State -w if_name "$lte_if_name" -is force_use_lte true &&
     log "ltem/ltem_force_lte.sh: wait_ovsdb_entry - Lte_Config reflected to Lte_State::force_use_lte is 'true' - Success" ||
-    raise "FAIL: wait_ovsdb_entry - Failed to reflect Lte_Config to Lte_State::force_use_lte is not 'true'" -l "ltem/ltem_force_lte.sh" -tc
+    raise "wait_ovsdb_entry - Failed to reflect Lte_Config to Lte_State::force_use_lte is not 'true'" -l "ltem/ltem_force_lte.sh" -tc
 
 update_ovsdb_entry Lte_Config -w if_name "$lte_if_name" \
     -u force_use_lte "false" &&
         log "ltem/ltem_force_lte.sh: update_ovsdb_entry - Lte_Config::force_use_lte set to 'false' - Success" ||
-        raise "FAIL: update_ovsdb_entry - Lte_Config::force_use_lte not set to 'false'" -l "ltem/ltem_force_lte.sh" -tc
+        raise "update_ovsdb_entry - Lte_Config::force_use_lte not set to 'false'" -l "ltem/ltem_force_lte.sh" -tc
 
 wait_ovsdb_entry Lte_State -w if_name "$lte_if_name" -is force_use_lte false &&
     log "ltem/ltem_force_lte.sh: wait_ovsdb_entry - Lte_Config reflected to Lte_State::force_use_lte is 'false' - Success" ||
-    raise "FAIL: wait_ovsdb_entry - Failed to reflect Lte_Config to Lte_State::force_use_lte is not 'false'" -l "ltem/ltem_force_lte.sh" -tc
+    raise "wait_ovsdb_entry - Failed to reflect Lte_Config to Lte_State::force_use_lte is not 'false'" -l "ltem/ltem_force_lte.sh" -tc
 
 pass

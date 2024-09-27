@@ -47,28 +47,30 @@ log_state_file=$(echo ${log_state_value} | tr -d '"')
 [ -z ${log_state_file} ] && raise "Kconfig option TARGET_PATH_LOG_STATE has no value" -l "pm/pm_verify_log_severity.sh" -arg
 # Trap needs to come after "log_state_file"
 trap '
+    fut_ec=$?
+    trap - EXIT INT
     fut_info_dump_line
     cat $log_state_file
     print_tables AW_Debug
     empty_ovsdb_table AW_Debug
-    check_restore_ovsdb_server
     fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    exit $fut_ec
+' EXIT INT TERM
 
 log "pm/pm_verify_log_severity.sh: Test setup - clean AW_Debug table"
 empty_ovsdb_table AW_Debug  &&
     log "pm/pm_verify_log_severity.sh - AW_Debug table empty - Success" ||
-    raise "FAIL: Could not empty table: empty_ovsdb_table AW_Debug" -l "pm/pm_verify_log_severity.sh" -ds
+    raise "Could not empty table: empty_ovsdb_table AW_Debug" -l "pm/pm_verify_log_severity.sh" -ds
 
 log "pm/pm_verify_log_severity.sh: Set log severity ${log_severity} for ${name}"
 set_manager_log ${name} ${log_severity} &&
     log "pm/pm_verify_log_severity.sh - set_manager_log ${name} ${log_severity} - Success" ||
-    raise "FAIL: set_manager_log ${name} ${log_severity}" -l "pm/pm_verify_log_severity.sh" -tc
+    raise "set_manager_log ${name} ${log_severity}" -l "pm/pm_verify_log_severity.sh" -tc
 
 log "pm/pm_verify_log_severity.sh: Ensure ${log_state_file} exists"
 [ -f ${log_state_file} ] &&
     log "pm/pm_verify_log_severity.sh - File ${log_state_file} exists - Success" ||
-    raise "FAIL: File ${log_state_file} does not exist" -l "pm/pm_verify_log_severity.sh" -tc
+    raise "File ${log_state_file} does not exist" -l "pm/pm_verify_log_severity.sh" -tc
 
 log "pm/pm_verify_log_severity.sh: Ensure content of ${log_state_file} is correct"
 #   ":a"        create a label
@@ -78,7 +80,7 @@ log "pm/pm_verify_log_severity.sh: Ensure content of ${log_state_file} is correc
 #   's/}/}\n/g' break line at every "}", get json dicts in single lines
 sed -e ':a' -e 'N' -e '$!ba' -e 's/\n/ /g' -e 's/}/}\n/g' ${log_state_file} | grep ${name} | grep ${log_severity} &&
     log "pm/pm_verify_log_severity.sh - ${log_state_file} contains ${name}:${log_severity} - Success" ||
-    raise "FAIL: ${log_state_file} does not contain ${name}:${log_severity}" -l "pm/pm_verify_log_severity.sh" -tc
+    raise "${log_state_file} does not contain ${name}:${log_severity}" -l "pm/pm_verify_log_severity.sh" -tc
 # Alternative, drawback: will match if individual lines are present, but not related!
 # sed -n -e '/'${name}'/,/log_severity/ p' ${log_state_file} | grep ${log_severity}
 

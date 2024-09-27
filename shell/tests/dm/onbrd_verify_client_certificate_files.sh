@@ -31,11 +31,13 @@ case "${1}" in
 esac
 
 trap '
-fut_info_dump_line
-print_tables SSL
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    print_tables SSL
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 NARGS=1
 [ $# -lt ${NARGS} ] && usage && raise "Requires at least ${NARGS} input argument(s)" -l "onbrd/onbrd_verify_client_certificate_files.sh" -arg
@@ -46,11 +48,11 @@ log_title "onbrd/onbrd_verify_client_certificate_files.sh: ONBRD test - Verify c
 
 [ -e "$cert_file_path" ] &&
     log "onbrd/onbrd_verify_client_certificate_files.sh: file '$cert_file_path' exists - Success" ||
-    raise "FAIL: file '$cert_file_path' is missing" -l "onbrd/onbrd_verify_client_certificate_files.sh" -tc
+    raise "file '$cert_file_path' is missing" -l "onbrd/onbrd_verify_client_certificate_files.sh" -tc
 
 log "onbrd/onbrd_verify_client_certificate_files.sh: Verify file is not empty"
 [ -s "$cert_file_path" ] &&
     log "onbrd/onbrd_verify_client_certificate_files.sh: file '$cert_file_path' is not empty - Success" ||
-    raise "FAIL: file '$cert_file_path' is empty" -l "onbrd/onbrd_verify_client_certificate_files.sh" -tc
+    raise "file '$cert_file_path' is empty" -l "onbrd/onbrd_verify_client_certificate_files.sh" -tc
 
 pass

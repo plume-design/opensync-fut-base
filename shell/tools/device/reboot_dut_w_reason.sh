@@ -59,7 +59,7 @@ case "$reboot_reason" in
         print_tables Wifi_Test_Config
     ;;
     *)
-        raise "FAIL: Unknown reason to check: $reboot_reason" -l "tools/device/reboot_dut_w_reason.sh" -arg
+        raise "Unknown reason to check: $reboot_reason" -l "tools/device/reboot_dut_w_reason.sh" -arg
     ;;
 esac
 

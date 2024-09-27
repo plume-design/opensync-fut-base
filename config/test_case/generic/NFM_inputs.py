@@ -1,3 +1,5 @@
+from config.defaults import def_wifi_args
+
 test_inputs = {
     "nfm_native_ebtable_check": {
         "args_mapping": [
@@ -36,6 +38,15 @@ test_inputs = {
             ["PREROUTING", "prerouting_drop", 10, "nat", "DROP", "ACCEPT"],
             ["POSTROUTING", "postrouting_drop", 10, "nat", "ACCEPT", "DROP"],
             ["OUTPUT", "output_drop", 10, "nat", "DROP", "ACCEPT"],
+        ],
+    },
+    "nfm_nat_loopback_check": {
+        "args_mapping": def_wifi_args[:] + ["topology"],
+        "inputs": [
+            [44, "HT40", "5g", "line"],
+            [44, "HT40", "5g", "tree"],
+            [44, "HT40", "5gl", "line"],
+            [44, "HT40", "5gl", "tree"],
         ],
     },
 }

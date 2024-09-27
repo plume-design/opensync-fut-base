@@ -22,7 +22,7 @@ Description:
 Arguments:
     -h  show this help message
     (radio_idx)     : Wifi_VIF_Config::vif_radio_idx            : (int)(required)
-    (if_name)       : Wifi_Radio_Config::if_name                : (string)(required)
+    (radio_if_name) : Wifi_Radio_Config::if_name                : (string)(required)
     (ssid)          : Wifi_VIF_Config::ssid                     : (string)(required)
     (channel)       : Wifi_Radio_Config::channel                : (int)(required)
     (ht_mode)       : Wifi_Radio_Config::ht_mode                : (string)(required)
@@ -31,26 +31,17 @@ Arguments:
     (vif_if_name)   : Wifi_VIF_Config::if_name                  : (string)(required)
     (channel_mode)  : Wifi_Radio_Config::channel_mode           : (string)(required)
     (enabled)       : Wifi_Radio_Config::enabled                : (string)(required)
-    (wifi_security_type) : 'wpa' if wpa fields are used or 'legacy' if security fields are used: (string)(required)
-
-Wifi Security arguments(choose one or the other):
-    If 'wifi_security_type' == 'wpa' (preferred)
     (wpa)           : Wifi_VIF_Config::wpa                      : (string)(required)
     (wpa_key_mgmt)  : Wifi_VIF_Config::wpa_key_mgmt             : (string)(required)
     (wpa_psks)      : Wifi_VIF_Config::wpa_psks                 : (string)(required)
     (wpa_oftags)    : Wifi_VIF_Config::wpa_oftags               : (string)(required)
-                    (OR)
-    If 'wifi_security_type' == 'legacy' (deprecated)
-    (security)      : Wifi_VIF_Config::security                 : (string)(required)
+
 Testcase procedure:
     - On DEVICE: Run: ./${manager_setup_file} (see ${manager_setup_file} -h)
-                 Run: ./wm2/wm2_set_ssid.sh -vif_radio_idx <VIF-RADIO-IDX> -if_name <IF_NAME> -ssid <SSID> -channel <CHANNEL> -ht_mode <HT_MODE> -hw_mode <HW_MODE> -mode <MODE> -vif_if_name <VIF_IF_NAME> -channel_mode <CHANNEL_MODE> -enabled <ENABLED> -wifi_security_type <WIFI_SECURITY_TYPE> -wpa <WPA> -wpa_key_mgmt <WPA_KEY_MGMT> -wpa_psks <WPA_PSKS> -wpa_oftags <WPA_OFTAGS>
-                 Run: ./wm2/wm2_set_ssid.sh -vif_radio_idx <VIF-RADIO-IDX> -if_name <IF_NAME> -ssid <SSID> -channel <CHANNEL> -ht_mode <HT_MODE> -hw_mode <HW_MODE> -mode <MODE> -vif_if_name <VIF_IF_NAME> -channel_mode <CHANNEL_MODE> -enabled <ENABLED> -wifi_security_type <WIFI_SECURITY_TYPE> -security <SECURITY>
+                 Run: ./wm2/wm2_set_ssid.sh -vif_radio_idx <VIF-RADIO-IDX> -radio_if_name <IF_NAME> -ssid <SSID> -channel <CHANNEL> -ht_mode <HT_MODE> -hw_mode <HW_MODE> -mode <MODE> -vif_if_name <VIF_IF_NAME> -channel_mode <CHANNEL_MODE> -enabled <ENABLED> -wifi_security_type <WIFI_SECURITY_TYPE> -wpa <WPA> -wpa_key_mgmt <WPA_KEY_MGMT> -wpa_psks <WPA_PSKS> -wpa_oftags <WPA_OFTAGS>
 Script usage example:
-    ./wm2/wm2_set_ssid.sh -vif_radio_idx 2 -if_name wifi0 -ssid 'plus+' -channel 2 -ht_mode HT20 -hw_mode 11n -mode ap -vif_if_name home-ap-24 -channel_mode manual -enabled "true" -wifi_security_type wpa -wpa "true" -wpa_key_mgmt "wpa-psk" -wpa_psks '["map",[["key","FutTestPSK"]]]' -wpa_oftags '["map",[["key","home--1"]]]'
-    ./wm2/wm2_set_ssid.sh -vif_radio_idx 2 -if_name wifi0 -ssid 'minus-' -channel 2 -ht_mode HT20 -hw_mode 11n -mode ap -vif_if_name home-ap-24 -channel_mode manual -enabled "true" -wifi_security_type wpa -wpa "true" -wpa_key_mgmt "wpa-psk" -wpa_psks '["map",[["key","FutTestPSK"]]]' -wpa_oftags '["map",[["key","home--1"]]]'
-    ./wm2/wm2_set_ssid.sh -vif_radio_idx 2 -if_name wifi0 -ssid 'emoji👍' -channel 2 -ht_mode HT20 -hw_mode 11n -mode ap -vif_if_name home-ap-24 -channel_mode manual -enabled "true" -wifi_security_type legacy -security '["map",[["encryption","WPA-PSK"],["key","FutTestPSK"]]]'
-
+    ./wm2/wm2_set_ssid.sh -vif_radio_idx 2 -radio_if_name wifi0 -ssid 'plus+' -channel 2 -ht_mode HT20 -hw_mode 11n -mode ap -vif_if_name home-ap-24 -channel_mode manual -enabled "true"  -wpa "true" -wpa_key_mgmt "wpa-psk" -wpa_psks '["map",[["key","FutTestPSK"]]]' -wpa_oftags '["map",[["key","home--1"]]]'
+    ./wm2/wm2_set_ssid.sh -vif_radio_idx 2 -radio_if_name wifi0 -ssid 'minus-' -channel 2 -ht_mode HT20 -hw_mode 11n -mode ap -vif_if_name home-ap-24 -channel_mode manual -enabled "true"  -wpa "true" -wpa_key_mgmt "wpa-psk" -wpa_psks '["map",[["key","FutTestPSK"]]]' -wpa_oftags '["map",[["key","home--1"]]]'
 usage_string
 }
 
@@ -58,7 +49,7 @@ case "${1}" in
     -h | --help)  usage ; exit 0 ;;
 esac
 
-NARGS=24
+NARGS=28
 [ $# -lt ${NARGS} ] && usage && raise "Requires at least ${NARGS}' input argument(s)" -l "wm2/wm2_set_ssid.sh" -arg
 
 # Parsing arguments passed to the script.
@@ -78,9 +69,9 @@ while [ -n "$1" ]; do
             radio_vif_args="${radio_vif_args} -${option#?} ${vif_if_name}"
             shift
             ;;
-        -if_name)
-            if_name=${1}
-            radio_vif_args="${radio_vif_args} -${option#?} ${if_name}"
+        -radio_if_name)
+            radio_if_name=${1}
+            radio_vif_args="${radio_vif_args} -${option#?} ${radio_if_name}"
             shift
             ;;
         -ssid)
@@ -93,40 +84,29 @@ while [ -n "$1" ]; do
             create_radio_vif_args="${create_radio_vif_args} -${option#?} ${1}"
             shift
             ;;
-        -wifi_security_type)
-            wifi_security_type=${1}
-            shift
-            ;;
         -wpa | \
         -wpa_key_mgmt | \
         -wpa_psks | \
         -wpa_oftags)
-            [ "${wifi_security_type}" != "wpa" ] && raise "FAIL: Incorrect combination of WPA and legacy wifi security type provided" -l "wm2/wm2_set_ssid.sh" -arg
             create_radio_vif_args="${create_radio_vif_args} -${option#?} ${1}"
             shift
             ;;
-        -security)
-            [ "${wifi_security_type}" != "legacy" ] && raise "FAIL: Incorrect combination of WPA and legacy wifi security type provided" -l "wm2/wm2_set_ssid.sh" -arg
-            radio_vif_args="${radio_vif_args} -${option#?} ${1}"
-            shift
-            ;;
         *)
-            raise "FAIL: Wrong option provided: $option" -l "wm2/wm2_set_ssid.sh" -arg
+            raise "Wrong option provided: $option" -l "wm2/wm2_set_ssid.sh" -arg
             ;;
     esac
 done
 
 ssid_len=$(echo -n $ssid | wc -c)
 [ $ssid_len -ge 1 ] && [ $ssid_len -le 32 ] ||
-    raise "FAIL: allowed ssid character length is between 1 and 32" -l "wm2/wm2_set_ssid.sh" -s
+    raise "allowed ssid character length is between 1 and 32" -l "wm2/wm2_set_ssid.sh" -s
 
 trap '
     fut_info_dump_line
     print_tables Wifi_Radio_Config Wifi_Radio_State
     print_tables Wifi_VIF_Config Wifi_VIF_State
-    check_restore_ovsdb_server
     fut_info_dump_line
-' EXIT SIGINT SIGTERM
+' EXIT INT TERM
 
 log_title "wm2/wm2_set_ssid.sh: WM2 test - Testing Wifi_Radio_Config field ssid - '${ssid}'"
 
@@ -143,14 +123,13 @@ check_radio_vif_state \
                 create_radio_vif_interface \
                     ${radio_vif_args} \
                     ${create_radio_vif_args} \
-                    -ssid "${ssid}" \
-                    -disable_cac &&
-                        log "wm2/wm2_set_ssid.sh: create_radio_vif_interface - Interface $if_name created - Success"
+                    -ssid "${ssid}" &&
+                        log "wm2/wm2_set_ssid.sh: create_radio_vif_interface - Interface $radio_if_name created - Success"
             ) ||
-                raise "FAIL: create_radio_vif_interface - Interface $if_name not created" -l "wm2/wm2_set_ssid.sh" -ds
+                raise "create_radio_vif_interface - Interface $radio_if_name not created" -l "wm2/wm2_set_ssid.sh" -ds
 
 wait_ovsdb_entry Wifi_VIF_State -w if_name "$vif_if_name" -is ssid "'$ssid'" &&
     log "wm2/wm2_set_ssid.sh: wait_ovsdb_entry - Wifi_VIF_Config reflected to Wifi_VIF_State::ssid is $ssid - Success" ||
-    raise "FAIL: wait_ovsdb_entry - Failed to reflect Wifi_VIF_Config to Wifi_VIF_State::ssid is not $ssid" -l "wm2/wm2_set_ssid.sh" -tc
+    raise "wait_ovsdb_entry - Failed to reflect Wifi_VIF_Config to Wifi_VIF_State::ssid is not $ssid" -l "wm2/wm2_set_ssid.sh" -tc
 
 pass

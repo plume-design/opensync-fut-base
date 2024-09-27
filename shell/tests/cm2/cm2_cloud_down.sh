@@ -52,12 +52,13 @@ unreachable_cloud_counter_val=${2:-${counter_default}}
 test_step=${3:-"${step_1_name}"}
 
 trap '
-fut_info_dump_line
-print_tables Manager Connection_Manager_Uplink
-check_restore_management_access || true
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    print_tables Manager Connection_Manager_Uplink
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 log_title "cm2/cm2_cloud_down.sh: CM2 test - Cloud Failure - $test_step"
 
@@ -68,15 +69,15 @@ if [ "$test_step" = "${step_1_name}" ]; then
     wait_ovsdb_entry Connection_Manager_Uplink -w if_name "${if_name}" -is unreachable_cloud_counter "$unreachable_cloud_counter_val" &&
         log "cm2/cm2_cloud_down.sh: Connection_Manager_Uplink::unreachable_cloud_counter is $unreachable_cloud_counter_val - Success" ||
         (update_ovsdb_entry Manager -u inactivity_probe "$inactivity_probe" &&
-        raise "FAIL: Connection_Manager_Uplink::unreachable_cloud_counter is not $unreachable_cloud_counter_val" -l "cm2/cm2_cloud_down.sh" -ow)
+        raise "Connection_Manager_Uplink::unreachable_cloud_counter is not $unreachable_cloud_counter_val" -l "cm2/cm2_cloud_down.sh" -fc)
     update_ovsdb_entry Manager -u inactivity_probe "$inactivity_probe"
 elif [ "$test_step" = "${step_2_name}" ]; then
     log "cm2/cm2_cloud_down.sh: Waiting for Connection_Manager_Uplink::unreachable_cloud_counter to reset to 0"
     wait_ovsdb_entry Connection_Manager_Uplink -w if_name "${if_name}" -is unreachable_cloud_counter "0" &&
         log "cm2/cm2_cloud_down.sh: Connection_Manager_Uplink::unreachable_cloud_counter reset to 0 - Success" ||
-        raise "FAIL: Connection_Manager_Uplink::unreachable_cloud_counter is not 0" -l "cm2/cm2_cloud_down.sh" -ow
+        raise "Connection_Manager_Uplink::unreachable_cloud_counter is not 0" -l "cm2/cm2_cloud_down.sh" -fc
 else
-    raise "FAIL: Wrong test type option" -l "cm2/cm2_cloud_down.sh" -arg
+    raise "Wrong test type option" -l "cm2/cm2_cloud_down.sh" -arg
 fi
 
 print_tables Manager Connection_Manager_Uplink

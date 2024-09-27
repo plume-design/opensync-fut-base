@@ -38,34 +38,35 @@ NARGS=1
 if_name=$1
 
 trap '
-fut_info_dump_line
-print_tables Connection_Manager_Uplink
-set_interface_up "$if_name" || true
-check_restore_management_access || true
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    print_tables Connection_Manager_Uplink
+    set_interface_up "$if_name" || true
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 log_title "cm2/cm2_link_lost.sh: CM2 test - has_L2 validation"
 
 log "cm2/cm2_link_lost.sh: Dropping interface $if_name"
 set_interface_down "$if_name" &&
     log "cm2/cm2_link_lost.sh: Interface $if_name is down - Success" ||
-    raise "FAIL: Could not bring down interface $if_name" -l "cm2/cm2_link_lost.sh" -ds
+    raise "Could not bring down interface $if_name" -l "cm2/cm2_link_lost.sh" -ds
 
 log "cm2/cm2_link_lost.sh: Waiting for Connection_Manager_Uplink::has_L2 is false on $if_name"
 wait_ovsdb_entry Connection_Manager_Uplink -w if_name "$if_name" -is has_L2 false &&
     log "cm2/cm2_link_lost.sh: wait_ovsdb_entry - Interface $if_name has_L2 is false - Success" ||
-    raise "FAIL: Connection_Manager_Uplink::has_L2 is not false" -l "cm2/cm2_link_lost.sh" -ow
+    raise "Connection_Manager_Uplink::has_L2 is not false" -l "cm2/cm2_link_lost.sh" -fc
 
 log "cm2/cm2_link_lost.sh: Bringing up interface $if_name"
 set_interface_up "$if_name" &&
     log "cm2/cm2_link_lost.sh: Interface $if_name is up - Success" ||
-    raise "FAIL: Could not bring up interface $if_name" -l "cm2/cm2_link_lost.sh" -ds
+    raise "Could not bring up interface $if_name" -l "cm2/cm2_link_lost.sh" -ds
 
 log "cm2/cm2_link_lost.sh: Waiting for Connection_Manager_Uplink::has_L2 -> true for if_name==$if_name"
 wait_ovsdb_entry Connection_Manager_Uplink -w if_name "$if_name" -is has_L2 true &&
     log "cm2/cm2_link_lost.sh: wait_ovsdb_entry - Interface $if_name has_L2 is true - Success" ||
-    raise "FAIL: Connection_Manager_Uplink::has_L2 is not true" -l "cm2/cm2_link_lost.sh" -ow
+    raise "Connection_Manager_Uplink::has_L2 is not true" -l "cm2/cm2_link_lost.sh" -fc
 
 pass

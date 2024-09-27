@@ -46,13 +46,14 @@ if_type=${2:-${if_type_default}}
 gateway=${3:-${gateway_default}}
 
 trap '
+    fut_ec=$?
+    trap - EXIT INT
     fut_info_dump_line
     print_tables Wifi_Inet_Config Wifi_Inet_State
     reset_inet_entry $if_name || true
-    check_restore_management_access || true
-    check_restore_ovsdb_server
     fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    exit $fut_ec
+' EXIT INT TERM
 
 log_title "nm2/nm2_set_gateway.sh: NM2 test - Testing table Wifi_Inet_Config field gateway"
 
@@ -66,31 +67,31 @@ create_inet_entry \
     -netmask "255.255.255.0" \
     -if_type "$if_type" &&
         log "nm2/nm2_set_gateway.sh: Interface $if_name created - Success" ||
-        raise "FAIL: Failed to create $if_name interface" -l "nm2/nm2_set_gateway.sh" -ds
+        raise "Failed to create $if_name interface" -l "nm2/nm2_set_gateway.sh" -ds
 
 log "nm2/nm2_set_gateway.sh: Setting GATEWAY for $if_name to $gateway"
 update_ovsdb_entry Wifi_Inet_Config -w if_name "$if_name" -u gateway "$gateway" &&
     log "nm2/nm2_set_gateway.sh: update_ovsdb_entry - Wifi_Inet_Config::gateway is $gateway - Success" ||
-    raise "FAIL: update_ovsdb_entry - Failed to update Wifi_Inet_Config::gateway is not $gateway" -l "nm2/nm2_set_gateway.sh" -oe
+    raise "update_ovsdb_entry - Failed to update Wifi_Inet_Config::gateway is not $gateway" -l "nm2/nm2_set_gateway.sh" -fc
 
 wait_ovsdb_entry Wifi_Inet_State -w if_name "$if_name" -is gateway "$gateway" &&
     log "nm2/nm2_set_gateway.sh: wait_ovsdb_entry - Wifi_Inet_Config reflected to Wifi_Inet_State::gateway is $gateway - Success" ||
-    raise "FAIL: wait_ovsdb_entry - Failed to reflect Wifi_Inet_Config to Wifi_Inet_State::gateway is $gateway" -l "nm2/nm2_set_gateway.sh" -tc
+    raise "wait_ovsdb_entry - Failed to reflect Wifi_Inet_Config to Wifi_Inet_State::gateway is $gateway" -l "nm2/nm2_set_gateway.sh" -tc
 
 gateway_check_cmd="ip route show default | grep -q $gateway' .* '$if_name"
 log "nm2/nm2_set_gateway.sh: Checking ifconfig for applied gateway for interface $if_name - LEVEL2"
 wait_for_function_response 0 "$gateway_check_cmd" &&
     log "nm2/nm2_set_gateway.sh: LEVEL2 - Gateway $gateway applied to system for interface $if_name - Success" ||
-    raise "FAIL: LEVEL2 - Failed to apply gateway $gateway to System for interface $if_name" -l "nm2/nm2_set_gateway.sh" -tc
+    raise "LEVEL2 - Failed to apply gateway $gateway to System for interface $if_name" -l "nm2/nm2_set_gateway.sh" -tc
 
 log "nm2/nm2_set_gateway.sh: Removing GATEWAY $gateway for $if_name"
 update_ovsdb_entry Wifi_Inet_Config -w if_name "$if_name" -u gateway "[\"set\",[]]" -u ip_assign_scheme none &&
     log "nm2/nm2_set_gateway.sh: update_ovsdb_entry - Wifi_Inet_Config::gateway is [\"set\",[]] - Success" ||
-    raise "FAIL: update_ovsdb_entry - Wifi_Inet_Config::gateway is not [\"set\",[]]" -l "nm2/nm2_set_gateway.sh" -oe
+    raise "update_ovsdb_entry - Wifi_Inet_Config::gateway is not [\"set\",[]]" -l "nm2/nm2_set_gateway.sh" -fc
 
 wait_ovsdb_entry Wifi_Inet_State -w if_name "$if_name" -is ip_assign_scheme none &&
     log "nm2/nm2_set_gateway.sh: wait_ovsdb_entry - Wifi_Inet_Config reflected to Wifi_Inet_State::ip_assign_scheme is 'none' - Success" ||
-    raise "FAIL: wait_ovsdb_entry - Failed to reflect Wifi_Inet_Config to Wifi_Inet_State::ip_assign_scheme is not 'none'" -l "nm2/nm2_set_gateway.sh" -tc
+    raise "wait_ovsdb_entry - Failed to reflect Wifi_Inet_Config to Wifi_Inet_State::ip_assign_scheme is not 'none'" -l "nm2/nm2_set_gateway.sh" -tc
 
 # Wifi_Inet_State::gateway field can either be empty or "0.0.0.0"
 wait_ovsdb_entry Wifi_Inet_State -w if_name "$if_name" -is gateway "0.0.0.0"
@@ -100,12 +101,12 @@ else
     log "nm2/nm2_set_gateway.sh: wait_ovsdb_entry - Wifi_Inet_State::gateway is not '0.0.0.0'"
     wait_for_function_response 'empty' "get_ovsdb_entry_value Wifi_Inet_State gateway -w if_name $if_name" &&
         log "nm2/nm2_set_gateway.sh: wait_for_function_response - Wifi_Inet_Config reflected to Wifi_Inet_State::gateway is 'empty' - Success" ||
-        raise "FAIL: wait_for_function_response - Failed to reflect Wifi_Inet_Config to Wifi_Inet_State::gateway is not 'empty'" -l "nm2/nm2_set_gateway.sh" -tc
+        raise "wait_for_function_response - Failed to reflect Wifi_Inet_Config to Wifi_Inet_State::gateway is not 'empty'" -l "nm2/nm2_set_gateway.sh" -tc
 fi
 
 log "nm2/nm2_set_gateway.sh: Checking ifconfig for removed gateway - LEVEL2"
 wait_for_function_response 1 "$gateway_check_cmd" &&
     log "nm2/nm2_set_gateway.sh: LEVEL2 - Gateway $gateway removed from system for interface $if_name - Success" ||
-    raise "FAIL: LEVEL2 - Failed to remove gateway $gateway from system for interface $if_name" -l "nm2/nm2_set_gateway.sh" -tc
+    raise "LEVEL2 - Failed to remove gateway $gateway from system for interface $if_name" -l "nm2/nm2_set_gateway.sh" -tc
 
 pass

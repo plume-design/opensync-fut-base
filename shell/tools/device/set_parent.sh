@@ -29,15 +29,15 @@ case "${1}" in
 esac
 
 trap '
-fut_ec=$?
-fut_info_dump_line
-if [ $fut_ec -ne 0 ]; then
-    print_tables Wifi_VIF_Config Wifi_VIF_State
-    check_restore_ovsdb_server
-fi
-fut_info_dump_line
-exit $fut_ec
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    if [ $fut_ec -ne 0 ]; then
+        print_tables Wifi_VIF_Config Wifi_VIF_State
+    fi
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 NARGS=2
 [ $# -ne ${NARGS} ] && usage && raise "Requires exactly ${NARGS} input argument(s)" -l "tools/device/set_parent.sh" -arg
@@ -48,11 +48,11 @@ log_title "tools/device/set_parent.sh: Updating Wifi_VIF_Config::parent to $mac_
 
 update_ovsdb_entry Wifi_VIF_Config -w if_name "$if_name" -u parent "$mac_address" &&
     log "tools/device/set_parent.sh: update_ovsdb_entry - Wifi_VIF_Config::parent is $mac_address - Success" ||
-    raise "FAIL: update_ovsdb_entry - Failed to update Wifi_VIF_Config::parent is not $mac_address" -l "tools/device/set_parent.sh" -tc
+    raise "update_ovsdb_entry - Failed to update Wifi_VIF_Config::parent is not $mac_address" -l "tools/device/set_parent.sh" -tc
 
 wait_ovsdb_entry Wifi_VIF_State -w if_name "$if_name" -is parent "$mac_address" &&
     log "tools/device/set_parent.sh: wait_ovsdb_entry - Wifi_VIF_Config reflected to Wifi_VIF_State::parent is $mac_address - Success" ||
-    raise "FAIL: wait_ovsdb_entry - Failed to reflect Wifi_VIF_Config to Wifi_VIF_State::parent is not $mac_address" -l "tools/device/set_parent.sh" -tc
+    raise "wait_ovsdb_entry - Failed to reflect Wifi_VIF_Config to Wifi_VIF_State::parent is not $mac_address" -l "tools/device/set_parent.sh" -tc
 
 pass
 

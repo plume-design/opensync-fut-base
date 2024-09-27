@@ -7,4 +7,4 @@ RUN pip3 install \
  pytest-dependency=="0.5.1" \
  pytest-ordering=="0.6" \
  pytest-select=="0.1.2" \
- retry=="0.9.2 "
+ retry=="0.9.2"

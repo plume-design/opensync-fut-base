@@ -27,6 +27,15 @@ case "${1}" in
     -h | --help)  usage ; exit 0 ;;
 esac
 
+trap '
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    iptables -t nat -vnL
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
+
 NARGS=2
 [ $# -ne ${NARGS} ] && usage && raise "Requires ${NARGS} input argument" -arg
 client_ip_addr=$1
@@ -34,12 +43,9 @@ port_num=$2
 
 log_title "tools/device/validate_port_forward_entry_in_iptables.sh: Verify port forwarding in the iptable rules"
 
-log "tools/device/validate_port_forward_entry_in_iptables.sh: Checking the iptables rules"
-iptable_rules=$(iptables -t nat -vnL)
-
-echo "$iptable_rules" | grep -i "dpt:${port_num} to:${client_ip_addr}:${port_num}"
+wait_for_function_response 0 "iptables -t nat -vnL | grep -E \"tcp dpt:${port_num}.*to:${client_ip_addr}:${port_num}\""
 if [ $? -eq 0 ]; then
     log -deb "tools/device/validate_port_forward_entry_in_iptables.sh: Port number ${port_num} is successfully forwarded - Success"
 else
-    raise "FAIL: Port number ${port_num} failed to forward!" -l "tools/device/validate_port_forward_entry_in_iptables.sh" -tc
+    raise "Port number ${port_num} failed to forward!" -l "tools/device/validate_port_forward_entry_in_iptables.sh" -tc
 fi

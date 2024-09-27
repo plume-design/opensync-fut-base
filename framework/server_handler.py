@@ -5,6 +5,7 @@ import time
 from pathlib import Path
 from queue import Queue
 from threading import Thread
+from typing import Callable, Literal
 
 import pytest
 
@@ -26,7 +27,6 @@ class ServerHandler(DeviceHandler):
     def __init__(self, name):
         log.debug("Entered ServerHandler class")
         super().__init__(name)
-        self.wan_ip_dict = self._get_wan_ip_dict()
         self.mgmt_ip_dict = self._get_mgmt_ip_dict()
         self.mqtt_hostname = "fut.opensync.io"
         self.mqtt_messages_file = "mqtt_messages.json"
@@ -54,27 +54,6 @@ class ServerHandler(DeviceHandler):
         """
         return SwitchToolGeneric(config=self.testbed_cfg)
 
-    def _get_wan_ip_dict(self):
-        """
-        Retrieve the WAN IPs for all nodes.
-
-        Returns:
-            wan_ip_dict (dict): Dictionary of node WAN IPs.
-
-        """
-        wan_ip_dict = {}
-
-        for device in ["gw", "l1", "l2"]:
-            if device in ["l1", "l2"]:
-                hostname = device[:1] + "eaf" + device[1:]
-            else:
-                hostname = device
-            wan_ip_cmd = f"getent hosts {hostname}_wan | cut -d' ' -f1"
-            wan_ip = self.device_api.run_raw(wan_ip_cmd)[1]
-            wan_ip_dict.update({device: wan_ip})
-
-        return wan_ip_dict
-
     def _get_mgmt_ip_dict(self):
         """
         Retrieve the management IPs for all nodes.
@@ -95,38 +74,6 @@ class ServerHandler(DeviceHandler):
             mgmt_ip_dict.update({device: mgmt_ip})
 
         return mgmt_ip_dict
-
-    def change_fut_cloud_tls_ver(self, tls_ver):
-        """
-        Change the FUT cloud TLS version.
-
-        Version can be changed to one of the following options:
-        [10, 11, 12, '1.0', '1.1', '1.2'].
-
-        Args:
-            tls_ver (str): TLS version.
-
-        Returns:
-            (bool): True if TLS version was changed, False otherwise.
-        """
-        log.debug(f"Changing FUT Cloud TLS version to {tls_ver}.")
-        tls_ver = str(tls_ver).replace(".", "")
-        tls_ver_exp = ".".join(tls_ver)
-        r_1 = "ssl-default-bind-options force-tlsv.* ssl-max-ver TLSv.* ssl-min-ver TLSv.*"
-        r_2 = "ssl-default-server-options force-tlsv.* ssl-max-ver TLSv.* ssl-min-ver TLSv.*"
-        s_0 = f"force-tlsv{tls_ver} ssl-max-ver TLSv{tls_ver_exp} ssl-min-ver TLSv{tls_ver_exp}"
-        s_1 = f"ssl-default-bind-options {s_0}"
-        s_2 = f"ssl-default-server-options {s_0}"
-        r_1 = self.device_api.run_raw(f"sed -i 's/{r_1}/{s_1}/g' {self.hap_path} && grep -q '{s_1}' {self.hap_path}")
-        r_2 = self.device_api.run_raw(f"sed -i 's/{r_2}/{s_2}/g' {self.hap_path} && grep -q '{s_2}' {self.hap_path}")
-
-        if r_1[0] != 0 or r_2[0] != 0:
-            log.warning("Failed to change FUT Cloud TLS version.")
-            return False
-
-        log.debug("FUT Cloud TLS version was changed.")
-
-        return True
 
     def restart_cloud(self):
         """
@@ -296,7 +243,7 @@ class ServerHandler(DeviceHandler):
         return cmd_ec, cmd_std_out, cmd_std_err
 
     @allure_script_execution_post_processing
-    def execute(self, path, args="", as_sudo=False, **kwargs):
+    def execute(self, path: str, args: str = "", as_sudo: bool = False, **kwargs) -> tuple[int, str, str]:
         """
         Execute the specified script with optional arguments.
 
@@ -314,44 +261,33 @@ class ServerHandler(DeviceHandler):
         cmd_ec, cmd_std_out, cmd_std_err = self._run_raw(path, args, as_sudo, **kwargs)
         return cmd_ec, cmd_std_out, cmd_std_err
 
-    def _mqtt_start_listener(self, queue, mqtt_args, mqtt_timeout):
+    def _mqtt_start_listener(self, queue: Queue, mqtt_args: str, mqtt_timeout: int) -> None:
         """
         Start the FUT MQTT tool with the provided arguments.
 
         Args:
             queue (object): Queue object.
-            mqtt_args (str): String containing MQTT configuration
-                arguments.
+            mqtt_args (str): String containing MQTT configuration arguments.
             mqtt_timeout (int): MQTT timeout.
-
-        Raises:
-            RuntimeError: If the FUT MQTT tool was not started
-                successfully.
         """
         log.info("Running FUT MQTT tool.")
-
-        try:
-            res = self.execute_in_docker(
-                f"{self.fut_dir}/framework/tools/fut_mqtt_tool.py",
-                args=mqtt_args,
-                timeout=mqtt_timeout,
-            )
-            log.info("Starting MQTT listener.")
-        except Exception as exception:
-            raise RuntimeError(f"Encountered an exception while using the FUT MQTT tool: {exception}")
-
+        res = self.execute_in_docker(
+            f"{self.fut_dir}/framework/tools/fut_mqtt_tool.py",
+            args=mqtt_args,
+            timeout=mqtt_timeout,
+        )
         log.info(f"Response from FUT MQTT tool: {res}")
         queue.put(res)
 
     def mqtt_trigger_and_validate_message(
         self,
-        topic,
-        trigger,
-        expected_data,
-        comparison_method="exact_match",
-        max_message_count=1,
-        node_filter="",
-    ):
+        topic: str,
+        trigger: Callable,
+        expected_data: dict,
+        comparison_method: str = "exact_match",
+        max_message_count: int = 1,
+        node_filter: str = "",
+    ) -> Literal[True]:
         """
         Start the FUT MQTT tool.
 
@@ -380,7 +316,7 @@ class ServerHandler(DeviceHandler):
             (bool): True if the MQTT connection, message gathering and data
                 comparison were performed correctly.
         """
-        main_queue = Queue()
+        main_queue: Queue = Queue()
         mqtt_timeout = 300
         messages_remote_path = f"{self.fut_dir}/{self.mqtt_messages_file}"
         messages_local_path = f"{self.fut_base_dir}/{self.mqtt_messages_file}"
@@ -464,7 +400,7 @@ class ServerHandler(DeviceHandler):
 
         return True
 
-    def clear_folder(self, folder_path):
+    def clear_folder(self, folder_path: str) -> Literal[True]:
         """Remove contents of the target folder on the remote device."""
         if not Path(folder_path).is_absolute():
             folder_path = f"{self.fut_dir}/{folder_path}/"

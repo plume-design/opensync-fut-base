@@ -25,11 +25,10 @@ case "${1}" in
 esac
 
 trap '
-fut_info_dump_line
-print_tables FSM_Policy
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_info_dump_line
+    print_tables FSM_Policy
+    fut_info_dump_line
+' EXIT INT TERM
 
 insert_ovsdb_entry FSM_Policy \
     -i policy gatekeeper \
@@ -37,6 +36,6 @@ insert_ovsdb_entry FSM_Policy \
     -i action gatekeeper \
     -i log all &&
         log "configure_gatekeeper_policy.sh: gk_all inserted to FSM_Policy inserted - Success" ||
-        raise "FAIL: Failed to insert gk_all to FSM_Policy" -l "configure_gatekeeper_policy.sh" -oe
+        raise "Failed to insert gk_all to FSM_Policy" -l "configure_gatekeeper_policy.sh" -fc
 
 pass

@@ -64,13 +64,15 @@ case "${1}" in
 esac
 
 trap '
-fut_info_dump_line
-print_tables Wifi_Inet_Config Wifi_Inet_State
-print_tables Wifi_VIF_Config Wifi_VIF_State
-print_tables DHCP_leased_IP
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    print_tables Wifi_Inet_Config Wifi_Inet_State
+    print_tables Wifi_VIF_Config Wifi_VIF_State
+    print_tables DHCP_leased_IP
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 NARGS=1
 [ $# -ne ${NARGS} ] && usage && raise "Requires exactly ${NARGS} input argument(s)" -l "othr/othr_verify_gre_tunnel_gw.sh" -arg
@@ -88,6 +90,6 @@ leaf_gre_inet_addr="$(get_associated_leaf_ip "${leaf_radio_mac}")"
 # Try 3 times to ping LEAF, could not be immediately available
 wait_for_function_exit_code 0 "ping -c${n_ping} ${leaf_gre_inet_addr}" 3 &&
     log "othr/othr_verify_gre_tunnel_gw.sh: Can ping LEAF GRE - Success" ||
-    raise "FAIL: Can not ping LEAF GRE" -l "othr/othr_verify_gre_tunnel_gw.sh" -tc
+    raise "Can not ping LEAF GRE" -l "othr/othr_verify_gre_tunnel_gw.sh" -tc
 
 pass

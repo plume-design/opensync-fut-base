@@ -46,40 +46,42 @@ fw_url=$2
 fw_name=${fw_url##*/}
 
 trap '
+    fut_ec=$?
+    trap - EXIT INT
     fut_info_dump_line
     print_tables AWLAN_Node
     reset_um_triggers $fw_path || true
-    check_restore_ovsdb_server
     fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    exit $fut_ec
+' EXIT INT TERM
 
 log_title "um/um_set_firmware_url.sh: UM test - Download FW - firmware_url"
 
 log "um/um_set_firmware_url.sh: Setting firmware_url to $fw_url"
 update_ovsdb_entry AWLAN_Node -u firmware_url "$fw_url" &&
     log "um/um_set_firmware_url.sh: update_ovsdb_entry - AWLAN_Node::firmware_url is $fw_url - Success" ||
-    raise "FAIL: update_ovsdb_entry - AWLAN_Node::firmware_url is not $fw_url" -l "um/um_set_firmware_url.sh" -oe
+    raise "update_ovsdb_entry - AWLAN_Node::firmware_url is not $fw_url" -l "um/um_set_firmware_url.sh" -fc
 
 fw_start_code=$(get_um_code "UPG_STS_FW_DL_START")
 log "um/um_set_firmware_url.sh: Waiting for FW download to start"
 wait_ovsdb_entry AWLAN_Node -is upgrade_status "$fw_start_code" &&
     log "um/um_set_firmware_url.sh: wait_ovsdb_entry - AWLAN_Node::upgrade_status is $fw_start_code - Success" ||
-    raise "FAIL: wait_ovsdb_entry - AWLAN_Node::upgrade_status is not $fw_start_code" -l "um/um_set_firmware_url.sh" -tc
+    raise "wait_ovsdb_entry - AWLAN_Node::upgrade_status is not $fw_start_code" -l "um/um_set_firmware_url.sh" -tc
 
 fw_stop_code=$(get_um_code "UPG_STS_FW_DL_END")
 log "um/um_set_firmware_url.sh: Waiting for FW download to finish"
 wait_ovsdb_entry AWLAN_Node -is upgrade_status "$fw_stop_code" &&
     log "um/um_set_firmware_url.sh: wait_ovsdb_entry - AWLAN_Node::upgrade_status is $fw_stop_code - Success" ||
-    raise "FAIL: wait_ovsdb_entry - AWLAN_Node::upgrade_status is not $fw_stop_code" -l "um/um_set_firmware_url.sh" -tc
+    raise "wait_ovsdb_entry - AWLAN_Node::upgrade_status is not $fw_stop_code" -l "um/um_set_firmware_url.sh" -tc
 
 log "um/um_set_firmware_url.sh: Checking for image in /tmp/pfirmware"
 wait_for_function_response 0 "ls $fw_path/$fw_name" &&
     log "um/um_set_firmware_url.sh: Image exists in $fw_path - Success" ||
-    raise "FAIL: Image does not exist in $fw_path" -l "um/um_set_firmware_url.sh" -tc
+    raise "Image does not exist in $fw_path" -l "um/um_set_firmware_url.sh" -tc
 
 log "um/um_set_firmware_url.sh: Checking for image md5 sum in $fw_path"
 wait_for_function_response 0 "ls $fw_path/$fw_name.md5" &&
     log "um/um_set_firmware_url.sh: Image exists in $fw_path - Success" ||
-    raise "FAIL: Image does not exist in $fw_path" -l "um/um_set_firmware_url.sh" -tc
+    raise "Image does not exist in $fw_path" -l "um/um_set_firmware_url.sh" -tc
 
 pass

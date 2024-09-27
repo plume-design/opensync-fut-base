@@ -42,13 +42,14 @@ primary_dns=$3
 secondary_dns=$4
 
 trap '
+    fut_ec=$?
+    trap - EXIT INT
     fut_info_dump_line
     print_tables Wifi_Inet_Config Wifi_Inet_State
     reset_inet_entry $if_name || true
-    check_restore_management_access || true
-    check_restore_ovsdb_server
     fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    exit $fut_ec
+' EXIT INT TERM
 
 log_title "nm2/nm2_set_dns.sh: NM2 test - Testing table Wifi_Inet_Config field dns"
 
@@ -62,21 +63,21 @@ create_inet_entry \
     -netmask "255.255.255.0" \
     -if_type "$if_type" &&
         log "nm2/nm2_set_dns.sh: Interface $if_name created - Success" ||
-        raise "FAIL: Failed to create $if_name interface" -l "nm2/nm2_set_dns.sh" -ds
+        raise "Failed to create $if_name interface" -l "nm2/nm2_set_dns.sh" -ds
 
 log "nm2/nm2_set_dns.sh: Setting DNS for '$if_name' to $primary_dns, $secondary_dns"
 configure_custom_dns_on_interface "$if_name" "$primary_dns" "$secondary_dns" &&
     log "nm2/nm2_set_dns.sh: Custom DNS set on interface '$if_name' - Success" ||
-    raise "FAIL: Failed to set custom DNS for interface '$if_name'" -l "nm2/nm2_set_dns.sh" -tc
+    raise "Failed to set custom DNS for interface '$if_name'" -l "nm2/nm2_set_dns.sh" -tc
 
 log "nm2/nm2_set_dns.sh: Checking if primary DNS was properly applied to interface '$if_name' - LEVEL2"
 wait_for_function_response 0 "check_resolv_conf $primary_dns" &&
     log "nm2/nm2_set_dns.sh: LEVEL2 - Primary DNS set in /tmp/resolv.conf - interface '$if_name' - Success" ||
-    raise "FAIL: LEVEL2 - Primary DNS configuration NOT valid - interface '$if_name'" -l "nm2/nm2_set_dns.sh" -tc
+    raise "LEVEL2 - Primary DNS configuration NOT valid - interface '$if_name'" -l "nm2/nm2_set_dns.sh" -tc
 
 log "nm2/nm2_set_dns.sh: Checking if secondary DNS was properly applied to interface '$if_name' - LEVEL2"
 wait_for_function_response 0 "check_resolv_conf $secondary_dns" &&
     log "nm2/nm2_set_dns.sh: LEVEL2 - Secondary DNS set in /tmp/resolv.conf - interface '$if_name' - Success" ||
-    raise "FAIL: LEVEL2 - Secondary DNS configuration NOT valid - interface '$if_name'" -l "nm2/nm2_set_dns.sh" -tc
+    raise "LEVEL2 - Secondary DNS configuration NOT valid - interface '$if_name'" -l "nm2/nm2_set_dns.sh" -tc
 
 pass

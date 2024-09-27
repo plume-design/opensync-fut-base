@@ -51,24 +51,23 @@ route_tool_path=${7}
 LTE_ROUTE_TIMEOUT=60
 
 trap '
-fut_info_dump_line
-print_tables Lte_Config Lte_State Connection_Manager_Uplink Wifi_Inet_State
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_info_dump_line
+    print_tables Lte_Config Lte_State Connection_Manager_Uplink Wifi_Inet_State
+    fut_info_dump_line
+' EXIT INT TERM
 
 check_ovsdb_table_exist Lte_State &&
     log "ltem/ltem_validation.sh: Lte_State table exists in ovsdb - Success" ||
-    raise "FAIL: Lte_State table does not exist in ovsdb" -l "ltem/ltem_validation.sh" -s
+    raise "Lte_State table does not exist in ovsdb" -l "ltem/ltem_validation.sh" -s
 
 log "ltem/ltem_validation.sh: Setting 'lte_failover_enable' for $lte_if_name to 'true'"
 update_ovsdb_entry Lte_Config -w if_name "$lte_if_name" -u lte_failover_enable true &&
     log "ltem/ltem_validation.sh: update_ovsdb_entry - Lte_Config::lte_failover_enable is 'true' - Success" ||
-    raise "FAIL: update_ovsdb_entry - Lte_Config::lte_failover_enable is not 'true'" -l "ltem/ltem_validation.sh" -oe
+    raise "update_ovsdb_entry - Lte_Config::lte_failover_enable is not 'true'" -l "ltem/ltem_validation.sh" -fc
 
 wait_ovsdb_entry Lte_State -w if_name "$lte_if_name" -is lte_failover_enable true &&
     log "ltem/ltem_validation.sh: wait_ovsdb_entry - Lte_Config reflected to Lte_State::lte_failover_enable is 'true' - Success" ||
-    raise "FAIL: wait_ovsdb_entry - Failed to reflect Lte_Config to Lte_State::lte_failover_enable is not 'true'" -l "ltem/ltem_validation.sh" -tc
+    raise "wait_ovsdb_entry - Failed to reflect Lte_Config to Lte_State::lte_failover_enable is not 'true'" -l "ltem/ltem_validation.sh" -tc
 
 wait_ovsdb_entry Lte_State -w if_name "$lte_if_name" \
     -is ipv4_enable "true" \
@@ -77,16 +76,16 @@ wait_ovsdb_entry Lte_State -w if_name "$lte_if_name" \
     -is manager_enable "true" \
     -is modem_enable "true" &&
         log "ltem/ltem_validation.sh: Expected entry in Lte_State table for $lte_if_name interface and $access_point_name of SIM - Success" ||
-        raise "FAIL: Expected entry is not present on Lte_State table for $lte_if_name interface and $access_point_name of SIM " -l "ltem/ltem_validation.sh" -tc
+        raise "Expected entry is not present on Lte_State table for $lte_if_name interface and $access_point_name of SIM " -l "ltem/ltem_validation.sh" -tc
 
 log "ltem/ltem_validation.sh: Setting 'force_use_lte' for $lte_if_name to 'true'"
 update_ovsdb_entry Lte_Config -w if_name "$lte_if_name" -u force_use_lte true &&
     log "ltem/ltem_validation.sh: update_ovsdb_entry - Lte_Config::force_use_lte is 'true' - Success" ||
-    raise "FAIL: update_ovsdb_entry - Lte_Config::force_use_lte is not 'true'" -l "ltem/ltem_validation.sh" -oe
+    raise "update_ovsdb_entry - Lte_Config::force_use_lte is not 'true'" -l "ltem/ltem_validation.sh" -fc
 
 wait_ovsdb_entry Lte_State -w if_name "$lte_if_name" -is force_use_lte true &&
     log "ltem/ltem_validation.sh: wait_ovsdb_entry - Lte_Config reflected to Lte_State::force_use_lte is 'true' - Success" ||
-    raise "FAIL: wait_ovsdb_entry - Failed to reflect Lte_Config to Lte_State::force_use_lte is not 'true'" -l "ltem/ltem_validation.sh" -tc
+    raise "wait_ovsdb_entry - Failed to reflect Lte_Config to Lte_State::force_use_lte is not 'true'" -l "ltem/ltem_validation.sh" -tc
 
 wait_ovsdb_entry Connection_Manager_Uplink -w if_name "$lte_if_name" \
     -is if_type "$if_type" \
@@ -94,25 +93,25 @@ wait_ovsdb_entry Connection_Manager_Uplink -w if_name "$lte_if_name" \
     -is has_L2 "$has_l2" \
     -is has_L3 "$has_l3" &&
         log "ltem/ltem_validation.sh: wait_ovsdb_entry - Entry present for $lte_if_name interface of type $if_type in Connection_Manager_Uplink - Success" ||
-        raise "FAIL: Entry not present for $lte_if_name interface of type $if_type in Connection_Manager_Uplink " -l "ltem/ltem_validation.sh" -tc
+        raise "Entry not present for $lte_if_name interface of type $if_type in Connection_Manager_Uplink " -l "ltem/ltem_validation.sh" -tc
 
 wait_ovsdb_entry Wifi_Inet_State -w if_name "$lte_if_name" \
     -is if_type "$if_type" \
     -is if_name "$lte_if_name" &&
         log "ltem/ltem_validation.sh: wait_ovsdb_entry - Expected entry for $lte_if_name interface in Wifi_Inet_State present - Success" ||
-        raise "FAIL: Expected entry is not present of $lte_if_name interface in Wifi_Inet_State" -l "ltem/ltem_validation.sh" -tc
+        raise "Expected entry is not present of $lte_if_name interface in Wifi_Inet_State" -l "ltem/ltem_validation.sh" -tc
 
 wait_for_function_response 0 "check_default_lte_route_gw $lte_if_name $metric $route_tool_path" $LTE_ROUTE_TIMEOUT &&
     log "ltem/ltem_validation - Lte interface with metric $metric was added to route table - Success" ||
-    raise "FAIL: Lte interface with metric $metric was not found in route table" -l "ltem/ltem_validation" -tc
+    raise "Lte interface with metric $metric was not found in route table" -l "ltem/ltem_validation" -tc
 
 log "ltem/ltem_validation.sh: Setting 'force_use_lte' for $lte_if_name to 'false'"
 update_ovsdb_entry Lte_Config -w if_name "$lte_if_name" -u force_use_lte false &&
     log "ltem/ltem_validation.sh: update_ovsdb_entry - Lte_Config::force_use_lte is 'false' - Success" ||
-    raise "FAIL: update_ovsdb_entry - Lte_Config::force_use_lte is not 'false'" -l "ltem/ltem_validation.sh" -oe
+    raise "update_ovsdb_entry - Lte_Config::force_use_lte is not 'false'" -l "ltem/ltem_validation.sh" -fc
 
 wait_ovsdb_entry Lte_State -w if_name "$lte_if_name" -is force_use_lte false &&
     log "ltem/ltem_validation.sh: wait_ovsdb_entry - Lte_Config reflected to Lte_State::force_use_lte is 'false' - Success" ||
-    raise "FAIL: wait_ovsdb_entry - Failed to reflect Lte_Config to Lte_State::force_use_lte is not 'false'" -l "ltem/ltem_validation.sh" -tc
+    raise "wait_ovsdb_entry - Failed to reflect Lte_Config to Lte_State::force_use_lte is not 'false'" -l "ltem/ltem_validation.sh" -tc
 
 pass

@@ -38,7 +38,7 @@ for if_name in "$@"
     do
         wait_ovsdb_entry Wifi_Radio_State -w if_name "$if_name" -is if_name "$if_name" &&
             log -deb "tools/device/device_init.sh - Wifi_Radio_State::if_name '$if_name' present - Success" ||
-            raise "FAIL: Wifi_Radio_State::if_name for '$if_name' does not exist" -l "tools/device/device_init.sh" -ds
+            raise "Wifi_Radio_State::if_name for '$if_name' does not exist" -l "tools/device/device_init.sh" -ds
     done
 
 exit 0

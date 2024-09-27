@@ -19,8 +19,10 @@ Description:
     This script runs the iperf3 server to check traffic flow.
 Arguments:
     -h  show this help message
+    \$@ (port) : server port to listen on/connect to : (int)(optional)
 Script usage example:
     ./tools/server/run_iperf3_server.sh
+    ./tools/server/run_iperf3_server.sh 55687
 usage_string
 }
 
@@ -30,6 +32,6 @@ esac
 
 log "tools/server/run_iperf3_server.sh: Running iperf3 server"
 
-run_iperf3_server
+run_iperf3_server "$@"
 
 pass

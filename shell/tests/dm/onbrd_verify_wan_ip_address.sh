@@ -32,12 +32,14 @@ case "${1}" in
 esac
 
 trap '
-fut_info_dump_line
-print_tables Wifi_Inet_State
-check_restore_ovsdb_server
-ifconfig "$wan_if_name"
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    print_tables Wifi_Inet_State
+    ifconfig "$wan_if_name"
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 NARGS=2
 [ $# -ne ${NARGS} ] && usage && raise "Requires exactly ${NARGS} input argument(s)" -l "onbrd/onbrd_verify_wan_ip_address.sh" -arg
@@ -49,10 +51,10 @@ log_title "onbrd/onbrd_verify_wan_ip_address.sh: ONBRD test - Verify WAN_IP in W
 log "onbrd/onbrd_verify_wan_ip_address.sh: Verify WAN IP address '$inet_addr' for interface '$wan_if_name'"
 wait_ovsdb_entry Wifi_Inet_State -w if_name "$wan_if_name" -is inet_addr "$inet_addr" &&
     log "onbrd/onbrd_verify_wan_ip_address.sh: wait_ovsdb_entry - Wifi_Inet_State '$wan_if_name' inet_addr is equal to '$inet_addr' - Success" ||
-    raise "FAIL: wait_ovsdb_entry - Wifi_Inet_State '$wan_if_name' inet_addr is not equal to '$inet_addr'" -l "onbrd/onbrd_verify_wan_ip_address.sh" -tc
+    raise "wait_ovsdb_entry - Wifi_Inet_State '$wan_if_name' inet_addr is not equal to '$inet_addr'" -l "onbrd/onbrd_verify_wan_ip_address.sh" -tc
 
 wait_for_function_response 0 "check_wan_ip_l2 $wan_if_name $inet_addr" &&
     log "onbrd/onbrd_verify_wan_ip_address.sh: LEVEL2 - WAN IP for '$wan_if_name' is equal to '$inet_addr' - Success" ||
-    raise "FAIL: LEVEL2 - WAN IP for '$wan_if_name' is not equal to '$inet_addr'" -l "onbrd/onbrd_verify_wan_ip_address.sh" -tc
+    raise "LEVEL2 - WAN IP for '$wan_if_name' is not equal to '$inet_addr'" -l "onbrd/onbrd_verify_wan_ip_address.sh" -tc
 
 pass

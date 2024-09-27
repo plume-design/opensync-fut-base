@@ -42,7 +42,7 @@ spawn_tinyproxies()
     -i proxy_method "reverse" \
     -i uam_url "https://captiveportal1" &&
         log "cpm/cpm_restart_crashed.sh: First Captive_Portal entry inserted - Success" ||
-        raise "FAIL: Failed to insert first Captive_Portal entry" -l "cpm/cpm_restart_crashed.sh" -oe
+        raise "Failed to insert first Captive_Portal entry" -l "cpm/cpm_restart_crashed.sh" -fc
 
     insert_ovsdb_entry Captive_Portal \
     -i additional_headers '["map",[["X-LocationID","100000000000000000000001"],["X-PodID","1000000001"],["X-PodMac","aa:bb:cc:dd:ee:ff"],["X-SSID","FUT_ssid_guest"]]]' \
@@ -51,7 +51,7 @@ spawn_tinyproxies()
     -i proxy_method "reverse" \
     -i uam_url "https://captiveportal2" &&
         log "cpm/cpm_restart_crashed.sh: Second Captive_Portal entry inserted - Success" ||
-        raise "FAIL: Failed to insert second Captive_Portal entry" -l "cpm/cpm_restart_crashed.sh" -oe
+        raise "Failed to insert second Captive_Portal entry" -l "cpm/cpm_restart_crashed.sh" -fc
 }
 
 # create list of <pid>:<uuid> pairs, separated by semicolon (;)
@@ -94,7 +94,7 @@ simulate_all_tinyproxies_crash()
 
     killall tinyproxy &&
         log "cpm/cpm_restart_crashed.sh: killed tinyproxy processes - Success" ||
-        raise "FAIL: Unable to kill tinyproxy processes"  -l "cpm/cpm_restart_crashed.sh" -tc
+        raise "Unable to kill tinyproxy processes"  -l "cpm/cpm_restart_crashed.sh" -tc
 
     # consider DAEMON_DEFAULT_RESTART_DELAY 1 second plus 1 second for
     # process creation
@@ -137,11 +137,13 @@ validate_pid_uuid_lists()
 }
 
 trap '
-fut_info_dump_line
-print_tables Captive_Portal
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    print_tables Captive_Portal
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 log_title "cpm/cpm_restart_crashed.sh: CPM test - Verify restart of crashed tinyproxies"
 
@@ -149,7 +151,7 @@ simulate_all_tinyproxies_crash
 
 validate_pid_uuid_lists &&
     log "cpm/cpm_restart_crashed.sh: Simulated tinyproxies crash - new pids found - Success" ||
-    raise "FAIL: Incorrect tinyproxies crash simulation result"  -l "cpm/cpm_restart_crashed.sh" -tc
+    raise "Incorrect tinyproxies crash simulation result"  -l "cpm/cpm_restart_crashed.sh" -tc
 
 print_tables Captive_Portal
 

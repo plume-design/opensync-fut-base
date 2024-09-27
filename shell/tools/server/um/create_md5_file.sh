@@ -36,4 +36,4 @@ um_fw_path=$1
 log "tools/server/um/create_md5_file.sh - Creating md5 sum file of file $um_fw_path"
 create_md5_file "$um_fw_path" &&
     log -deb "tools/server/um/create_md5_file.sh - md5 sum file created - Success" ||
-    raise "FAIL: Could not create md5 sum file" -l "tools/server/um/create_md5_file.sh" -ds
+    raise "Could not create md5 sum file" -l "tools/server/um/create_md5_file.sh" -ds

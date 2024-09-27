@@ -34,13 +34,14 @@ NARGS=0
 [ $# -ne ${NARGS} ] && usage && raise "Requires exactly ${NARGS} input arguments" -arg
 
 trap '
-fut_info_dump_line
-print_tables SSL Manager Connection_Manager_Uplink
-ifconfig eth0
-check_restore_management_access || true
-check_restore_ovsdb_server
-fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    print_tables SSL Manager Connection_Manager_Uplink
+    ifconfig eth0
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
 log_title "cm2/cm2_ssl_check.sh: CM2 test - SSL Check"
 
@@ -50,22 +51,22 @@ private_key_path=$(get_ovsdb_entry_value SSL private_key)
 
 [ -e "$ca_cert_path" ] &&
     log "cm2/cm2_ssl_check.sh: ca_cert file is valid - $ca_cert_path - Success" ||
-    raise "FAIL: ca_cert file is missing - $ca_cert_path" -l "cm2/cm2_ssl_check.sh" -tc
+    raise "ca_cert file is missing - $ca_cert_path" -l "cm2/cm2_ssl_check.sh" -tc
 [ -e "$certificate_path" ] &&
     log "cm2/cm2_ssl_check.sh: certificate file is valid - $certificate_path - Success" ||
-    raise "FAIL: certificate file is missing - $certificate_path" -l "cm2/cm2_ssl_check.sh" -tc
+    raise "certificate file is missing - $certificate_path" -l "cm2/cm2_ssl_check.sh" -tc
 [ -e "$private_key_path" ] &&
     log "cm2/cm2_ssl_check.sh: private_key file is valid - $private_key_path - Success" ||
-    raise "FAIL: private_key file is missing - $private_key_path" -l "cm2/cm2_ssl_check.sh" -tc
+    raise "private_key file is missing - $private_key_path" -l "cm2/cm2_ssl_check.sh" -tc
 
 [ -s "$ca_cert_path" ] &&
     log "cm2/cm2_ssl_check.sh: ca_cert file is not empty - $ca_cert_path - Success" ||
-    raise "FAIL: ca_cert file is empty - $ca_cert_path" -l "cm2/cm2_ssl_check.sh" -tc
+    raise "ca_cert file is empty - $ca_cert_path" -l "cm2/cm2_ssl_check.sh" -tc
 [ -s "$certificate_path" ] &&
     log "cm2/cm2_ssl_check.sh: certificate file is not empty - $certificate_path - Success" ||
-    raise "FAIL: certificate file is empty - $certificate_path" -l "cm2/cm2_ssl_check.sh" -tc
+    raise "certificate file is empty - $certificate_path" -l "cm2/cm2_ssl_check.sh" -tc
 [ -s "$private_key_path" ] &&
     log "cm2/cm2_ssl_check.sh: private_key file is not empty - $private_key_path - Success" ||
-    raise "FAIL: private_key file is empty - $private_key_path" -l "cm2/cm2_ssl_check.sh" -tc
+    raise "private_key file is empty - $private_key_path" -l "cm2/cm2_ssl_check.sh" -tc
 
 pass

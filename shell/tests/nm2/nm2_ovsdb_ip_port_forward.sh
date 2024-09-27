@@ -46,40 +46,42 @@ protocol=$5
 pf_table=$6
 
 trap '
+    fut_ec=$?
+    trap - EXIT INT
     fut_info_dump_line
     print_tables IP_Port_Forward Netfilter
-    check_restore_ovsdb_server
     fut_info_dump_line
-' EXIT SIGINT SIGTERM
+    exit $fut_ec
+' EXIT INT TERM
 
 log_title "nm2/nm2_ovsdb_ip_port_forward.sh: NM2 test - Testing IP port forwarding"
 
 log "nm2/nm2_ovsdb_ip_port_forward.sh: Set IP FORWARD in OVSDB"
 set_ip_port_forwarding "$src_ifname" "$src_port" "$dst_ipaddr" "$dst_port" "$protocol" "$pf_table" &&
     log "nm2/nm2_ovsdb_ip_port_forward.sh: Set IP port forward for $src_ifname - Success" ||
-    raise "FAIL: Failed to set IP port forward - $src_ifname" -l "nm2/nm2_ovsdb_ip_port_forward.sh" -tc
+    raise "Failed to set IP port forward - $src_ifname" -l "nm2/nm2_ovsdb_ip_port_forward.sh" -tc
 
 log "nm2/nm2_ovsdb_ip_port_forward.sh: Check for IP FORWARD record in iptables - LEVEL2"
 wait_for_function_response 0 "check_ip_port_forwarding $dst_ipaddr:$dst_port" &&
     log "nm2/nm2_ovsdb_ip_port_forward.sh: LEVEL2 - IP port forward record propagated to iptables" ||
-    raise "FAIL: LEVEL2 - Failed to propagate record into iptables" -l "nm2/nm2_ovsdb_ip_port_forward.sh" -tc
+    raise "LEVEL2 - Failed to propagate record into iptables" -l "nm2/nm2_ovsdb_ip_port_forward.sh" -tc
 
 log "nm2/nm2_ovsdb_ip_port_forward.sh: Delete IP FORWARD from OVSDB"
 
 if [ "$pf_table" = "Netfilter" ]; then
     ${OVSH} d "$pf_table" -w chain=="PF_PREROUTING" -w name=="pf.dnat_tcp_$src_ifname" &&
         log "nm2/nm2_ovsdb_ip_port_forward.sh: Deleted IP FORWARD for $src_ifname from Netfilter" ||
-        raise "FAIL: Failed to delete IP FORWARD for $src_ifname from Netfilter" -l "nm2/nm2_ovsdb_ip_port_forward.sh" -tc
+        raise "Failed to delete IP FORWARD for $src_ifname from Netfilter" -l "nm2/nm2_ovsdb_ip_port_forward.sh" -tc
     wait_ovsdb_entry_remove "$pf_table" -w chain "PF_PREROUTING" -w name "pf.dnat_tcp_$src_ifname" &&
         log "nm2/nm2_ovsdb_ip_port_forward.sh: Removed entry from Netfilter for $src_ifname - Success" ||
-        raise "FAIL: Failed to remove entry from Netfilter for $src_ifname" -l "nm2/nm2_ovsdb_ip_port_forward.sh" -tc
+        raise "Failed to remove entry from Netfilter for $src_ifname" -l "nm2/nm2_ovsdb_ip_port_forward.sh" -tc
 else
     ${OVSH} d "$pf_table" -w dst_ipaddr=="$dst_ipaddr" -w src_ifname=="$src_ifname" &&
         log "nm2/nm2_ovsdb_ip_port_forward.sh: Deleted IP FORWARD for $src_ifname from IP_Port_Forward" ||
-        raise "FAIL: Failed to delete IP FORWARD for $src_ifname from IP_Port_Forward" -l "nm2/nm2_ovsdb_ip_port_forward.sh" -tc
+        raise "Failed to delete IP FORWARD for $src_ifname from IP_Port_Forward" -l "nm2/nm2_ovsdb_ip_port_forward.sh" -tc
     wait_ovsdb_entry_remove "$pf_table" -w dst_ipaddr "$dst_ipaddr" -w src_ifname "$src_ifname" &&
         log "nm2/nm2_ovsdb_ip_port_forward.sh: Removed entry from IP_Port_Forward for $src_ifname - Success" ||
-        raise "FAIL: Failed to remove entry from IP_Port_Forward for $src_ifname" -l "nm2/nm2_ovsdb_ip_port_forward.sh" -tc
+        raise "Failed to remove entry from IP_Port_Forward for $src_ifname" -l "nm2/nm2_ovsdb_ip_port_forward.sh" -tc
 fi
 
 log "nm2/nm2_ovsdb_ip_port_forward.sh: Check is IP FORWARD record is deleted from iptables - LEVEL2"

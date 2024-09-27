@@ -11,34 +11,51 @@ source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
 usage()
 {
 cat << usage_string
-tools/device/configure_sta_interface.sh [-h] arguments
+tools/device/configure_sta_interface [-h] arguments
 Description:
-    - Configures STA interface and validates it in Wifi_VIF_State table
+    - The script configures an STA interface by populating the Wifi_VIF_Config OVSDB table.
+    - If the clear_wcc parameter is set to 'true', the Wifi_Credential_Config OVSDB table is cleared.
+
 Arguments:
-    -h  show this help message
-    See wm2_lib::configure_sta_interface for more information
+    -h : show this help message
+    (mac_list)               : Wifi_VIF_Config::mac_list                          : (set)(optional)
+    (mac_list_type)          : Wifi_VIF_Config::mac_list_type                     : (str)(optional)
+    (mode)                   : Wifi_VIF_Config::mode                              : (str)(required)
+    (multi_ap)               : Wifi_VIF_Config::multi_ap                          : (str)(optional)
+    (parent)                 : Wifi_VIF_State::parent                             : (str)(optional)
+    (ssid)                   : Wifi_VIF_Config::ssid                              : (str)(required)
+    (vif_if_name)            : Wifi_VIF_Config::if_name                           : (str)(required)
+    (wpa)                    : Wifi_VIF_Config::wpa                               : (bool)(required)
+    (wpa_key_mgmt)           : Wifi_VIF_Config::wpa_key_mgmt                      : (str)(required)
+    (wpa_oftags)             : Wifi_VIF_Config::wpa_oftags                        : (map)(required)
+    (wpa_psks)               : Wifi_VIF_Config::wpa_psks                          : (map)(required)
+    (clear_wcc)              : clear the Wifi_Credential_Config OVSDB table       : (bool)(optional)
+    (wait_ip)                : wait for the STA interface to obtain an IP address : (bool)(optional)
+
 Script usage example:
-    ./tools/device/configure_sta_interface.sh -if_name bhaul-sta-l50 -ssid fut-2568.bhaul -onboard_type gre -channel 36 -clear_wcc -wait_ip -wifi_security_type legacy -security '["map",[["encryption","WPA-PSK"],["key","FutTestPSK"],["mode","2"]]]'
-    ./tools/device/configure_sta_interface.sh -if_name bhaul-sta-l50 -ssid fut-2568.bhaul -onboard_type gre -channel 36 -clear_wcc -wait_ip -wifi_security_type wpa -wpa "true" -wpa_key_mgmt "wpa-psk" -wpa_psks '["map",[["key","FutTestPSK"]]]' -wpa_oftags '["map",[["key","home--1"]]]'
+    ./tools/device/configure_sta_interface.sh -vif_if_name "bhaul-sta-24" -mode "sta" \
+    -ssid "86382dfcecc79d9657b8a82cb15fe839" -wpa_oftags '["map",[["key--1","home--1"]]]' -wpa true \
+    -wpa_psks '["map",[["key--1","62e2dacd685b91ea8ad2b8df1b592b42"]]]' -wpa_key_mgmt "wpa2-psk"
 usage_string
 }
 
 trap '
-fut_ec=$?
-fut_info_dump_line
-print_tables Wifi_Radio_Config Wifi_Radio_State Wifi_VIF_Config Wifi_VIF_State Wifi_Inet_Config Wifi_Inet_State Wifi_Credential_Config || true
-check_restore_ovsdb_server
-fut_info_dump_line
-exit $fut_ec
-' EXIT SIGINT SIGTERM
+    fut_ec=$?
+    trap - EXIT INT
+    fut_info_dump_line
+    print_tables Wifi_Radio_Config Wifi_Radio_State Wifi_VIF_Config Wifi_VIF_State Wifi_Inet_Config Wifi_Inet_State Wifi_Credential_Config || true
+    fut_info_dump_line
+    exit $fut_ec
+' EXIT INT TERM
 
+NARGS=6
+[ $# -eq ${NARGS} ] && usage && raise "Requires exactly ${NARGS} input argument(s)" -l "tools/device/configure_sta_interface.sh" -arg
 
-NARGS=1
-[ $# -lt ${NARGS} ] && usage && raise "Requires at least ${NARGS} input argument(s)" -l "tools/device/configure_sta_interface.sh" -arg
+log "tools/device/configure_sta_interface.sh: Configure STA interface"
 
-log "tools/device/$(basename "$0"): configure_sta_interface - Configuring STA interface"
+# Pass all arguments to the configure_sta_interface shell function
 configure_sta_interface "$@" &&
-    log "tools/device/$(basename "$0"): configure_sta_interface - Success" ||
-    raise "configure_sta_interface - Failed" -l "tools/device/$(basename "$0")" -tc
+    log "tools/device/configure_sta_interface.sh: STA interface configured - Success" ||
+    raise "STA interface not configured" -l "tools/device/configure_sta_interface.sh" -tc
 
 exit 0
