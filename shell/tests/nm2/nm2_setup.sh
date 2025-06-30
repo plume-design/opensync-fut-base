@@ -1,10 +1,10 @@
 #!/bin/sh
 
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
-[ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
-[ -e "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "${PLATFORM_OVERRIDE_FILE}" ] && . "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
+[ -e "${MODEL_OVERRIDE_FILE}" ] && . "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
 
 usage()
 {
@@ -40,11 +40,3 @@ set_manager_log WM TRACE &&
 set_manager_log NM TRACE &&
     log -deb "nm2/nm2_setup.sh - Manager log for NM set to TRACE - Success" ||
     raise "set_manager_log NM TRACE - Could not set manager log severity" -l "nm2/nm2_setup.sh" -ds
-
-# Check if radio interfaces are created
-for if_name in "$@"
-do
-    wait_ovsdb_entry Wifi_Radio_State -w if_name "$if_name" -is if_name "$if_name" &&
-        log -deb "nm2/nm2_setup.sh - Wifi_Radio_State::if_name '$if_name' present - Success" ||
-        raise "Wifi_Radio_State::if_name for '$if_name' does not exist" -l "nm2/nm2_setup.sh" -ds
-done

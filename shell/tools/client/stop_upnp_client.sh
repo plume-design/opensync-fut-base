@@ -1,13 +1,8 @@
 #!/usr/bin/env bash
 
 current_dir=$(dirname "$(realpath "$BASH_SOURCE")")
-fut_topdir="$(realpath "$current_dir"/../..)"
-
-# FUT environment loading
-source "${fut_topdir}"/config/default_shell.sh
-# Ignore errors for fut_set_env.sh sourcing
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${fut_topdir}"/lib/unit_lib.sh
+fut_topdir="$(realpath "$current_dir"/../../..)"
+source "${fut_topdir}"/shell/lib/base_lib.sh
 protocol="TCP"
 
 usage() {
@@ -38,10 +33,8 @@ wlan_namespace_cmd="ip netns exec ${wlan_namespace} bash"
 trap '
     fut_ec=$?
     trap - EXIT INT
-    fut_info_dump_line
     [ -e /tmp/miniupnpd/mupnp_wan.leases ] && cat /tmp/miniupnpd/mupnp_wan.leases
     ps aux | grep iperf3 || true
-    fut_info_dump_line
     exit $fut_ec
 ' EXIT INT TERM
 

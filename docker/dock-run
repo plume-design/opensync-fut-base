@@ -1,4 +1,5 @@
-#!/bin/sh -ae
+#!/usr/bin/env sh
+set -ae
 
 DOCKER_START_FLAG=${DOCKER_START_FLAG:-"-ai"}
 OPENSYNC_ROOT="$(dirname "$(dirname "$(readlink -f "$0")")")"

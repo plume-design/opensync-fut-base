@@ -3,9 +3,9 @@ import sys
 from itertools import product
 from pathlib import Path
 
-from config.defaults import all_pytest_flags, channel_keywords, radio_band_keywords, radio_band_list
+from config.defaults import all_pytest_flags, all_radio_bands, channel_keywords, radio_band_keywords
+from framework.handlers.pod_handler import PodHandler
 from framework.lib.fut_lib import load_reg_rule, validate_channel_ht_mode_band
-from lib_testbed.generic.pod.generic.pod_api import PodApi
 from lib_testbed.generic.util.logger import log
 
 fut_base_dir = Path(__file__).absolute().parents[2].as_posix()
@@ -29,7 +29,7 @@ for generator_name in generator_names:
 
 
 class DefaultGenClass:
-    def __init__(self, gw: "PodApi", leaf: "PodApi"):
+    def __init__(self, gw: "PodHandler", leaf: "PodHandler"):
         self.gw = gw
         self.leaf = leaf
         self.regulatory_domain = self.gw.capabilities.get_regulatory_domain()
@@ -68,7 +68,7 @@ class DefaultGenClass:
         except AttributeError:
             res = False
         if not res:
-            log.debug(f"Radio band {band} is not compatible with device")
+            log.trace(f"Radio band {band} is not compatible with device")
         return res
 
     def _check_band_channel_compatible(self, band: str, channel: int, device: str, ht_mode: str = "HT20") -> bool:
@@ -81,7 +81,7 @@ class DefaultGenClass:
             return False
         channel_supported = channel in channels
         if not channel_supported:
-            log.debug(f"Radio band {band} is not compatible with device")
+            log.trace(f"Radio band {band} is not compatible with device")
         channel_ht_mode_band_regulatory_compliant = validate_channel_ht_mode_band(
             channel,
             radio_band=band,
@@ -121,6 +121,14 @@ class DefaultGenClass:
                 | "backhaul_sta"
             ):
                 if_type = "vif"
+                # MLO backhaul and fronthaul handling
+                if (if_role in ["backhaul_sta", "backhaul_ap"] and "MLO_BH" in self.gw.supported_features) or (
+                    if_role in ["home_ap", "onboard_ap", "fhaul_ap"] and "MLO_FH" in self.gw.supported_features
+                ):
+                    interface = self.gw.capabilities.get_mld_iface(iface_type=if_role)
+                    return [(interface, if_type)]
+
+                # Legacy interface handling
                 interfaces = self.gw.capabilities.get_ifnames(iftype=if_role)
             case "uplink_gre":
                 if_type = "gre"
@@ -146,13 +154,16 @@ class DefaultGenClass:
             case "primary_wan_interface":
                 if_type = "eth"
                 interfaces = self.gw.capabilities.get_primary_wan_iface()
+            case "phy_radio_name":
+                interfaces = self.gw.capabilities.get_phy_radio_ifnames()
+                if_type = "phy"
             case _:
                 raise KeyError(f"Invalid interface role: {if_role}")
-        if isinstance(interfaces, dict) and if_type == "vif":
-            if radio_band in radio_band_list:
+        if isinstance(interfaces, dict) and if_type in ["vif", "phy"]:
+            if radio_band in all_radio_bands:
                 if_names = interfaces.get(radio_band, None)
             elif radio_band is None:
-                if_names = list(filter(None, list(interfaces.values())))
+                if_names = interfaces.values()
             else:
                 raise RuntimeError(f"Unsupported radio_band: {radio_band}")
         else:
@@ -171,13 +182,18 @@ class DefaultGenClass:
                 return False
             ht_mode_num = int(ht_mode.split("HT")[1])
             if ht_mode_num > band_max_width:
-                log.debug(
+                log.trace(
                     f"HT mode {ht_mode} for radio band {radio_band} is larger than max supported width for band of HT{band_max_width}",
                 )
                 return False
         except AttributeError:
             return False
         return True
+
+    def _case_types(self, inputs: dict) -> dict:
+        if "args_mapping" in inputs and not isinstance(inputs["args_mapping"], list):
+            inputs["args_mapping"] = list(inputs["args_mapping"])
+        return inputs
 
     def _replace_if_role_with_if_name_type(self, inputs: dict) -> dict:
         """Replace the if_role argument and values with if_name and if_type from the device capabilities."""
@@ -247,7 +263,7 @@ class DefaultGenClass:
             return inputs
         tmp_inputs = []
         for single_input in inputs["inputs"]:
-            # Expand tuples into lists ov values within the end-inclusive range of the tuple
+            # Expand tuples into lists of values within the end-inclusive range of the tuple
             tmp_input = [
                 item if not isinstance(item, tuple) else list(range(item[0], item[1] + 1)) for item in single_input
             ]
@@ -256,8 +272,7 @@ class DefaultGenClass:
         inputs["inputs"] = tmp_inputs
         return inputs
 
-    @staticmethod
-    def _implicit_insert_encryption(inputs: dict) -> dict:
+    def _implicit_insert_encryption(self, inputs: dict) -> dict:
         """Implicitly insert missing encryption parameter into test case inputs where radio_band is present."""
         if (
             "args_mapping" not in inputs
@@ -265,13 +280,12 @@ class DefaultGenClass:
             or "encryption" in inputs["args_mapping"]
         ):
             return inputs
-        radio_band_index = inputs["args_mapping"].index("radio_band")
         inputs["args_mapping"] = inputs["args_mapping"] + ["encryption"]
         encryption_index = inputs["args_mapping"].index("encryption")
         for idx, single_input in enumerate(inputs["inputs"]):
             if len(single_input) == len(inputs["args_mapping"]):
                 continue
-            encryption = "WPA3" if str(single_input[radio_band_index]).lower() == "6g" else "WPA2"
+            encryption = "WPA3" if "WPA3" in self.gw.capabilities.get_supported_security_modes() else "WPA2"
             inputs["inputs"][idx].insert(encryption_index, encryption)
         return inputs
 
@@ -455,13 +469,18 @@ class DefaultGenClass:
 
             for flag in flags:
                 flag_conf = inputs[flag]
+                if not isinstance(flag_conf, dict):
+                    config[flag] = flag_conf
+                    continue
                 flag_conf = self._inputs_int_or_str_to_list(flag_conf)
-                flag_msg = flag_conf.get("msg", f"{flag.upper()}: Uncommented {flag.upper()}")
+                flag_msg = flag_conf.get("msg", flag.upper())
                 # Do not unpack the flag if there are speficied inputs and none match the current config
                 if "inputs" in flag_conf and not any(single_input == flag_input for flag_input in flag_conf["inputs"]):
                     continue
                 config[flag] = True
                 config[f"{flag}_msg"] = flag_msg
+                if "ticket" in flag_conf:
+                    config["ticket"] = flag_conf["ticket"]
 
             configs.append(config)
         inputs["configs"] = configs
@@ -490,6 +509,7 @@ class DefaultGenClass:
         import traceback
 
         try:
+            inputs = self._case_types(inputs)
             inputs = self._replace_if_role_with_if_name_type(inputs)
             inputs = self._inputs_int_or_str_to_list(inputs)
             inputs = self._expand_permutations(inputs)

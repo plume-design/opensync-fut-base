@@ -1,15 +1,8 @@
 #!/usr/bin/env bash
 
 current_dir=$(dirname "$(realpath "$BASH_SOURCE")")
-fut_topdir="$(realpath "$current_dir"/../..)"
-
-# FUT environment loading
-# shellcheck disable=SC1091
-source "${fut_topdir}"/config/default_shell.sh &> /dev/null
-# Ignore errors for fut_set_env.sh sourcing
-# shellcheck disable=SC1091
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh &> /dev/null
-source "${fut_topdir}"/lib/unit_lib.sh &> /dev/null
+fut_topdir="$(realpath "$current_dir"/../../..)"
+source "${fut_topdir}"/shell/lib/base_lib.sh
 
 def_n_ping=5
 def_ip="1.1.1.1"
@@ -48,8 +41,7 @@ wlan_namespace_cmd="sudo ip netns exec ${wlan_namespace} bash"
 
 log "tools/client/check_internet_traffic.sh: Verify if internet traffic is ${traffic_state}ed"
 
-res=$(${wlan_namespace_cmd} -c "ping -c${n_ping} ${internet_check_ip}")
-if [ $? -eq 0 ]; then
+if ${wlan_namespace_cmd} -c "ping -c${n_ping} ${internet_check_ip}"; then
     if [ "$traffic_state" == "block" ]; then
         raise "Internet traffic is not blocked" -l "tools/client/check_internet_traffic.sh" -tc
     fi

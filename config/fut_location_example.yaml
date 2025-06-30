@@ -13,6 +13,7 @@ ssh_gateway:
   hostname: <rpi-server or its static IP address>  # configure
   user: <user>  # configure
   pass: <password>  # configure
+  type: debian  # configure: match client type: rpi - RaspberryPI, debian - x86 Debian PC
 # List of location nodes
 Nodes:
   - name: gw
@@ -23,8 +24,8 @@ Nodes:
       user: <user>  # optional: configure or remove
       pass: <password>  # optional: configure or remove
     switch:  # Network switch ports configuration.
-      gw_wan: [uplink, mn, lan]  # roles: uplink - wired WAN uplink, mn - management ssh access, lan - LAN clients
-      gw_lan: [lan]
+      gw_eth0: [uplink, mn, lan]  # roles: uplink - wired WAN uplink, mn - management ssh access, lan - LAN clients
+      gw_eth1: [lan]
   - name: l1
     id: <device serial number, example 123456789B>  # configure
     model: <device model, example PP203X>  # configure: match OSRT device model
@@ -33,8 +34,8 @@ Nodes:
       user: <user>  # optional: configure or remove
       pass: <password>  # optional: configure or remove
     switch:
-      l1_wan: [lan, mn]
-      l1_lan: [lan]
+      l1_eth0: [lan, mn]
+      l1_eth1: [lan]
   - name: l2
     id: <device serial number, example 123456789C>  # configure
     model: <device model, example PP203X>  # configure: match OSRT device model
@@ -43,13 +44,13 @@ Nodes:
       user: <user>  # optional: configure or remove
       pass: <password>  # optional: configure or remove
     switch:
-      l2_wan: [lan, mn]
-      l2_lan: [lan]
+      l2_eth0: [lan, mn]
+      l2_eth1: [lan]
     static_eth_client: e1
 # List of clients
 Clients:
   - name: w1  # Wireless client 1
-    type: rpi  # configure: match client type: rpi - RaspberryPI, linux - Gigabyte Brix or Shuttle, debian - Debian
+    type: debian  # configure: match client type: rpi - RaspberryPI, debian - x86 Debian PC
     host:
       name: rpi1
       user: <user>  # optional: configure or remove
@@ -57,7 +58,7 @@ Clients:
       netns: nswifi1  # use network namespace to separate services, network interfaces, and traffic
     wifi: true
   - name: w2  # Wireless client 2
-    type: rpi  # configure: match client type: rpi - RaspberryPI, linux - Gigabyte Brix or Shuttle, debian - Debian
+    type: debian  # configure: match client type: rpi - RaspberryPI, debian - x86 Debian PC
     host:
       name: rpi2
       user: <user>  # optional: configure or remove
@@ -65,7 +66,7 @@ Clients:
       netns: nswifi1
     wifi: true
   - name: w3  # Wireless client 3
-    type: rpi
+    type: debian
     host:
       name: localhost  # specify 'localhost' to use server device for this wireless client
       user: <user>  # optional: configure or remove
@@ -73,7 +74,7 @@ Clients:
       netns: nswifi1
     wifi: true
   - name: e1  # Ethernet wired client 1
-    type: rpi  # configure: match client type: rpi - RaspberryPI, linux - Gigabyte Brix or Shuttle, debian - Debian
+    type: debian  # configure: match client type: rpi - RaspberryPI, debian - x86 Debian PC
     host:
       name: rpi1
       user: <user>  # optional: configure or remove
@@ -81,7 +82,7 @@ Clients:
       netns: nseth305
     eth: true
   - name: e2  # Ethernet wired client 2
-    type: rpi  # configure: match client type: rpi - RaspberryPI, linux - Gigabyte Brix or Shuttle, debian - Debian
+    type: debian  # configure: match client type: rpi - RaspberryPI, debian - x86 Debian PC
     host:
       name: rpi2
       user: <user>  # optional: configure or remove
@@ -90,7 +91,7 @@ Clients:
     eth: true
     vlan: 351  # if two network namespaces are used on the same device, vlan is needed
   - name: e3  # Ethernet wired client 3
-    type: rpi  # configure: match client type: rpi - RaspberryPI, linux - Gigabyte Brix or Shuttle, debian - Debian
+    type: debian  # configure: match client type: rpi - RaspberryPI, debian - x86 Debian PC
     host:
       name: rpi2
       user: <user>  # optional: configure or remove
@@ -99,7 +100,7 @@ Clients:
     eth: true
     vlan: 352  # if two network namespaces are used on the same device, vlan is needed
   - name: bt1  # Bluetooth client 1
-    type: rpi
+    type: debian
     host:
       name: rpi1
       user: <user>  # optional: configure or remove
@@ -136,20 +137,20 @@ Switch:
     port: 8023  # telnet access to network switch, for dynamic configuration changes
     alias:
       - backhaul: 303  # GW primary_wan_interface
-        name: gw_wan  # configure: can be wan or lan, depending on the device model
+        name: gw_eth0  # configure: can be wan or lan, depending on the device model
         port: 3
       - backhaul: 309  # GW primary_lan_interface
-        name: gw_lan  # configure: can be wan or lan, depending on the device model
+        name: gw_eth1  # configure: can be wan or lan, depending on the device model
         port: 9
       - backhaul: 304  # Leaf1 primary_wan_interface
-        name: l1_wan  # configure: can be wan or lan, depending on the device model
+        name: l1_eth0  # configure: can be wan or lan, depending on the device model
         port: 4
       - backhaul: 310  # Leaf1 primary_lan_interface
-        name: l1_lan  # configure: can be wan or lan, depending on the device model
+        name: l1_eth1  # configure: can be wan or lan, depending on the device model
         port: 10
       - backhaul: 305  # Leaf2 primary_wan_interface
-        name: l2_wan  # configure: can be wan or lan, depending on the device model
+        name: l2_eth0  # configure: can be wan or lan, depending on the device model
         port: 5
       - backhaul: 311  # Leaf2 primary_lan_interface
-        name: l2_lan  # configure: can be wan or lan, depending on the device model
+        name: l2_eth1  # configure: can be wan or lan, depending on the device model
         port: 11

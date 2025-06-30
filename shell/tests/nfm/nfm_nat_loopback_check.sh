@@ -1,10 +1,8 @@
 #!/bin/sh
 
-# FUT environment loading
-# shellcheck disable=SC1091
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
 
 usage()
 {

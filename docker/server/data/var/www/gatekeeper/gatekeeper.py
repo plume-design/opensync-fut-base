@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
 import logging
+import signal
+import sys
 
 from docker.server.data.var.www.gatekeeper.lib import gatekeeper_io
 from flask import Flask
@@ -47,5 +49,12 @@ def gatekeeper_test(path):
     }
 
 
+def signal_handler(sig, frame):
+    sys.exit(0)
+
+
 if __name__ == "__main__":
+    # Accept signal interrupts
+    for sig in [signal.SIGINT, signal.SIGTERM]:
+        signal.signal(sig, signal_handler)
     app.run(host="0.0.0.0", port=5000, debug=True)

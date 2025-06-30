@@ -1,19 +1,22 @@
-from enum import Enum
+import json
+import os
 from pathlib import Path
 
+import allure
 import pytest
 
-from config.defaults import unit_test_exec_name, unit_test_resource_dir, unit_test_subdir
-from framework.lib.fut_lib import determine_required_devices, find_filename_in_dir, output_to_json, print_allure
-from framework.tools import fut_setup
-from lib_testbed.generic.util.logger import log
+from framework.generators.fut_gen import FutTestConfigGenClass
+from framework.handlers.pod_handler import PodHandler
+from framework.lib.fut_fixtures import resolve_pod_obj
+from framework.lib.fut_lib import get_testbed_name, read_md_description
+from lib_testbed.generic.util.config import load_tb_config
 
-
-pytest.expected_shell_result = 0
 # Global variable that defines the managers which are tracked as part of the OpenSync process restart feature
 pytest.tracked_managers = ["dm"]
 pytest_plugins = [
     "framework.lib.fut_allure",
+    "framework.lib.fut_fixtures",
+    "lib_testbed.generic.pytest_plugins.logger_configurator",
 ]
 if Path("internal/pytest_plugins").is_dir():
     pytest_plugins.extend(
@@ -41,151 +44,118 @@ def pytest_addoption(parser):
     )
 
 
-def pytest_sessionstart():
-    unit_test_file_list = find_filename_in_dir(
-        directory=Path(unit_test_resource_dir).joinpath(unit_test_subdir).as_posix(),
-        pattern=unit_test_exec_name,
-    )
-    unit_test_files = [{"unit_test_file": file} for file in unit_test_file_list]
-    if unit_test_files:
-        pytest.unit_test_files = unit_test_files
+def _generate_test_configs():
+    try:
+        testbed_name = os.getenv("OPENSYNC_TESTBED", get_testbed_name())
+        testbed_cfg = load_tb_config(location_file=f"{testbed_name}.yaml", skip_deployment=True)
+        gw_obj = resolve_pod_obj(name="gw", index=0, config=testbed_cfg, multi_obj=False)
+        leaf_obj = resolve_pod_obj(name="l1", index=1, config=testbed_cfg, multi_obj=False)
+
+        gw_handler = PodHandler(**gw_obj)
+        leaf_handler = PodHandler(**leaf_obj)
+
+        fut_test_config_generator = FutTestConfigGenClass(
+            gw=gw_handler,
+            leaf=leaf_handler,
+        )
+
+        test_configs = fut_test_config_generator.get_test_configs()
+
+        with open("config/test_case/full_test_config.json", "w") as config_file:
+            json.dump(test_configs, config_file, sort_keys=True, indent=4)
+
+        return test_configs
+    except RuntimeError as runtime_error:
+        raise RuntimeError(f"Failed to generate test configurations: {runtime_error}")
 
 
 def pytest_collection_modifyitems(config, items):
-    def _get_item_config(item):
-        try:
-            tcc = item._request.node.callspec.params
-        except AttributeError:
-            return {}
-        if isinstance(tcc, Enum):
-            return {}
-        if "cfg" not in tcc:
-            return tcc
-        if isinstance(tcc["cfg"], Enum):
-            return {}
-        return tcc["cfg"]
-
-    tests_to_run, class_mapping = [], []
-
+    """Filter tests based on CLI options."""
     if config.getoption("--run_test"):
-        specified_tc_list = config.getoption("--run_test").split(",")
+        run_test_list = config.getoption("--run_test").split(",")
+        filtered_items = []
         for item in items:
-            tc_name, sep, tc_tail = item.name.partition("[")
-            if tc_name in specified_tc_list:
-                tests_to_run.append(item)
-    else:
-        tests_to_run = items
-
-    for item in tests_to_run:
-        # Get a list of all parent nodes - used for determining device requirements
-        class_mapping.append(item.cls.__name__)
-        test_case_configuration = _get_item_config(item)
-        if test_case_configuration.get("xfail"):
-            item.add_marker(pytest.mark.xfail(reason=test_case_configuration.get("xfail_msg")))
-
-    # Remove duplicated values in the class_mapping list
-    config.test_suites = list(set(class_mapping))
-
-    items[:] = tests_to_run
+            tc_name, _sep, _tc_tail = item.name.partition("[")
+            if tc_name in run_test_list:
+                filtered_items.append(item)
+        items[:] = filtered_items
 
 
-@pytest.fixture(autouse=True, scope="session")
-def setup(request):
-    try:
-        log.debug("Entered FUT setup fixture.")
-        test_suites = request.config.test_suites
-        required_nodes, required_clients = determine_required_devices(test_suites)
-        fut_setup.pre_test_device_setup(node_devices=required_nodes, client_devices=required_clients)
-    except RuntimeError as exception:
-        raise RuntimeError(f"Failed to perform FUT setup: {exception}")
+def pytest_configure(config):
+    """Configure pytest options."""
+    config.GLOBAL_TEST_CONFIGS = _generate_test_configs()
+
+
+@pytest.fixture(scope="session")
+def full_test_config(pytestconfig):
+    return pytestconfig.GLOBAL_TEST_CONFIGS
 
 
 @pytest.fixture(scope="function")
-def update_baseline_os_pids():
-    """
-    Update the baseline OpenSync PIDs used for reboot detection.
-
-    The fixture is used in test cases where a reboot is part of the
-    test procedure, and the PIDs used in the reboot detection
-    process need to be updated.
-
-    Returns:
-        None
-    """
-    yield
-    pytest.session_baseline_os_pids = pytest.gw.opensync_pid_retrieval(tracked_node_services=pytest.tracked_managers)
+def test_config(request, pytestconfig):
+    test_name = request.node.name.removeprefix("test_")
+    return pytestconfig.GLOBAL_TEST_CONFIGS.get(test_name, [])
 
 
-@pytest.fixture(autouse=True, scope="function")
-def process_restart_detection(request):
-    """
-    Check if OpenSync related PIDs have changed.
+def _marks_for(cfg: dict) -> list:
+    """Create pytest markers for the test configuration."""
+    marks = []
+    if cfg.get("xfail"):
+        marks.append(pytest.mark.xfail(reason=cfg["xfail_msg"]))
+    if cfg.get("known_issues"):
+        marks.append(pytest.mark.known_issues)
+        marks.append(pytest.mark.xfail(reason=cfg["known_issues_msg"]))
+    return marks
 
-    The function checks if the PIDs of OpenSync related processes on
-    the device have changed, which would indicate that a reboot has
-    happened.
 
-    Returns with no action if requesting function uses marker "no_process_restart_detection"
+def pytest_generate_tests(metafunc):
+    """Dynamically parametrize tests with generated configurations."""
+    if "parametrized_test_config" in metafunc.fixturenames:
+        test_name = metafunc.function.__name__.removeprefix("test_")
+        test_config = metafunc.config.GLOBAL_TEST_CONFIGS.get(test_name, [])
+        parameters = [pytest.param(cfg, marks=_marks_for(cfg)) for cfg in test_config]
+        metafunc.parametrize("parametrized_test_config", parameters)
 
-    Returns:
-        None
 
-    """
-    yield
+def pytest_runtest_setup(item):
+    test_name = getattr(item, "originalname", item.name.partition("[")[0])
+    test_name = test_name.removeprefix("test_")
+    test_config = item.config.GLOBAL_TEST_CONFIGS.get(test_name, [])
+    # For parametrized tests, match the config to the current parameter set
+    if hasattr(item, "callspec"):
+        config = item.callspec.params.get("parametrized_test_config")
+        if not isinstance(config, dict):
+            raise TypeError(f"Expected dict for 'parametrized_test_config', got {type(config).__name__}")
+    else:
+        # Non-parametrized: use the first config, flags are the same for all list items
+        config = test_config[0] if len(test_config) > 0 else {}
 
-    if "no_process_restart_detection" in request.keywords:
+    # For non-parametrized tests, pytest markers are added to the function object after collection
+    for mark in _marks_for(config):
+        if mark.name in [mark.name for mark in item.iter_markers()]:
+            continue
+        # Items need to be added individually to avoid duplicates
+        item.add_marker(mark)
+
+    # Apply allure decorators dynamically based on the test configuration
+    if ticket := config.get("ticket"):
+        allure.dynamic.issue(ticket)
+    allure.dynamic.severity(config.get("severity", "normal"))
+
+
+def pytest_runtest_call(item):
+    test_name = getattr(item, "originalname", item.name.partition("[")[0])
+    test_name = test_name.removeprefix("test_")
+    # Apply allure decorators dynamically based on the test configuration
+    # Description must be applied at execution time to ensure it reflects the current test configuration
+    allure.dynamic.description(read_md_description(test_name))
+
+
+def pytest_sessionfinish(session):
+    """Save testing environment information into Allure's environment.properties file after test run."""
+    if not session.config.getoption("--alluredir"):
         return
 
-    log.debug("Executing process restart detection fixture")
-    current_os_pids = pytest.gw.opensync_pid_retrieval(tracked_node_services=pytest.tracked_managers)
+    from lib_testbed.generic.util.allure_util import AllureUtil
 
-    session_baseline_os_pids = pytest.session_baseline_os_pids.copy()
-    baseline_os_proc = sorted(session_baseline_os_pids.keys())
-    current_os_proc = sorted(current_os_pids.keys())
-    missing_os_pids = {key: session_baseline_os_pids[key] for key in baseline_os_proc if key not in current_os_proc}
-    mismatching_os_pids = {
-        key: current_os_pids[key]
-        for key in current_os_proc
-        if key in baseline_os_proc and current_os_pids[key] != session_baseline_os_pids[key]
-    }
-
-    # This modifies pytest.session_baseline_os_pids and must be done last, but before failing or exiting pytest
-    new_os_pids = {key: current_os_pids[key] for key in current_os_proc if key not in baseline_os_proc}
-    if new_os_pids:
-        pytest.session_baseline_os_pids.update(new_os_pids)
-        print_allure(f"Adding new OpenSync process PIDs to baseline: {new_os_pids}")
-
-    if missing_os_pids or mismatching_os_pids:
-        print_allure(
-            "\n".join(
-                [
-                    "Current OpenSync process PIDs:",
-                    f"{output_to_json(current_os_pids, convert_only=True)}",
-                    "mismatch the baseline OpenSync process PIDs:",
-                    f"{output_to_json(session_baseline_os_pids, convert_only=True)}",
-                    "Current OpenSync processes with different PID in baseline:",
-                    f"{output_to_json(mismatching_os_pids, convert_only=True)}",
-                    "Baseline OpenSync processes that are currently missing:",
-                    f"{output_to_json(missing_os_pids, convert_only=True)}",
-                ],
-            ),
-        )
-        os_restart_msg = "Unexpected OpenSync restart detected."
-
-        if request.config.getoption("disable_strict_process_restart_detection"):
-            pytest.session_baseline_os_pids.update(mismatching_os_pids)
-            print_allure(f"Updating baseline OpenSync process PIDs: {mismatching_os_pids}")
-            pytest.fail(reason=os_restart_msg)
-        else:
-            pytest.exit(reason=os_restart_msg, returncode=1)
-
-
-def pytest_sessionfinish():
-    try:
-        server = pytest.server
-        log.info("Performing docker container cleanup on the server device")
-        assert server.execute("server_docker_cleanup", suffix=".py", folder="docker/server")[0] == 0
-    except AttributeError as exception:
-        log.debug(f"Unable to perform docker container cleanup on the server device: {exception}")
-    except Exception as exception:
-        log.warning(f"Unable to perform docker container cleanup on the server device: {exception}")
+    AllureUtil(session.config).save_cached_environment_info()

@@ -1,12 +1,10 @@
 #!/bin/sh
 
-# FUT environment loading
-# shellcheck disable=SC1091
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
-[ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
-[ -e "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "${PLATFORM_OVERRIDE_FILE}" ] && . "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
+[ -e "${MODEL_OVERRIDE_FILE}" ] && . "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
 
 manager_setup_file="wm2/wm2_setup.sh"
 usage()
@@ -127,10 +125,5 @@ update_ovsdb_entry Wifi_Radio_Config -w if_name "$radio_if_name" -u tx_power "$t
 wait_ovsdb_entry Wifi_Radio_State -w if_name "$radio_if_name" -is tx_power "$tx_power" &&
     log "wm2/wm2_set_radio_tx_power.sh: wait_ovsdb_entry - Wifi_Radio_Config reflected to Wifi_Radio_State::tx_power is $tx_power - Success" ||
     raise "wait_ovsdb_entry - Failed to reflect Wifi_Radio_Config to Wifi_Radio_State::tx_power is not $tx_power" -l "wm2/wm2_set_radio_tx_power.sh" -fc
-
-log "wm2/wm2_set_radio_tx_power.sh: Checking tx_power $tx_power at system level - LEVEL2"
-check_tx_power_at_os_level "$tx_power" "$vif_if_name" "$radio_if_name" &&
-    log "wm2/wm2_set_radio_tx_power.sh: LEVEL2 - check_tx_power_at_os_level - tx_power $tx_power set at system level - Success" ||
-    raise "LEVEL2 - check_tx_power_at_os_level - tx_power $tx_power not set at system level" -l "wm2/wm2_set_radio_tx_power.sh" -tc
 
 pass

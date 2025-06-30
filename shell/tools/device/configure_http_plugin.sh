@@ -1,15 +1,11 @@
 #!/bin/sh
 
-# FUT environment loading
-# shellcheck disable=SC1091
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
-[ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
-[ -e "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "${PLATFORM_OVERRIDE_FILE}" ] && . "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
+[ -e "${MODEL_OVERRIDE_FILE}" ] && . "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
 
-# Default of_port must be unique between fsm tests for valid testing
-of_port_default=10002
 usage() {
     cat << usage_string
 tools/device/configure_http_plugin.sh [-h] arguments
@@ -61,6 +57,7 @@ insert_ovsdb_entry Openflow_Tag \
     -i cloud_value '["set",["'${client_mac}'"]]'
 
 # Insert egress rule to Openflow_Config
+# shellcheck disable=SC2016
 insert_ovsdb_entry Openflow_Config \
     -i token "dev_flow_http_out" \
     -i table 0 \

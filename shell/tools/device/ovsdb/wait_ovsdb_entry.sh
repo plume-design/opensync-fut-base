@@ -1,12 +1,11 @@
 #!/bin/sh
 
-# FUT environment loading
 # Script echoes single line so we are redirecting source output to /dev/null
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh &> /dev/null
-source /tmp/fut-base/shell/config/default_shell.sh &> /dev/null
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh" &> /dev/null
-[ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" &> /dev/null
-[ -n "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" &> /dev/null
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh &> /dev/null
+. /tmp/fut-base/shell/config/default_shell.sh &> /dev/null
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh" &> /dev/null
+[ -e "${PLATFORM_OVERRIDE_FILE}" ] && . "${PLATFORM_OVERRIDE_FILE}" &> /dev/null
+[ -e "${MODEL_OVERRIDE_FILE}" ] && . "${MODEL_OVERRIDE_FILE}" &> /dev/null
 
 
 tc_name="device/ovsdb/$(basename "$0")"

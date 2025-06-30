@@ -1,10 +1,10 @@
 #!/bin/sh
 
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
-[ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
-[ -e "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "${PLATFORM_OVERRIDE_FILE}" ] && . "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
+[ -e "${MODEL_OVERRIDE_FILE}" ] && . "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
 
 usage()
 {
@@ -59,7 +59,6 @@ log "wpd/wpd_stop_opensync.sh: Wait for ${WPD_TIMEOUT_WDPING} seconds for first 
 sleep ${WPD_TIMEOUT_WDPING}
 sleep 1  # Avoid race conditions
 
-pre_cmd_time=$(date +%s)
 log "wpd/wpd_stop_opensync.sh: Stopping OpenSync."
 stop_managers
 log "wpd/wpd_stop_opensync.sh: Issue ping and wait for ${wpd_ping_timeout} seconds for WPD to timeout."
@@ -81,7 +80,7 @@ start_managers
 log "wpd/wpd_stop_wpd.sh: System watchdog did not reset the system for ${wpd_ping_timeout} seconds."
 
 log "wpd/wpd_check_flags.sh: Flush logs by killing all background processes."
-kill $(jobs -p) >/dev/null 2>&1 || true
+jobs -p | xargs -r kill >/dev/null 2>&1 || true
 
 log "wpd/wpd_stop_opensync.sh: Inspecting logs for correct entries."
 test_str="Failed to get ping from managers. Watchdog will soon bite"

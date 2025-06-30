@@ -1,12 +1,10 @@
 #!/bin/sh
 
-# FUT environment loading
-# shellcheck disable=SC1091
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
-[ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
-[ -e "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "${PLATFORM_OVERRIDE_FILE}" ] && . "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
+[ -e "${MODEL_OVERRIDE_FILE}" ] && . "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
 
 usage() {
     cat <<usage_string
@@ -43,9 +41,6 @@ port_num=$2
 
 log_title "tools/device/validate_port_forward_entry_in_iptables.sh: Verify port forwarding in the iptable rules"
 
-wait_for_function_response 0 "iptables -t nat -vnL | grep -E \"tcp dpt:${port_num}.*to:${client_ip_addr}:${port_num}\""
-if [ $? -eq 0 ]; then
-    log -deb "tools/device/validate_port_forward_entry_in_iptables.sh: Port number ${port_num} is successfully forwarded - Success"
-else
+wait_for_function_response 0 "iptables -t nat -vnL | grep -E \"tcp dpt:${port_num}.*to:${client_ip_addr}:${port_num}\"" &&
+    log -deb "tools/device/validate_port_forward_entry_in_iptables.sh: Port number ${port_num} is successfully forwarded - Success" ||
     raise "Port number ${port_num} failed to forward!" -l "tools/device/validate_port_forward_entry_in_iptables.sh" -tc
-fi

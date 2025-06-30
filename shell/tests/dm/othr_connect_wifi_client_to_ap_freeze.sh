@@ -1,12 +1,10 @@
 #!/bin/sh
 
-# FUT environment loading
-# shellcheck disable=SC1091
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
-[ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
-[ -e "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "${PLATFORM_OVERRIDE_FILE}" ] && . "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
+[ -e "${MODEL_OVERRIDE_FILE}" ] && . "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
 
 freeze_src_token="device_freeze_src"
 freeze_dst_token="device_freeze_dst"
@@ -138,7 +136,8 @@ nb_device_freeze()
         -i enable true ||
             raise "Could not insert entry to Netfilter table" -l "othr/othr_connect_wifi_client_to_ap_freeze.sh" -fc
 
-    # ebtables rules for the CONNECTION user-defined chain
+    # ebtables rules for the CONNECTION user-defined chain, the rule notation is intentional
+    # shellcheck disable=SC2016
     insert_ovsdb_entry Netfilter \
         -i chain "CONNECTION" \
         -i enable true \
@@ -151,6 +150,7 @@ nb_device_freeze()
         -i target "DROP" ||
             raise "Could not insert entry to Netfilter table" -l "othr/othr_connect_wifi_client_to_ap_freeze.sh" -fc
 
+    # shellcheck disable=SC2016
     insert_ovsdb_entry Netfilter \
         -i chain "CONNECTION" \
         -i enable true \
@@ -225,6 +225,7 @@ nb_device_freeze()
             raise "Could not insert entry to Netfilter table" -l "othr/othr_connect_wifi_client_to_ap_freeze.sh" -fc
 }
 
+# shellcheck disable=SC2016
 ovs_device_freeze()
 {
     ${OVSH} i Openflow_Config action:=drop bridge:="${lan_bridge}" priority:=200 rule:='dl_src=${frozen}' table:=0 token:=${freeze_src_token} &&

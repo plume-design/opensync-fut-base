@@ -2,499 +2,624 @@
 
 Welcome to OpenSync Functional Unit Testing (FUT) release notes. See what has changed with the latest release.
 
-## Release FUT-2.4
+## Release FUT-2.6
 
-This [version](../.version) of FUT supports the following OpenSync releases:
+This [version](../.version) of FUT supports the following OpenSync releases on these reference devices:
 
-- 6.4.0.0
-- 5.6.0.0
+- `PP443Z`: `6.6.0`
+- `PP703X`: `6.6.0`, `7.0.0`
+- `FILOGIC880-BE19000`: `6.6.0`
+
+The `debian-server` and `debian-client` version required for FUT is `3.0.59`. The `RPI server` and `RPI client` version
+required for FUT is `2.0-209`. Due to a regression in the client driver, the recommended `debian-client` version for
+testbeds with non-WiFi-7 devices remains `3.0.41`.
 
 ## New Features
 
-Added coverage for `TPSM - OpenSync Third Party Service Manager`, to the FUT framework. A new test case
-`tpsm_crash_speedtest_verify_reporting` was implemented, that verifies error reporting when speedtest services crash.
-Existing test cases were updated to the latest OpenSync standard.
+FUT now supports MLO fronthaul in test cases.
 
-Added coverage for the `WDS` OpenSync feature to the FUT framework.
+FUT now supports MLO backhaul in test cases.
 
-Added coverage for the `NAT loopback` OpenSync feature to the FUT framework.
+A new mechanism was introduced for dynamic generation and loading of test configurations via pytest hooks and fixtures.
+This includes the implementation of new device management handlers with cached properties and corresponding pytest
+fixtures. File transfer procedures have been improved and simplified, alongside the standardization of test fixture
+arguments. Automated firmware download fixtures were added for UM tests, and testbed pod initialization was simplified.
+Legacy device handlers, the `test_suite_device_requirements.yaml` file, and redundant pytest fixtures have been removed.
 
-Added coverage for `WPD - Watchdog Proxy Daemon` to the FUT framework.
+A mechanism was introduced to load `<MODEL>_known_issues.py` files similar to `<TEST_SUITE>_inputs.py` and combine them
+into test case configurations with the framework generators. The known issues files are model and version specific, and
+are intended to store known FW issues. When a test session is started, the specified test cases are marked with a pytest
+marker names `known_issue` to make them easy to recognize, and with the `xfail` marker, which turns test failures into
+skipped tests in the Allure report, while still executing the test, in case the firmware bug is fixed, and to be able to
+inspect logs without tainting results.
 
-Changed the method used for device bridge type retrieval. The new method defines the bridge type based on the
-`ovs_version` field in the `AWLAN_Node` table.
+Changed the default encryption used throughout FUTs to `WPA3`. Unless stated otherwise, all test cases will use this
+security mode.
 
-An additional cleanup step was added to the `wm2_wds_backhaul_traffic_capture` test case. It ensures that the client
-interface is set back to STA mode.
+Added the possibility to mark tests with `xfail` if the test case configuration contains this key.
 
-The shell `log()` function implementation was changed from using `if` statements to `switch` statements. This produces
-less printout when using `set -x` for development or debugging.
+Lower the `tx_power` on device radios at pytest session start. Do this only if the device supports this feature.
 
-The following flags in shell functions were removed:
+Removed the following deprecated test cases:
 
-- `log -wrn`
-- `raise -nf`
-- `raise -f`
-- `raise -osc`
-- `raise -oe`
-- `raise -ow`
+- `test_cm2_ble_status_cloud_down`
+- `test_cm2_ble_status_internet_block`
+- `test_wm2_check_wpa3_with_wpa2_multi_psk`
+- `test_wm2_leaf_ht_mode_change`
+- `test_wm2_set_wifi_credential_config`
+- `test_wm2_wifi_security_mix_on_multiple_aps`
 
-Some shell functions were moved from `base_lib.sh` to `unit_lib.sh` and `docstrings` were added:
+Framework logging is enhanced and simplified. `SSH` commands are no longer shown in its entirety on `DEBUG` level, only
+on `TRACE` level. Instead, only the command is logged that is executed on the remote device.
 
-- `contains_element()`
-- `get_index_in_list()`
-- `get_by_index_from_list()`
+Added a new test case `dm_verify_max_memory` that verifies whether `DM` terminates the `OpenSync` process that consumes
+too much memory. The process crash is reported via the `MQTT`.
 
-The unnecessary `FAIL` string was removed from all calls to the `raise()` shell function. The format was unified and
-changed to include the failure type already.
+Added a new test case for the OpenSync restart reporting feature.
 
-Various shell script errors that were reported by the `shellcheck` static analysis tool were fixed in this release.
+Added a new test case to verify the remotely triggered device reboot functionality.
 
-Checking the device WPA3 support was simplified and made faster. The code bloat in the
-`tools/device/check_wpa3_compatibility.sh` script was removed and error logging in shell functions was removed in favor
-of simply returning the correct exit code.
+Added a new test cases for verifying reduced disruptions caused by radar events.
 
-The shell function `cm_disable_fatal_state` was renamed to `disable_fatal_state` to better reflect the functionality.
+Added new test cases for Latency Optimisation under Variable Load with active measurements for Fixed Wireless Access - FWA
+scenarios, handled by the QOSM.
 
-Part of the function `check_ovsdb_entry()` was split into `check_ovsdb_entry_transact()` to minimize execution time and
-error logs when the condition is not met.
+Added a new test case `sm_latency_report`, where latency stats are gathered for WAN/home-ap interfaces on the GW,
+while network traffic is generated from an associated client to the testbed server. This verifies that:
 
-The `wm2_set_radio_tx_power` and `wm2_set_radio_tx_power_neg` test cases were added back to the list of default test
-cases. The underlying features were fixed in `OpenSync` version `6.4.0`. The minimal `OpenSync` version is checked
-during the test.
+- Epping (latency measuring tool) is successfully deployed on WAN and home-ap interfaces on the GW.
+- Epping is able to gather data on those interfaces.
+- An MQTT report is generated, which contains collected latency data samples for each interface.
 
-Created the `test_wm2_transmit_rate_boost` test case.
+Added a new test case `othr_healthcheck_service` that verifies the healthcheck service is correctly configured and
+running on the device.
 
-Enhanced the `wm2_check_wpa3_with_wpa2_multi_psk` test case by implementing a ping check, instead of only verifying
-whether the client can be associated. A bug was fixed where the VIF radio index was erroneously passed to the
-`add_bridge_port.sh` script.
+Added a new test suite `QOSM` with tests concerning the Quality of Service Manager.
 
-The `clear_port_forward_in_iptables.sh` script was renamed to `flush_iptables_chain.sh` and now allows the user to
-specify which `iptables` chain should be flushed.
+Enhanced the test case `wpd_stop_wpd` with a generic solution to ensure HW clocks stay at the correct frequency. Some
+devices tie the HW watchdog clock to the processor clock, which is throttled down at times of inactivity. By
+implementing this fix, one of the CPU cores is loaded with a computationally intense repetitive task to keep it busy and
+maintain the clock frequency.
 
-The `run_iperf3_server.sh` now accepts an optional port argument, which allows the user to specify the port of the
-`iperf3` server on which to listen on and connect to.
+Add support for `mld_addr` field in common libraries. This is used instead of the `mac` field in table
+`Wifi_Associated_Clients` when the connection uses MLO.
 
-The `connect_to_fut_cloud()` now appends the FUT generated `CA` file to the device `CA` file instead of overwriting it.
-This ensures the original device `CA` remains accessible in case it is incorrectly restored.
+Markdown support has been added for test case descriptions, and the documentation structure was reorganized to a flat
+hierarchy. Automatic test case description generation has been integrated into Allure.
 
-The test case `wm2_set_radio_tx_power` inputs are changed to a list of values instead of a range.
+The NGINX rate limiting on the testbed server, used for UM tests, was changed from `1024k` to `10240k` to speed up image
+download. This decreases the setup steps of most UM test cases.
 
-Test case `nm2_ovsdb_ip_port_forward` definition file was updated after changes were made in the generators.
+Test case config files were removed for models that are no longer supported.
 
-Removed unused shell scripts and shell functions from the FUT framework.
+Test case configuration generators were enhanced with the option to override inputs completely. This is useful if
+skipping or ignoring certain inputs would be too complex.
 
-The test suite setup procedures were optimized to expect the device to be ready for testing instead of resetting the
-device every time. This both decreases execution time and allows for more time for the device to settle into a more
-stable state, thus improving stability.
+Add `log.info` to server and client setup functions in `fut_fixtures.py`.
 
-The traps in FUT shell scripts have been made more robust and posix compliant by unifying indentation, making signal
-specifications posix compliant, disarming them and calling exit explicitly.
+Unified OpenSync version checks across all test suites to ensure consistency.
 
-The framework implemented a new method `get_wpa3_support()` for the `NodeHandler` class, that does not log errors.
+Enhanced file transfer by introducing separate local and remote paths. The `self.transfers` attribute now stores a list
+of `(local path, remote path)` tuples intended for file transfer. All pytest plugins must use the same structure when
+appending directories via the `extra_transfer` attribute. This enhancement required updating supplementary functions
+such as `_get_model_override_dir()`, which was renamed to `_get_model_override_filepath()` and now returns the correct
+remote file path regardless of the local path. Using `Path.is_file()` was inappropriate since the return value reflects
+the remote location. Because local and remote paths may differ due to the enhanced transfer logic, the value is now
+normalized before being returned.
 
-The `sm_radio_type` parameter is now inferred from the `radio_band` parameter needed for the same test, and is no longer
-required in the test case inputs.
+Retrieved only the DM manager PID in `fut_fixtures.py` instead of getting all and filtering later. This reduced
+execution time and avoided unnecessary device function calls.
 
-The command used to detect the `noexec` flag on `tmpfs` disk partitions on devices under test was negated to eliminate
-error reporting in the framework, when the expected condition is met.
-
-A new method `_add_to_logs()` was introduced in the `NodeHandler` class. It adds logs to the report instead of the
-console.
-
-Framework `NodeHandler` objects now fetch information about support for individual managers in `kconfig` and their
-status in the `Node_State`table at `pytest` session start. This enhances detection of missing or unsupported test
-suites and skips test case execution more reliably.
-
-Created the `VirtualInterafce` class in `node_handler.py`, which handles all configuration tasks related to virtual
-interfaces on the devices. By creating a new instance for every configured interface it allows for easier VIF
-manipulation and information retrieval. The parameter names used in the VIF configuration procedure have been unified
-with the names of fields in OVSDB tables where possible. Redundant parameters have been removed.
-
-Added the option of configuring a multi-leaf backhaul network, using either the star or line topology.
-
-Added type hinting to all `NodeHandler` class methods.
-
-The `Ovsdb` class from `lib_testbed/generic/pod/generic/pod_lib.py` was implemented into the FUT framework. An
-additional `wait_for_value` method was added to the `Ovsdb` class, which can be used to wait for a field to have a
-specific value in an OVSDB table.
-
-The `Config` class in `fut_configurator.py` and all of its uses were removed from the FUT framework. The code
-readability was poor and the added value did not justify the maintenance cost.
-
-All `FutGen` keywords were removed from test case input files. This makes generating test case configurations from the
-test case inputs more unified and the code more easily maintained.
-
-The FUT framework was enhanced to enable running remote commands on the device in the background, so the function call
-is not blocking.
-
-The FUT framework no longer relies on the `192.168.200.10` DHCP reservation for the `gw` device `WAN` address. The
-address is retrieved from the device every time it is needed in case it is different than expected.
-
-Regulatory rules now correctly handle `UNII-4` support in devices. If certain `5GHz` channels are not supported by the
-device, the framework infers there is no support for `UNII-4` and some channel-bandwidth combinations are not allowed as
-test case inputs.
-
-Exception handling in the FUT framework was enhanced in several ways:
-
-- Redundant exception handling was removed if there was not a specific use case in mind.
-- `RuntimeError` exceptions were replaced with more specific exceptions and more information was provided in logs.
-- Generic or catch-all exceptions were replaced with more specific exceptions or removed entirely.
-- Exception casting was eliminated or the same exception was thrown with additional log information.
-- Exception formatting was unified and the `from` clause was added when casting exception types.
-
-The `sanitize_arg()` framework method was simplified and unit tested. `Int` type arguments are cast into `str` before
-`sanitize_arg()` is called.
-
-The `all_encryption_types` list was added to `defaults.py` and used in tests instead of hardcoded values.
-
-The `get_command_arguments()` method was enhanced to handle lists, tuples and sets recursively. The recursion was also
-fixed, as individual arguments were unpacked incorrectly before recursively calling the method.
-
-The unused method `get_radio_band_from_channel()` was removed.
-
-Added type hinting to various function and class methods in the FUT framework:
-
-- `DefaultGen.py`
-- `allure_parser.py`
-- `device_handler.py`
-- `fut_configurator.py`
-- `fut_gen_cli.py`
-- `fut_lib.py`
-- `fut_mqtt_tool.py`
-- `fut_setup.py`
-- `server_handler.py`
-
-The FUT framework now uses only the new `osrt` CLI tools. All usage of the legacy CLI tools was removed.
-
-Common `osrt` CLI tools now have the option to validate the location file to the provided schema. Example of use:
-`./docker/dock-run osrt validate-locations -D -x config/locations/_testbed_validation_exclude.txt`.
-
-Tracking of the `OpenSync` manager PIDs is now done by the FUT framework. The`check_manager_alive()` function in
-`unit_lib.sh` is thus redundant and was removed.
-
-Input files for the test case configuration generators are now reusing common test values, present in several tests. The
-most reused are the radio band, channel and bandwidth settings for WiFi tests.
-
-The number of test configurations per radio band was normalized. Unnecessarily duplicated `5GHz` and `6GHz` test
-configurations were removed to improve overall execution time.
-
-The monolithic implementation in `DefaultGen.py` was split into several smaller functions to improve code readability.
-
-All custom generators were removed and the `DefaultGen.py` was enhanced to make all procedures generic, but only
-executed on some test cases, where needed.
-
-Added custom keys `do_not_sort` and `expand_permutations` to test case generators.
-
-A method was introduced to expand permutations of test case inputs directly, without requiring an additional generator.
-
-Methods `get_if_name_type_from_if_role()` and `replace_if_role_with_if_name_type()` were added to test case
-configuration generators. This allows the user to specify test case inputs as interface roles, and the framework gets
-the interface name from the device model properties. This increases reliability that the values are correct for each
-device.
-
-Some variations to the keywords `channel` and `radio_band` were added to the test case configuration generators in order
-to better detect when some checks need to be performed.
-
-Many logs in the test case generators were changed from `warning` to `debug` when loading inputs and regulatory rules.
-
-FUT framework `unit tests` were updated after changes were made in the generators.
-
-The `mergedeep` library was added to the test case generators. This performs efficient merging of nested dictionaries.
-
-Test case inputs now only have the `inputs` key, the `additional_inputs` key was removed. The generator procedure was
-enhanced to correctly join generic, per-platform and per-model inputs, in this order, subsequent values override
-previous ones.
-
-The `config/defaults.py` file is populated with values commonly used in test case generators, such as default `channel`,
-`radio_band` and `ht_mode` values.
-
-Some duplicate configurations on some radio bands were removed.
-
-The `mismatch_bandwidth_list` was changed from `160MHz` to `320MHz` and a check for `max_ht_mode` was added during the
-test procedure. This minimizes the possibility of the selected bandwidth being supported, which invalidates the test. If
-the `max_ht_mode` of the band for the device is `320MHz`, the test is `skipped`. The test condition assumes that the
-bandwidth is unsupported.
-
-Test case `wm2_ht_mode_and_channel_iteration` now executes all combinations of test case inputs for `6GHz` band instead
-of a select subset.
-
-The exception handling of the `validate_channel_ht_mode_band()` method was improved.
-
-The `config.py` file was removed from the framework library. This particular file was providing classes and methods to
-handle the test case configuration. With this change, these configuration capabilities are no longer available within
-the framework. This change was made in order to improve code readability and improve efficiency by using built-in data
-structures.
-
-## Fixed Bugs
-
-Fixed the test case `onbrd_verify_dut_client_certificate_file_on_server` to adjust the certificate permissions in case
-it is not appropriate for the test procedure.
-
-Additional `CA` certificates were appended to the `ca_chain.pem` file. The new certificate authority files are used on
-the FUT test server side to authenticate client certificates in the `onbrd_verify_client_tls_connection` test case.
-
-Fixed the `wm2_transmit_rate_boost` test case. Piping `stdout` to `awk` and expecting it to filter the content does
-*not* fail, if nothing is preset in the output. This behaves differently to the `grep` command. However piping to `grep`
-after that matches the verification requirements. This change ensures the script accurately filters the packet capture
-file for the specified transmit rate and source MAC address, increasing reliability in test results.
-
-Increased the channel change timeout in the `wm2_ht_mode_and_channel_iteration` test case to prevent issues when testing
-DFS channels.
+Implemented fixes for `FILOGIC880-BE19000` MLO compatibility, which includes correcting the model properties file and
+adding additional checks to FUT test cases, which verify the validity of interfaces. This makes it possible to run FUT
+test cases on this WiFi-7 device, that uses AP interfaces instead of MLD interfaces.
 
 Replaced capabilities dictionaries with `NodeHandler` instances in the `DefaultGen` class and refactored class methods
 accordingly. Related classes and tests were refactored to accommodate this change.
 
 The `vif_reset.sh` script now checks the interface type before performing any action. This increases robustness of the
 cleanup step of `nm2_set_gateway` test case. This ensures that a VIF reset is only executed when the interface type is
-`vif`, preventing potential failures for other interface types.
+vif, preventing potential failures for other interface types.
 
-An `OpenSync` version check was added to the following test cases to prevent compatibility issues:
+An OpenSync version check was added to the following test cases to prevent compatibility issues:
 
-- `fsm_configure_test_dpi_http_request`
-- `fsm_configure_test_dpi_http_url_request`
-- `fsm_configure_test_dpi_https_sni_request`
 - `nm2_set_upnp_mode`
+- `fsm_configure_test_dpi_http_request`
+- `fsm_configure_test_dpi_https_sni_request`
+- `fsm_configure_test_dpi_http_url_request`
 - `wm2_transmit_rate_boost`
 
-Increased the `pytest` test case timeout to `720` seconds in `wm2_wifi_security_mix_on_multiple_aps` and
+The test case `wm2_verify_associated_clients` was removed. It is the same as `wm2_connect_wpa3_client` since we started
+defaulting to WPA3 encryption.
+
+The test case `wm2_connect_wpa3_client` was renamed to `wm2_connect_client`.
+
+Introduced new functions to manage pod reboots and dynamically check for device availability within tests.
+
+Added a shell function to disable all GRE interfaces during test cleanup procedures.
+
+The test framework's reliability has been improved by handling pod reboots during module setup, ensuring devices are
+properly initialized.
+
+Device initialization is now more robust by verifying that all device radios are active before proceeding with tests.
+
+System configuration is now better protected against modification during runtime by converting certain default values to
+read-only tuples.
+
+Optimized the process for retrieving PIDs by fetching the specific manager PID directly, reducing system calls and
+execution time.
+
+Replaced fixed-time delays with more reliable wait functions in shell scripts to improve test stability.
+
+Standardized the use of `ovs-vsctl` for interacting with network bridges to ensure consistent behavior across different
+device types.
+
+Test framework setup now defaults to performing a full device initialization for all required devices, increasing test
+robustness.
+
+Unified OpenSync version checks across all test suites for consistency.
+
+Enhanced Multi-Link Operation (MLO) detection logic to use feature flags for determining backhaul and fronthaul support.
+
+Various variable and internal key names were updated for better clarity and consistency throughout the framework.
+
+Test client connection methods were refactored for improved stability.
+
+Updated the Python version from `3.12` to `3.13` and downgraded the protobuf library to resolve compatibility issues.
+
+Removed a duplicate test case for verifying associated clients, as its functionality was covered by the WPA3 connection
+test.
+
+Numerous refactoring and code cleanup tasks were completed, including removing redundant code and unifying function
+calls.
+
+Test reporting was enhanced to include more dynamic information, such as ticket numbers and failure reasons for known
+issues.
+
+Renamed test case `wm2_create_wpa3_ap` to `wm2_create_ap`.
+
+Renamed test case `wm2_connect_wpa3_leaf` to `wm2_connect_leaf`.
+
+Test case `wm2_set_radio_tx_power_neg` was removed to simplify testing procedure and reduce the need for empirically
+determined test case inputs.
+
+Running the `dhclient` on the testbed client device is now more robust. Detecting an existing process and stopping it is
+now successful even if the `PID` stored in the pid file is incorrect or the process is stopped already.
+
+### Removed shell overrides
+
+Model and platform shell library override files were removed and adjustments made to test cases to make them generic.
+The files can still be used for other models, if required, each user is responsible for their own overrides.
+
+UM test cases now use `UPG_ERR_IMG_FAIL` and `UPG_ERR_FL_WRITE` interchangeably. This affects `um_corrupt_image.sh`,
+`um_set_invalid_firmware_url.sh`, `um_set_upgrade_timer.sh`.
+
+The `wm2_set_radio_tx_power` test case now allows test case input overrides to be more generic and accomodate more
+devices.
+
+The function `get_actual_chainmask()` in `wm2_set_radio_thermal_tx_chainmask` and `wm2_set_radio_tx_chainmask` was
+replaced with overridable test case inputs and the function was removed from `unit_lib.sh`.
+
+The test case `validate_radio_mac_address` was removed.
+
+The function `get_syslog_rotate_cmd()` was changed from a stub to generic implementation and the function
+`device_syslog_rotate()` was added.
+
+The function `clear_dns_cache()` was changed from a stub to generic implementation and the `cm2_dns_failure` test case
+definition.
+
+Changed the default value of the `disable_fatal_state` parameter in `_pod_handler_setup()` to `True` in
+`fut_fixtures.py`. This ensured that all required devices perform `device_init`, including OpenSync restart, at session
+start, where previously only L1 and L2 devices did. This increased test robustness at the cost of ~18 seconds of
+execution time.
+
+Replaced the combination of sleep and check with a wait function in `unit_lib.sh` for `nb_add_port_to_bridge()`.
+
+Used `ovs-vsctl` instead of `brctl` in `unit_lib.sh`, regardless of bridge type. This is the correct method for
+obtaining system information, even on devices that implement Linux native bridges.
+
+Printed Inet tables in the script trap in `wm2_setup.sh`.
+
+Ensured `MODEL_OVERRIDE_FILE` and `PLATFORM_OVERRIDE_FILE` were only added in `pod_handler.py` if configured. Paired
+with the default `/dev/null` value in `default_shell.sh`, these files are populated only when the correct pytest plugin
+is loaded. The overrides were removed and are now loaded explicitly rather than implicitly, if you decide to provide
+them for models that require them.
+
+Changed the default value of `MODEL_OVERRIDE_FILE` and `PLATFORM_OVERRIDE_FILE` in `default_shell.sh` to `/dev/null`.
+
+Enhanced `_get_model_override_dir()` in `pod_handler.py` to search only in `self.file_transfer_folders`.
+
+Updated `_find_target_path_in_root_dir()` in `fut_lib.py` to search through a list of `root_dirs` instead of a single
+one.
+
+Added an `extra_transfer` list of directories from `request.config` to `self.transfer_folders` during device handler
+setup in `fut_fixtures.py`.
+
+Added the `transfer_folders` attribute to all handler classes.
+
+Introduced `_find_target_path_in_root_dir()` as a general function to locate a target path within a root directory. Used
+this function in `_get_test_case_inputs_dirs()` in `fut_gen.py`.
+
+Removed the `wpa3_support` cached property from the `PodHandler` class and eliminated compatibility checks in
+`_configure_security_args()`. Assume all devices support WPA3. Removed the `check_wpa3_compatibility()` function from
+`unit_lib.sh`. Also removed calls to `get_wpa3_support()` from `WM2_test.py` and deleted the
+`check_wpa3_compatibility.sh` script.
+
+Removed `get_tx_power_from_os()` and updated the `wm2_set_radio_tx_power_neg` test case and its definition accordingly.
+
+Removed `check_tx_power_at_os_level()` and updated the `wm2_set_radio_tx_power` test and definition.
+
+Removed the `simulate_radar()` function from `unit_lib.sh`.
+
+Removed `check_ht_mode_at_os_level()` and updated the `wm2_set_ht_mode` test and its definition.
+
+Removed the `leaf_ht_mode_change` test case, its definition, inputs, and `check_ht_mode_at_os_level` shell file.
+
+Removed `check_channel_at_os_level()` and updated the `wm2_set_channel` test and definition.
+
+Removed `get_ht_mode_from_os()` and updated the `wm2_set_ht_mode_neg` test and definition.
+
+Removed `get_channel_from_os()` and updated the `wm2_set_channel_neg` test and definition.
+
+Removed `check_vlan_iface()` and updated the `nm2_vlan_interface` test and definition.
+
+Removed `check_tx_chainmask_at_os_level()` and updated the `wm2_set_radio_thermal_tx_chainmask` and
+`wm2_set_radio_tx_chainmask` tests and definitions.
+
+Removed `check_beacon_interval_at_os_level()` and updated the `wm2_set_bcn_int` test and definition.
+
+Updated the `nm2_set_upnp_mode` test case definition.
+
+Fixed a typo in the `test_nm2_set_upnp_mode` log in `NM2_test.py`.
+
+Passed `request.config` to all device handler fixtures and added `extra_transfer` to `put_dir` calls in setup
+procedures. This replaced the hardcoded transfer of the shell/internal directory. if it existed and had files. With the
+recent improvements in selective pytest collection, this change prevents tainting the device shell environment with
+overrides. These overrides are now opt-in, rather than assumed to always be present.
+
+Added kwargs support to the `device_test_setup()` method in `pod_handler.py` and propagated the argument to the
+`execute()` call. This allowed for overriding the path to the executed function, making internal shell scripts
+reachable.
+
+### Fixed shellcheck errors
+
+Fixed `shellcheck SC2068: Double quote array expansions to avoid re-splitting elements`.
+
+Fixed `shellcheck SC2181: Check exit code directly with e.g. if mycmd;, not indirectly with 130`.
+
+Fixed `shellcheck SC2046: Quote this to prevent word splitting`.
+
+Fixed `shellcheck SC2016: Expressions don't expand in single quotes, use double quotes for that`.
+
+Fixed `shellcheck SC1073: Couldn't parse this (thing), fix to allow more checks`.
+
+Fixed `shellcheck SC2060: Quote parameters to tr to prevent glob expansion`.
+
+Fixed `shellcheck SC2034: foo appears unused. Verify it or export it`.
+
+Fixed `shellcheck SC2002: Useless cat. Consider cmd < file | .. or cmd file | .. instead`.
+
+Fixed `shellcheck SC2091: Remove surrounding $() to avoid executing output (or use eval if intentional)`.
+
+Fixed `shellcheck SC3046: In POSIX sh, source in place of . is undefined`.
+
+Unified sourcing of shell libs and redirecting `stdout` and `stderr` to `/dev/null`. For shell scripts in
+`shell/tools/device` it is necessary to only echo to `stdout` or `stderr` whatever is needed by the calling script. If
+sourcing the library scripts is not silenced, this may end up unexpectedly in the calling scripts expected output.
+
+Replaced variable `tc_name` with hardcoded string in `nm2_configure_verify_native_tap_interface.sh`.
+
+Enhanced `unit_lib.sh::killall_process_by_name()` by sleeping between `kill` commands with different signals. This gives
+the process time to die gracefully, before continuing with the next, more aggresive signal. To save time, only sleep
+`10000` microseconds if `usleep` is available on the device, otherwise sleep `1` second.
+
+Enhanced `unit_lib.sh::contains_element()` to handle several input arguments or a single space separated string.
+
+Removed unnecessary code comments `FUT environment loading`, `SECTION START` and `SECTION STOP` in shell scripts.
+
+Unified shell scripts used on the testbed client:
+
+- Prefer using `fut_topdir` variable when only `base_lib.sh` is needed.
+- Unified script sourcing and paths.
+- Eliminated sourcing `fut_set_env.sh` as this is not generated or transferred for the client device.
+- Eliminated sourcing of `default_shell.sh` as it requires device-specific variables to be set.
+
+Removed `set -x` from `tpsm_crash_speedtest_verify_reporting.sh` that was unintentionally left in the code.
+
+Shell scripts used on the testbed server were unified:
+
+- Script sourcing and paths were unified both in logs and function calls.
+- Prefer using `fut_topdir` variable when only `rpi_lib.sh` is needed, and only export `FUT_TOPDIR` when `unit_lib.sh`
+- import is needed.
+- Added checks if the file exists for UM shell scripts.
+- Hardened shell UM scripts to handle cases where the script path given is relative, and there is no dir change needed.
+- Eliminated sourcing `fut_set_env.sh` as this is not generated or transferred for the server device.
+- Eliminated sourcing of `default_shell.sh` as it requires device-specific variables to be set.
+- Unified naming and invocation of help/usage function in scripts.
+
+Reversed import order of `fut_set_env.sh` and `default_shell.sh`. The `default_shell.sh` now has import guards
+preventing execution if key environment variables are not set, so it must be sourced after `fut_set_env.sh`.
+
+Removed comment regarding `remove_sta_interfaces_exclude` from `unit_lib.sh` since the function was previously removed.
+
+Replaced calling the `test` tool with native parameter evaluation in `default_shell.sh`.
+
+Removed shell variable `DEFAULT_WAIT_TIME` and hardcoded the value or passed as parameter from calling function.
+
+Do not modify the shell variable `PATH`, since the framework does this already when executing ssh commands. Removed
+`PATH` from the device handler `_get_shell_cfg()` function.
+
+Removed shell variable `LOGREAD` and replaced it with a config parameter provided by the framework.
+
+Removed unused variables fom `default_shell.sh` and `device_handler.py`.
+
+Removed unused import guard variables from `default_shell.sh` for shell libs that no longer exist.
+
+Removed unused variables from shell:
+
+- `CAC_TIMEOUT`
+- `MGMT_IFACE`
+- `MGMT_IFACE_UP_TIMEOUT`
+- `MGMT_CONN_TIMEOUT`
+
+Added the import guard variable to `base_lib.sh`.
+
+Fixed terminal logging for `fut_setup.py` tool and added the debug level option.
+
+Removed unused file `shell/lib/client_lib.sh`.
+
+## Fixed Bugs
+
+Fixed the retrieval of the incorrect MAC address when connecting the client device to the pod.
+
+Created new shell function `wan_link_selection_enabled()`. This function checks the new Kconfig value
+`CONFIG_TARGET_ENABLE_WAN_LINK_SELECTION` to see if OpenSync or a third party service controls the WAN link selection on
+the device. The legacy `CONFIG_TARGET_CAP_EXTENDER` value is also evaluated for backward compatibility.
+
+Fixed the `get_wifi_associated_clients()` method in `pod_lib.py` to no longer treat `00:00:00:00:00:00` as a valid MAC addresses.
+
+Fixed the kconfig dependency for the bridge type check in shell. The check is now performed by inspecting the
+`ovs_version` filed of the `AWLAN_Node` OVSDB table. This fix was previously done in the framework, and now the two are
+identical.
+
+Moved test cases `test_nm2_verify_linux_traffic_control_rules` and
+`test_nm2_verify_linux_traffic_control_template_rules` in the NM suite to `test_qosm_verify_linux_traffic_control_rules`
+and `test_qosm_verify_linux_traffic_control_template_rules` in the QOSM suite.
+
+Fixed `test_dm_verify_reboot_reason` failures due to a Python error: `UnboundLocalError: cannot access local variable
+'log_tail_local_path' where it is not associated with a value.`
+
+Added missing `arping_cmd` value to `unit_lib.sh`.
+
+Fixed the test case `tpsm_verify_ookla_speedtest_bind_reporting` to wait for the process PID for some time instead of
+only checking once without delay.
+
+Fixed test case `test_onbrd_verify_model_awlan_node` by using `model_org` instead of `model` attribute in the testbed
+configuration. The difference between these attributes is the change done by `DeviceCommon.convert_model_name()`. Each
+value should be used for its own purpose.
+
+Added a check of the wireless manager to the FUT framework. The `wm2_set_wifi_credential_config` test case is executed
+only on devices using the WM2 wireless manager.
+
+Fixed the `AW_Debug` entry parameters used to enable TRACE logs for OWM.
+
+Fixed the test case `test_onbrd_verify_client_tls_connection` that occasionally failed during the setup procedure if a
+`cloud_listener` process was not already running.
+
+Fixed the `wm2_transmit_rate_boost` test case. Piping stdout to awk and expecting it to filter the content does not
+fail, if nothing is preset in the output. This behaves differently to the grep command. However piping to grep after
+that matches the verification requirements. This change ensures the script accurately filters the packet capture file
+for the specified transmit rate and source MAC address, increasing reliability in test results.
+
+Increased the channel change timeout in the `wm2_ht_mode_and_channel_iteration` test case to prevent issues when testing
+DFS channels.
+
+Increased the pytest test case timeout to `720` seconds in `wm2_wifi_security_mix_on_multiple_aps` and
 `wm2_create_all_aps_per_radio` test cases.
 
-Replaced `check_ovsdb_entry()` with `wait_ovsdb_entry()` when performing the `channel availability check (CAC)` to give
-the access point some time to start.
+The test case `nm2_set_gateway` configuration is simplified to only execute on the uplink WAN ethernet port.
 
-Fixed the `pytest` test collection procedure. The presence of `swap files` in the `config/test_case/generic/` directory
-would break the test collection procedure.
+Corrected an issue where checks for associated Wi-Fi clients would only evaluate the first client in the list,
+potentially missing others.
 
-The redundant shell function `check_restore_ovsdb_server` was removed.
+Resolved a bug that could cause an error when retrieving MAC addresses from an empty list.
 
-The following shell functions were removed:
+Fixed an issue where a service would enter an endless restart loop if it crashed.
 
-- `add_interface_to_bridge()`
-- `add_ovs_bridge()`
-- `add_tap_interface()`
-- `brv_setup_env()`
-- `check_radar_event_on_channel()`
-- `check_restore_management_access()`
-- `check_sta_send_csa_message()`
-- `connect_to_wpa()`
-- `create_wpa_supplicant_config()`
-- `disable_watchdog()`
-- `enable_fatal_state_cm()`
-- `force_purge_interface_raise()`
-- `get_udhcpc_path()`
-- `get_vif_mac_from_ovsdb()`
-- `insert_wifi_stats_config()`
-- `manipulate_iptables_protocol()`
-- `nb_start_ovsdb_server()`
-- `ovs_start_openswitch()`
-- `remove_bridge_interface()`
-- `restart_dhclient()`
-- `start_openswitch()`
-- `start_qca_hostapd()`
-- `start_qca_wpa_supplicant()`
-- `start_udhcpc()`
-- `start_wireless_driver()`
-- `stop_healthcheck()`
-- `stop_openswitch()`
-- `stop_wireless_driver()`
-- `tap_up_cmd()`
-- `um_encrypt_image()`
-- `vif_clean()`
-- `wait_for_empty_ovsdb_table()`
+Addressed a test timeout in the `dm_verify_max_memory` test by adjusting the memory check parameters for a faster
+response.
 
-The following shell functions were renamed:
+Corrected the interface name being passed to a test script for GRE tunnel verification.
 
-- `add_bridge_port()` to `add_port_to_bridge()`
-- `nb_add_bridge_port()` to `nb_add_port_to_bridge()`
-- `ovs_add_bridge_port()` to `ovs_add_port_to_bridge()`
-- `ovs_create_bridge()` to `ovsdb_create_bridge()`
-- `ovs_delete_bridge()` to `ovsdb_delete_bridge()`
-- `ovs_gen_bridge_config()` to `ovsdb_gen_bridge_config()`
-- `ovs_remove_bridge_port()` to `ovs_remove_port_from_bridge()`
-- `remove_bridge_port()` to `remove_port_from_bridge()`
-- `set_ovs_vsctl_interface_option()` to `ovs_set_interface_option()`
+Fixed a bug in a GRE tunnel test caused by an incorrect MAC address being used.
 
-Test `onbrd_verify_client_tls_connection` procedure was enhanced and simplified to handle previously running services
-gracefully.
+Fixed an issue where a test cleanup procedure failed to disable all GRE interfaces.
 
-A shell syntax error was fixed in the test case `onbrd_verify_client_tls_connection`, fixing test failures on devices
-where the `CA` certificate file needs to be adjusted before the test procedure.
+Corrected the setup step for a speedtest crash verification test.
 
-The test case `nm2_set_upnp_mode` is now more robust. The client connectivity is maintained until the `UPnP` `WAN` lease
-is removed from the `gw` device. The test script waits for the `iptables` rule for some time to allow time to be applied
-to the system, instead of testing immediately. The `regex` was made more generic to comply with several different
-`OpenSync` versions.
+Resolved a potential error by ensuring the pod reboot function can handle an empty list of inputs.
 
-Fixed the `othr_add_client_freeze` test case to support execution on devices using Linux native bridge.
+Removed the 6GHz radio band configuration from a multi-PSK Wi-Fi client connection test to prevent failures.
 
-The code for testing the presence of the `CONFIG_CPM_TINYPROXY_PATH` kconfig option has been updated. It not only checks
-for the existence of the `tinyproxy` binary at the kconfig specified path but also validates if it is executable.
+Added a SIGKILL stop signal to the server's Docker container to ensure it exits immediately when stopped.
 
-FSM test cases no longer use hard-coded commands. Only parametrized functions from common shell libraries are used. The
-bridge type is now taken into account.
+Temporarily disabled several known flaky test cases and suites (CM2, NM2, WM2) to improve overall test run stability.
 
-The VPNM test suite was previously executed on all devices with the necessary test case inputs, as there was no reliable
-way to determine support on the device. A Kconfig value check was added, that should determine if the device supports
-executing tests these tests.
+Removed the erroneous second input parameter `port_name` in `get_all_ports_in_bridge()` calls to
+`nb_get_all_ports_in_bridge()` and `ovs_get_all_ports_in_bridge()` and improve error handling in the
+`remove_all_ports_from_bridge()` function in `unit_lib.sh`, by examining the exit code of the sub-shell used to get the
+value of ports instead of using the sub-shell directly in the for loop.
 
-## Common Test Bed Library
+Test case `wm2_dfs_cac_aborted` procedure was simplified to only wait for the correct state of the
+`Wifi_Radio_State::channels` field, not the `Wifi_Radio_State::channel` field. Waiting for the channel to change in
+`Wifi_Radio_State` after setting it in `Wifi_Radio_Config` may hide the fact that enough time has passed for CAC to
+elapse. This is no longer the case, and `30s` is chosen for this effect to be seen.
 
-### Features
+## Common Testbed Library
 
-Added `osrt validate-locations [OPTIONS] [LOCATIONS]` tool to validate location configuration files against
-`locations_schema.json` using the `JSON` schema data format. There is an option to exclude specified configuration files
-from schema validation.
+New model features were incorporated into the capabilities list.
 
-Added support for continuous `ping` on the client devices. The interval can be specified, `sudo` privilege is used for
-very small intervals. The interface can be specified. IPv6 is supported.
+`POWER_METER` was added to the capabilities enum array in `locations_schema.json`.
 
-Client WiFi sniffing: Added optional tcpdump flags and configurable log file. Fixed enabling and disabling sniffing.
-Extend capture file download time.
+A method `is_tx_power_configurable()` was added to the `Capabilities` class.
 
-Added the `wait_unavailable()` method for devices. This is useful when a reboot is expected.
+A method `is_mld_iface()` was added to the `Capabilities` class.
 
-Added support for `DFS puncturing`.
+A method `is_mlo_bh()` was added to the `Capabilities` class.
 
-Increased unit test coverage.
+A method `is_mlo_fh()` was added to the `Capabilities` class.
 
-Docker: Fixed caching and checksumming all direct `Dockerfile` downloads. The `apt install` command can use stale
-package data when reusing old images so `apt update` is always run beforehand. All `apt` commands use cache mount. Use
-`eatmydata` with all `apt` commands to avoid unnecessary `fsync` and decrease the `docker` image build time. Create
-unique docker volumes per user to ensure optimal performance. Support `docker` building from the `home` directory.
+The `client_api: disable_mlo` flag was added to allow disabling Multi-Link Operation (MLO) when requested, not only when
+the BSSID was set.
 
-Bump versions of the following packages:
+The `iw` tool is now used to look for active MLO link BSSID in `client_lib.py`.
 
-- cryptography
-- jmeter
-- mitmproxy
-- protobuf
-- pytest
-- requests
-- ubuntu
+MLO was disabled for client connect `--bssid=` on Wi-Fi 7 clients.
 
-Added the following packages:
+The `client.connect()` method now includes a `node` parameter that works with MLO.
 
-- aiofiles
-- checksumdir
-- columnify
-- databricks
-- dotenv
-- jsonschema
-- mergedeep
-- retry
-- sortedcontainers
-- sphinxcontrib-programoutput
+The `bssid_accept=` `wpa_supplicant` option now works with MLO.
 
-Removed the following packages:
+The logic for finding the active BSSID was updated to no longer rely on `wpa_cli mlo_status` and instead uses `iw link`
+and `iw info` for Wi-Fi 7 clients with MLO support.
 
-- chrome
-- cmdrunner
+The `client_lib` no longer uses fixed BSSID in `wpa_supplicant` config for MLO, and instead uses `wpa_cli roam` to move
+to the desired node.
 
-Added a method into `pod_api.py` to set the device ethernet interface speed.
+The associated clients check was enhanced to ignore `00:00:00:00:00:00` as a valid MAC address for MLO-capable clients.
 
-Added support for setting 6HGz channel topology.
+MLD address support was added to `Wifi_Associated_Clients`.
 
-Added support for setting `ip-type` for multiple nodes.
+LAN Latency Measurements were introduced, including the addition of `collect_lan_latency_stats` to `MqttClient` and
+`get_lan_latency_topic` to `MqttResolver`.
 
-Added the `wait_for_value()` method to the `Ovsdb` class in `pod_api.py`. The method can be used to wait for a field to
-have a specific value.
+The `mqtt_client` now handles all exceptions when establishing an MQTT connection to improve robustness.
 
-Added `pytest` fixtures for the `bt1` client.
+The `sta` interface type was unified to `backhaul_sta`.
 
-Added a new ovsdb method `update_value()` to update `OVSDB` values on the device without requiring a `where` statement.
+A fix was implemented for the `osrt tree` command to handle non-group commands that do not have the `.list_commands()`
+attribute.
 
-The `WiFi7` client connection procedure is more robust.
+The multiplex command in `parallelssh.py` was updated to remove unnecessary concatenation of strings.
 
-Added a `protobuf` file for 5G cellular network `MQTT` information. Added post-processing of the `mac_address` field for
-the `LatencyReport` in `MQTT` messages. MQTT messages are now generated using `fake-mqtts` based on messages from all
-pods from the location instead of relying only only on messages from the gw node. A new reference of object for
-`proto-decoder` is created and separated from the publisher (`fake-mqtt`) and receiver.
+A `wait` command was added to the client tool, allowing waiting for a client to become available.
 
-Added support for modern `HostKeyAlgorithms` for secure SSH connections to devices.
+The `cfg80211` based `tx_power` methods were moved to the generic `pod_lib`.
 
-Added debug level logs to every `SSH` call.
+The `iw` tool's `set txpower` syntax was fixed by adding the `fixed` keyword.
 
-Prefer `SLAAC` over `link-local` `IPv6` addresses when calling `client.get_client_ips()`.
+The `tx-power` setting now allows resetting to default by using "auto" or "fixed 0" when the input `tx_power` is less
+than or equal to 0.
 
-Added a `timeout` parameter to the `run_command()` method in `pod_lib.py`
+Generic `PodLib.*tx_power*()` methods now stop on the first `iw` error.
 
-Test execution is paused in case the testbed is `force-reserved`. The testbed reservation status is gathered in 10
-minute intervals, so the effect is not immediate. In case the testbed reservation can not be established again in the
-following 6 hours, pytest exits with an error.
+The `iw` tool is now used for getting and setting `tx_power` on `QSDK >= 11` and Mediatek by default.
 
-Add country code support for Morocco.
+Tx power limit setting was reworked, including renaming `limit-tx-power` to `limit-tx-power-set` and adding
+`limit-tx-power-get` commands. Options were also reworked into arguments, and `True/False` into `enabled/disabled`.
 
-Enhance support for `mtk` and `cfg80211` platforms.
+A `network namespace` property was added to `client_api`.
 
-### New `osrt` tools
+The `put_dir()` methods for `ssh_execute` and `client_lib` were unified and logging was enhanced.
 
-Added new `osrt` tools that replace the legacy CLI testbed tools. See the [user manual](user_manual.md) for more info.
+Logging was enhanced for `wait_available()`, `wait_unavailable()`, and `put_file()` in `ssh_execute.py`.
 
-Moved `pipenv` and `venv` outside of docker. Replace `pipenv` with `python` `uv`, a `Rust` based replacement. A new
-unique virtual environment is created for every `dock-run` invocation under `/tmp/` due to performance issues. Move UV
-cache to named volume, to work around FS slowness on Mac. An `ascii art` warning shows the user when a testbed is
-reserved by another user, preventing conflicts in simultaneous access. The new tools are using `processpoolexecutor`
-instead of `threadpoolexecutor` to allow for true simultaneous execution of commands on multiple devices. The `osrt`
-tools have extensive `help` messages for all commands, sub-commands and options, and feature `tab auto-completion` for
-`bash` and `zsh` shells. Piping the output of the `osrt` tools or processing with other tools changes the output from
-`pretty` to `json` or `raw`. The `osrt reserve` tool now stores the testbed reservation expiration timestamp and
-displays a countdown in the `PROMPT_COMMAND`.
+The logging level in `set_log_level()` was changed from `debug` to `trace`.
 
-Examples of available commands (not limited to):
+Logging clutter at the `DEBUG` level was reduced in `parallelssh.py` and `ssh_execute.py` by changing some debug logs to
+trace logs.
 
-``` bash
-osrt client connect --bssid=86:9f:07:00:d1:45 --ip-v4=False --ipv6=stateful w2
-osrt client upgrade --download-locally
-osrt pod boot-partition-switch
-osrt pod upgrade-multi 6.4.0,5.8.0 gw,l1
-osrt reserve get mytb* --only-free
-osrt server ssh-login-logs
-osrt server upgrade --version=stable
-osrt switch daisy-chain-set gw l1
-osrt testbed upgrade --mirror-url=<URL>
-```
+The ability to log at `TRACE = 5` level, lower than `DEBUG = 10`, was added.
 
-#### Testbed features
+`client_lib` now checks for SSH availability before attempting to get `dmesg` logs to prevent timeouts.
 
-All the tools from the testbed server `home` directory are moved into the `/tools` directory. The network switch
-configuration files are moved to the `/srv/tftp/switch-configs` directory.
+The `get_client_ips` method in `client_lib` was updated to try parsing IP output even if the return code is 255.
 
-Added support for setting port isolation on `2.5G` network switches.
+The `fqdn_check` method in `client_lib` now uses the `EXECUTE_CMD_TIMEOUT` for its default timeout.
 
-Fix an `AssertionError` when the telnet session is not closed in case of failed login attempt to the network switch.
+Client connection now retries if the wrong BSSID is selected.
 
-Added support for `Shelly Pro 4PM smart relay` as a type of `PDU`.
+The `bssid_accept` option is no longer used on RPi clients due to lack of support.
 
-Added the ability to limit client device tx power.
+The `client.set_accepted_bssid()` API was added to change which BSSID `wpa_supplicant` will associate with.
 
-Added the ability monitor the `RSSI` of a connected client device.
+Wireless clients are now always disconnected, even if they are not shown as connected, to prevent `wpa_supplicant` from
+remaining running after failed connection attempts.
 
-Collate device temperature reports.
+The "roam to bssid" feature in `connect()` is now used only for Wi-Fi 7 clients.
 
-Added support for multiple network switches per testbed in the `osrt switch` tool.
+Upgrade using `ospkg` images is now possible.
 
-#### Fixes
+The `upgrade` procedure for `BCM947622DVT` was fixed by correcting the overloaded method.
 
-Fixed client `SNR` retrieval for `QCA`.
+Unencrypted upgrade now allows different image types beyond `.img`, including `.bin` and `.pkgtb`.
 
-Windows clients now trigger a WiFi scan before connecting an access point. Encoding is force changed to UTF-8 for
-increased interoperability.
+A fix was implemented to ensure `args` are not altered to `None` in `upgrade_from_local_file()` when `fw_key` does not
+exist, preventing exceptions during unencrypted image upgrades.
 
-Fixed SSH multiplexing (muxing) to testbed devices. Fixed names are used for establishing SSH connections to devices.
-SSH muxing was broken due to a random thread name on the testbed server, which caused the device name and SSH mux file
-to be different each time. Connection speed is increased.
+The `md5sum` check in Artifactory download was fixed to correctly handle cases where the md5sum is not available.
 
-## Limitations
+The `fn-prefix` in `artifactory_lib.py` was adjusted to remove trailing hyphens.
 
-- VPNM tests may be executed while VPNM is not supported by the device, if the device has a misconfigured Kconfig file.
-- WDS tests may be executed while VPNM is not supported by the device, since there is no Kconfig value to check and the
-  feature is not only dependent on the OpenSync version.
-- The `test_dm_verify_reboot_reason` test case sometimes causes the framework to disconnect and the test to fail.
-- The `test_nfm_nat_loopback_check` test case fails due to a known firmware bug.
-- The `test_tpsm_verify_iperf3_speedtest` test case fails due to a known firmware bug.
-- The `test_um_corrupt_image` test case fails due to a known firmware bug.
-- The rapid changing of channel or bandwidth settings on wireless interfaces sometimes causes the device to take longer
-  to respond to the configured values. The tests do not implement dynamic timeouts and sometimes fail as a result.
-- The test cases requiring clients to sniff WiFi packets are sometimes unreliable and the packet capture files generated
-  by the client in monitor mode are empty.
+The `artifactory_reader` was adjusted to enhance the API request for getting a list of images by increasing the search
+depth.
+
+Prefix checking in `artifactory_reader` now supports regex.
+
+BSSID parsing was updated to handle lowercase BSSIDs returned by some clients.
+
+The `get_channel_states()` function was implemented to return `channel_states` / `cs` objects.
+
+The `pod_api` now uses the config model if SSH fails when retrieving the model.
+
+The `pod_lib` was updated to override `DE` as `EU` for country code handling.
+
+The `pod_lib` now skips exceptions when getting the OVS version.
+
+The `pod_lib` was fixed to correctly get client MAC addresses, even if the MAC is `00:00:00:00:00:00`.
+
+The `get_bssids` method in `pod_lib` now properly handles both single and multiple UUID cases when a radio band has only
+one UUID associated with it.
+
+The `eval()` function was removed from `python_list_to_ovsdb_set()` in `pod_lib.py` and replaced with a more robust type
+checking and string formatting approach.
+
+A 1-second timeout was added after stopping `tcpdump` and switching the Wi-Fi client to station mode, and before
+downloading the pcap file, to improve stability.
+
+The `pod api get_wifi_associated_clients()` method was updated to always return a list of MAC addresses, empty if no
+clients are found.
+
+Installation of editable packages was reverted to be done in separate steps in `dock-run`.
+
+Implementation was added for setting and getting bandwidth limits on switch ports, including new `set_bw_limit()` and
+`get_bw_limit()` methods.
+
+A client reboot is now triggered when `wlan0` is missing after stopping the network namespace service.
+
+Cached client data is now stored in `cached_properties` for improved performance.
+
+Clients are now rebooted in case of a driver crash while starting the sniffer.
+
+A missing `--band` option was added to the `client wmonitor` command, and `wifi_station` was fixed.
+
+The `scp_timeout` in sniffing utilities was increased and exposed as an argument to `sniff_packets_on_client` to allow
+downloading larger files.
+
+The Docker image now attempts to query systemd for the timezone.
+
+Blindly bind-mounting `/etc/localtime` in Docker was avoided.
+
+The `fastavro` version was bumped to `1.10.0` to add support for Python 3.13.
+
+Deprecated `mix_stderr` parameter was removed from `CliRunner` in `conftest.py` due to its removal in `Click 8.2.0`.
+
+The Python interpreter was bumped to version `3.13.2`.
+
+Code formatting errors were fixed in `sanity_lib.py` and `rpowerlib.py`.
+
+Support for DSS (DSA) host SSH keys was dropped.
+
+PID retrieval from commands for clients was fixed.
+
+MD5 sum hash calculation was replaced with a dedicated `get_md5sum()` method using `hashlib.md5`.

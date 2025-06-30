@@ -1,12 +1,10 @@
 #!/bin/sh
 
-# FUT environment loading
-# shellcheck disable=SC1091
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
-[ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
-[ -e "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "${PLATFORM_OVERRIDE_FILE}" ] && . "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
+[ -e "${MODEL_OVERRIDE_FILE}" ] && . "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
 
 usage()
 {
@@ -20,10 +18,10 @@ Prerequisites:
     - LEAF device associated to DUT
 Arguments:
     -h : show this help message
-    \$1 (bhaul_ap_if_name)    : used for bhaul ap interface name : (string)(required)
-    \$2 (leaf_radio_mac)      : used for LEAF radio mac          : (string)(required)
-    \$3 (gre_mtu)             : used for GRE MTU                 : (string)(required)
-    \$4 (lan_bridge_if_name)  : used for LAN bridge name         : (string)(required)
+    \$1 (bhaul_ap_inet_if_name) : used for bhaul ap interface name : (string)(required)
+    \$2 (leaf_radio_mac)        : used for LEAF radio mac          : (string)(required)
+    \$3 (gre_mtu)               : used for GRE MTU                 : (string)(required)
+    \$4 (lan_bridge_if_name)    : used for LAN bridge name         : (string)(required)
 Testcase procedure (FUT scripts call only)(example):
     # Initial DUT and REF setup
     # On DUT: ./fut-base/shell//tests/dm/othr_setup.sh wifi0 wifi1 wifi2
@@ -68,6 +66,7 @@ trap '
     fut_info_dump_line
     print_tables Wifi_Inet_Config Wifi_Inet_State
     print_tables Wifi_VIF_Config Wifi_VIF_State
+    print_tables Interface Port Bridge
     print_tables DHCP_leased_IP
     show_bridge_details
     fut_info_dump_line
@@ -75,7 +74,7 @@ trap '
 
 NARGS=4
 [ $# -ne ${NARGS} ] && usage && raise "Requires exactly ${NARGS} input argument(s)" -l "othr/configure_gre_tunnel_gw.sh" -arg
-bhaul_ap_if_name=${1}
+bhaul_ap_inet_if_name=${1}
 leaf_radio_mac=${2}
 gre_mtu=${3}
 lan_bridge_if_name=${4}
@@ -98,14 +97,14 @@ else
     raise "FAIL #2: LEAF ${leaf_sta_inet_addr} not associated" -l "tools/device/configure_gre_tunnel_gw.sh" -ds
 fi
 gre_name="pgd$(echo "${leaf_sta_inet_addr//./-}" | cut -d'-' -f3-4)"
-ap_inet_addr=$(get_ovsdb_entry_value Wifi_Inet_Config inet_addr -w if_name "${bhaul_ap_if_name}" -r)
+ap_inet_addr=$(get_ovsdb_entry_value Wifi_Inet_Config inet_addr -w if_name "${bhaul_ap_inet_if_name}" -r)
 
 # TESTCASE:
 log "tools/device/configure_gre_tunnel_gw.sh: Create GW GRE parent interface"
 create_inet_entry \
     -if_name "${gre_name}" \
     -if_type "gre" \
-    -gre_ifname "${bhaul_ap_if_name}" \
+    -gre_ifname "${bhaul_ap_inet_if_name}" \
     -gre_local_inet_addr "${ap_inet_addr// /}" \
     -gre_remote_inet_addr "${leaf_sta_inet_addr}" \
     -ip_assign_scheme "${bhaul_ip_assign_scheme}" \

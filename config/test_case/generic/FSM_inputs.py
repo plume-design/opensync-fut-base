@@ -23,7 +23,7 @@ test_inputs = {
             "test_client_cmd": "curl http://www.neverssl.com",
             "expected_action": "allowed",
         },
-        "args_mapping": def_wifi_args,
+        "args_mapping": def_wifi_args[:],
         "inputs": [
             [44, "HT40", "5g"],
             [44, "HT40", "5gl"],
@@ -35,7 +35,7 @@ test_inputs = {
             "test_client_cmd": "curl https://www.plume.com",
             "expected_action": "allowed",
         },
-        "args_mapping": def_wifi_args,
+        "args_mapping": def_wifi_args[:],
         "inputs": [
             [36, "HT20", "5g"],
             [36, "HT20", "5gl"],
@@ -47,7 +47,7 @@ test_inputs = {
             "test_client_cmd": "curl http://neverssl.com/changes",
             "expected_action": "allowed",
         },
-        "args_mapping": def_wifi_args,
+        "args_mapping": def_wifi_args[:],
         "inputs": [
             [44, "HT40", "5g"],
             [44, "HT40", "5gl"],

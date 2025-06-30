@@ -1,12 +1,10 @@
 #!/bin/sh
 
-# FUT environment loading
-# shellcheck disable=SC1091
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
-[ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
-[ -e "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "${PLATFORM_OVERRIDE_FILE}" ] && . "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
+[ -e "${MODEL_OVERRIDE_FILE}" ] && . "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
 
 manager_setup_file="um/um_setup.sh"
 um_resource_path="resource/um/"
@@ -76,9 +74,21 @@ update_ovsdb_entry AWLAN_Node -u upgrade_timer 1 &&
     log "um/um_corrupt_image.sh: update_ovsdb_entry - AWLAN_Node::upgrade_timer is 1 - Success" ||
     raise "update_ovsdb_entry - AWLAN_Node::upgrade_timer is not 1" -l "um/um_corrupt_image.sh" -fc
 
-fw_fail_code=$(get_um_code "UPG_ERR_FL_WRITE")
-log "um/um_corrupt_image.sh: Waiting for AWLAN_Node::upgrade_status to become UPG_ERR_FL_WRITE ($fw_fail_code)"
-wait_ovsdb_entry AWLAN_Node -is upgrade_status "$fw_fail_code" &&
+# Some models do not distinguish between image check and flash write
+for fw_fail_enum in "UPG_ERR_IMG_FAIL" "UPG_ERR_FL_WRITE"; do
+    fw_fail_code=$(get_um_code "${fw_fail_enum}")
+    log "um/um_corrupt_image.sh: Waiting for AWLAN_Node::upgrade_status to become ${fw_fail_enum} ($fw_fail_code)"
+    wait_ovsdb_entry AWLAN_Node -is upgrade_status "$fw_fail_code"
+    fw_fail_ec=$?
+    if [ $fw_fail_ec = 0 ]; then
+        log "um/um_corrupt_image.sh: wait_ovsdb_entry - AWLAN_Node::upgrade_status is $fw_fail_code - Success"
+        break
+    else
+        log -err "um/um_corrupt_image.sh: FAIL: wait_ovsdb_entry - AWLAN_Node::upgrade_status is not $fw_fail_code"
+    fi
+done
+
+[ $fw_fail_ec = 0 ] &&
     log "um/um_corrupt_image.sh: wait_ovsdb_entry - AWLAN_Node::upgrade_status is $fw_fail_code - Success" ||
     raise "wait_ovsdb_entry - AWLAN_Node::upgrade_status is not $fw_fail_code" -l "um/um_corrupt_image.sh" -tc
 

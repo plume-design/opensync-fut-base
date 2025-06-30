@@ -1,12 +1,10 @@
 #!/bin/sh
 
-# FUT environment loading
-# shellcheck disable=SC1091
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
-[ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" &> /dev/null
-[ -e "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" &> /dev/null
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "${PLATFORM_OVERRIDE_FILE}" ] && . "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
+[ -e "${MODEL_OVERRIDE_FILE}" ] && . "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
 
 usage()
 {
@@ -25,6 +23,7 @@ Arguments:
     (parent)                 : Wifi_VIF_State::parent                             : (str)(optional)
     (ssid)                   : Wifi_VIF_Config::ssid                              : (str)(required)
     (vif_if_name)            : Wifi_VIF_Config::if_name                           : (str)(required)
+    (network_if_name)        : Wifi_VIF_Config::network_if_name                   : (str)(optional)
     (wpa)                    : Wifi_VIF_Config::wpa                               : (bool)(required)
     (wpa_key_mgmt)           : Wifi_VIF_Config::wpa_key_mgmt                      : (str)(required)
     (wpa_oftags)             : Wifi_VIF_Config::wpa_oftags                        : (map)(required)
@@ -48,8 +47,8 @@ trap '
     exit $fut_ec
 ' EXIT INT TERM
 
-NARGS=6
-[ $# -eq ${NARGS} ] && usage && raise "Requires exactly ${NARGS} input argument(s)" -l "tools/device/configure_sta_interface.sh" -arg
+NARGS=7
+[ $# -lt ${NARGS} ] && usage && raise "Requires at least ${NARGS} input argument(s)" -l "tools/device/configure_sta_interface.sh" -arg
 
 log "tools/device/configure_sta_interface.sh: Configure STA interface"
 

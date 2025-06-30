@@ -1,63 +1,65 @@
-import allure
 import pytest
 
-from framework.fut_configurator import FutConfigurator
-from framework.lib.fut_lib import determine_required_devices, step
-from lib_testbed.generic.util.logger import log
+from framework.lib.fut_lib import get_command_arguments, reboot_pods_and_wait_available, step
 
 
-ExpectedShellResult = pytest.expected_shell_result
-pytest.fut_configurator = FutConfigurator()
-pm_config = pytest.fut_configurator.get_test_config()
+@pytest.fixture(scope="module")
+def pm_setup(request: pytest.FixtureRequest):
+    module_name = request.module.__name__.split(".")[1].split("_")[0]
+    fixturenames = {fixturename for item in request.session.items for fixturename in item.fixturenames}
+    with step(f"{module_name} module setup"):
+        handlers = []
+        if "gw_handler" in fixturenames:
+            gw_handler = request.getfixturevalue("gw_handler")
+            handlers.append(gw_handler)
+
+            manager_name = module_name.lower()
+            if manager_name.upper() not in gw_handler.kconfig_managers:
+                pytest.skip(f"{manager_name.upper()} not present on device")
+
+            if gw_handler.node_service_status[manager_name]["status"] != "enabled":
+                pytest.skip(f"{manager_name.upper()} not enabled on device")
+
+        if "l1_handler" in fixturenames:
+            l1_handler = request.getfixturevalue("l1_handler")
+            handlers.append(l1_handler)
+
+        if "l2_handler" in fixturenames:
+            l2_handler = request.getfixturevalue("l2_handler")
+            handlers.append(l2_handler)
+
+        reboot_pods_and_wait_available(handlers)
+
+        if "gw_handler" in fixturenames:
+            gw_handler.device_test_setup(test_suite_name=manager_name)
+    yield
 
 
-@pytest.fixture(scope="class", autouse=True)
-def pm_setup():
-    test_class_name = ["TestPm"]
-    nodes, clients = determine_required_devices(test_class_name)
-    log.info(f"Required devices for PM: {nodes + clients}")
-    for node in nodes:
-        if not hasattr(pytest, node):
-            raise RuntimeError(f"{node.upper()} handler is not set up correctly.")
-        node_handler = getattr(pytest, node)
-        if "PM" not in node_handler.get_kconfig_managers():
-            pytest.skip("PM not present on device")
-        node_handler.fut_device_setup(test_suite_name="pm")
-        service_status = node_handler.get_node_services_and_status()
-        if service_status["pm"]["status"] != "enabled":
-            pytest.skip("PM not enabled on device")
-    # Set the baseline OpenSync PIDs used for reboot detection
-    pytest.session_baseline_os_pids = pytest.gw.opensync_pid_retrieval(tracked_node_services=pytest.tracked_managers)
+def test_pm_verify_log_severity(pm_setup, parametrized_test_config, gw_handler):
+    with step("Preparation of testcase parameters"):
+        # Arguments from test case configuration
+        test_args = get_command_arguments(
+            parametrized_test_config.get("name"),
+            parametrized_test_config.get("log_severity"),
+        )
+
+    with step("Test Case"):
+        assert gw_handler.execute_with_logging("tests/pm/pm_verify_log_severity", test_args)[0] == 0
 
 
-class TestPm:
-    @allure.severity(allure.severity_level.NORMAL)
-    @pytest.mark.parametrize("cfg", pm_config.get("pm_verify_log_severity", []))
-    def test_pm_verify_log_severity(self, cfg: dict):
-        gw = pytest.gw
+def test_pm_trigger_cloud_logpull(pm_setup, parametrized_test_config, gw_handler):
+    with step("Preparation of testcase parameters"):
+        logread_command = gw_handler.capabilities.get_logread_command()
+        assert (
+            logread_command != "" and logread_command is not None
+        ), "Logread command is empty, check model properties file"
+        # Arguments from test case configuration
+        test_args = get_command_arguments(
+            parametrized_test_config.get("upload_location"),
+            parametrized_test_config.get("upload_token"),
+            parametrized_test_config.get("name"),
+            logread_command,
+        )
 
-        with step("Preparation of testcase parameters"):
-            # Arguments from test case configuration
-            test_args = gw.get_command_arguments(
-                cfg.get("name"),
-                cfg.get("log_severity"),
-            )
-
-        with step("Test Case"):
-            assert gw.execute_with_logging("tests/pm/pm_verify_log_severity", test_args)[0] == ExpectedShellResult
-
-    @allure.severity(allure.severity_level.NORMAL)
-    @pytest.mark.parametrize("cfg", pm_config.get("pm_trigger_cloud_logpull", []))
-    def test_pm_trigger_cloud_logpull(self, cfg: dict):
-        gw = pytest.gw
-
-        with step("Preparation of testcase parameters"):
-            # Arguments from test case configuration
-            test_args = gw.get_command_arguments(
-                cfg.get("upload_location"),
-                cfg.get("upload_token"),
-                cfg.get("name"),
-            )
-
-        with step("Test Case"):
-            assert gw.execute_with_logging("tests/pm/pm_trigger_cloud_logpull", test_args)[0] == ExpectedShellResult
+    with step("Test Case"):
+        assert gw_handler.execute_with_logging("tests/pm/pm_trigger_cloud_logpull", test_args)[0] == 0

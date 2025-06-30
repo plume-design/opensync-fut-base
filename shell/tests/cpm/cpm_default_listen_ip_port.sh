@@ -1,13 +1,11 @@
 #!/bin/sh
 
 
-# FUT environment loading
-# shellcheck disable=SC1091
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
-[ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
-[ -e "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "${PLATFORM_OVERRIDE_FILE}" ] && . "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
+[ -e "${MODEL_OVERRIDE_FILE}" ] && . "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
 
 usage()
 {
@@ -37,8 +35,8 @@ validate_tinyproxy_ip_port()
 {
     retval=1
     uuid=$(get_ovsdb_entry_value Captive_Portal _uuid -w name "default")
-    listenip=$(cat /tmp/tinyproxy/tinyproxy."$uuid".conf | grep "Listen .*" | sed 's/Listen //')
-    listenport=$(cat /tmp/tinyproxy/tinyproxy."$uuid".conf | grep "port .*" | sed 's/port //')
+    listenip=$(grep "Listen .*" /tmp/tinyproxy/tinyproxy."$uuid".conf | sed 's/Listen //')
+    listenport=$(grep "port .*" /tmp/tinyproxy/tinyproxy."$uuid".conf | sed 's/port //')
     echo "uuid, ip and port: $uuid, $listenip, $listenport"
     [ "$listenip" = "127.0.0.1" ] && [ "$listenport" = "8888" ] && retval=0
     return $retval

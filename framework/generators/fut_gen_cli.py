@@ -8,7 +8,9 @@ from pathlib import Path
 
 from fut_gen import FutTestConfigGenClass
 
-from lib_testbed.generic.pod.pod import Pod
+from framework.handlers.pod_handler import PodHandler
+from framework.lib.fut_fixtures import resolve_pod_obj
+from lib_testbed.generic.pod.generic.pod_api import PodApi
 from lib_testbed.generic.util.config import load_tb_config
 from lib_testbed.generic.util.logger import log
 
@@ -63,6 +65,14 @@ def parse_arguments():
         nargs="+",
         help="Output test configuration for given test name(s)",
     )
+    parser.add_argument(
+        "-V",
+        "--force_version",
+        required=False,
+        default=None,
+        type=str,
+        help="Force version for which test configuration is generated. If not specified, the version is taken from the testbed configuration.",
+    )
     input_args = parser.parse_args()
     return input_args
 
@@ -70,7 +80,7 @@ def parse_arguments():
 def write_json_to_file(json_data: object, filename: str) -> None:
     print(f"Saving test configuration to output {filename}")
     with open(filename, "w") as json_f:
-        json_f.write(json.dumps(json_data, sort_keys=True, indent=4))
+        json.dump(json_data, json_f, sort_keys=True, indent=4)
 
 
 if __name__ == "__main__":
@@ -82,21 +92,31 @@ if __name__ == "__main__":
     testbed_name = os.getenv("OPENSYNC_TESTBED")
     testbed_cfg = load_tb_config(location_file=f"{testbed_name}.yaml", skip_deployment=True)
 
-    device_obj = Pod()
-    gw_obj = device_obj.resolve_obj(**{"config": testbed_cfg, "nickname": "gw"})
-    leaf_obj = device_obj.resolve_obj(**{"config": testbed_cfg, "nickname": "l1"})
+    gw_obj = resolve_pod_obj(name="gw", index=0, config=testbed_cfg, multi_obj=False)
+    leaf_obj = resolve_pod_obj(name="l1", index=1, config=testbed_cfg, multi_obj=False)
 
-    for obj in [gw_obj, leaf_obj]:
-        if hasattr(obj, "override_version_specific_ifnames"):
-            obj.override_version_specific_ifnames()
+    if opts.force_version:
+
+        def opensync_version_override(self):
+            return opts.force_version
+
+        def version_override(self):
+            return opts.force_version
+
+        PodApi.opensync_version = opensync_version_override
+        PodApi.version = version_override
+
+    gw_handler = PodHandler(**gw_obj)
+    leaf_handler = PodHandler(**leaf_obj)
 
     test_config_obj = FutTestConfigGenClass(
-        gw=gw_obj,
-        leaf=leaf_obj,
+        gw=gw_handler,
+        leaf=leaf_handler,
         modules=opts.modules,
         test_list=opts.test,
+        version=opts.force_version,
     )
     gen_test_cfg = test_config_obj.get_test_configs()
-    out_filename = f"{gw_obj.model}_{leaf_obj.model}" if not opts.json else opts.json
+    out_filename = f"{gw_handler.model}_{leaf_handler.model}" if not opts.json else opts.json
     modules_str = f"_{'_'.join(opts.modules)}" if opts.modules else ""
     write_json_to_file(json_data=gen_test_cfg, filename=f"{out_filename}{modules_str}_gen.json")

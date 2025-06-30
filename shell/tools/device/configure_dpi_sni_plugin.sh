@@ -1,12 +1,10 @@
 #!/bin/sh
 
-# FUT environment loading
-# shellcheck disable=SC1091,SC2016
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
-[ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
-[ -e "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "${PLATFORM_OVERRIDE_FILE}" ] && . "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
+[ -e "${MODEL_OVERRIDE_FILE}" ] && . "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
 
 usage() {
     cat << usage_string
@@ -48,6 +46,7 @@ insert_ovsdb_entry Flow_Service_Manager_Config \
         raise "Failed to insert Walleye DPI configuration to Flow_Service_Manager_Config" -l "configure_dpi_sni_plugin.sh" -fc
 
 # Configure DPI SNI client
+# shellcheck disable=SC2016
 insert_ovsdb_entry Flow_Service_Manager_Config \
     -i handler dpi_sni \
     -i type dpi_client \
@@ -64,6 +63,7 @@ insert_ovsdb_entry Flow_Service_Manager_Config \
         raise "Failed to insert Gatekeeper configuration to Flow_Service_Manager_Config" -l "configure_dpi_sni_plugin.sh" -fc
 
 # Configure dispatcher
+# shellcheck disable=SC2016
 insert_ovsdb_entry Flow_Service_Manager_Config \
     -i handler core_dpi_dispatch \
     -i type dpi_dispatcher \
@@ -72,6 +72,7 @@ insert_ovsdb_entry Flow_Service_Manager_Config \
         log "configure_dpi_sni_plugin.sh: Dispatcher configuration inserted to Flow_Service_Manager_Config - Success" ||
         raise "Failed to insert Dispatcher configuration to Flow_Service_Manager_Config" -l "configure_dpi_sni_plugin.sh" -fc
 
+# shellcheck disable=SC2016
 insert_ovsdb_entry Flow_Service_Manager_Config \
     -i handler dpi_dns \
     -i type dpi_client \

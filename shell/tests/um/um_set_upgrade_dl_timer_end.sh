@@ -1,12 +1,10 @@
 #!/bin/sh
 
-# FUT environment loading
-# shellcheck disable=SC1091
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
-[ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
-[ -e "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "${PLATFORM_OVERRIDE_FILE}" ] && . "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
+[ -e "${MODEL_OVERRIDE_FILE}" ] && . "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
 
 manager_setup_file="um/um_setup.sh"
 um_resource_path="resource/um/"
@@ -76,15 +74,12 @@ wait_ovsdb_entry AWLAN_Node -is upgrade_status "$fw_start_code" &&
 
 dl_end_code=$(get_um_code "UPG_STS_FW_DL_END")
 log "um/um_set_upgrade_dl_timer_end.sh: Waiting for FW download to finish, AWLAN_Node::upgrade_status to become UPG_STS_FW_DL_END ('$dl_end_code')"
-wait_ovsdb_entry AWLAN_Node -is upgrade_status "$dl_end_code"
-if [ $? -eq 0 ]; then
-{
+if wait_ovsdb_entry AWLAN_Node -is upgrade_status "$dl_end_code"; then
     end_time=$(date -D "%H:%M:%S"  +"%Y.%m.%d-%H:%M:%S")
     t1=$(date -u -d "$start_time" +"%s")
     t2=$(date -u -d "$end_time" +"%s")
     download_time=$(( t2 - t1 ))
     log "um/um_set_upgrade_dl_timer_end.sh: wait_ovsdb_entry - AWLAN_Node::upgrade_status is '$dl_end_code', FW downloaded in $download_time secs - Success"
-}
 else
     raise "wait_ovsdb_entry - Failed to set AWLAN_Node::upgrade_status to $dl_end_code, FW download not finished" -l "um/um_set_upgrade_dl_timer_end.sh" -tc
 fi

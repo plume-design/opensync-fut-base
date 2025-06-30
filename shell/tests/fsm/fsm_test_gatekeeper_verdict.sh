@@ -1,12 +1,10 @@
 #!/bin/sh
 
-# FUT environment loading
-# shellcheck disable=SC1091
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
-[ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
-[ -e "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "${PLATFORM_OVERRIDE_FILE}" ] && . "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
+[ -e "${MODEL_OVERRIDE_FILE}" ] && . "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
 
 usage() {
     cat << usage_string
@@ -17,8 +15,9 @@ Arguments:
     -h  show this help message
     \$1 (url)              : Url for which verdict is requested   : (string)(required)
     \$2 (expected_verdict) : Expected verdict from the Gatekeeper : (string)(required)
+    \$3 (logread_cmd)      : The command for reading system logs  : (string)(required)
 Script usage example:
-    ./fsm/fsm_test_gatekeeper_verdict.sh fut.opensync.io/test/url allow
+    ./fsm/fsm_test_gatekeeper_verdict.sh fut.opensync.io/test/url allow logread
 usage_string
 }
 
@@ -37,12 +36,13 @@ trap '
     exit $fut_ec
 ' EXIT INT TERM
 
-NARGS=2
+NARGS=3
 [ $# -lt ${NARGS} ] && usage && raise "Requires at least ${NARGS} input argument(s)" -arg
 url=${1}
 expected_verdict=${2}
+logread_cmd=${3}
 
-fsm_message_regex="$LOGREAD |
+fsm_message_regex="$logread_cmd |
  tail -3000 |
  grep gatekeeper_get_verdict |
  grep ${url} |

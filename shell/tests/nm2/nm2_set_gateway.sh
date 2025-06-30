@@ -1,37 +1,23 @@
 #!/bin/sh
 
-# FUT environment loading
-# shellcheck disable=SC1091
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
-[ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
-[ -e "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "${PLATFORM_OVERRIDE_FILE}" ] && . "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
+[ -e "${MODEL_OVERRIDE_FILE}" ] && . "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
 
-manager_setup_file="nm2/nm2_setup.sh"
-create_radio_vif_file="tools/device/create_radio_vif_interface.sh"
-if_type_default="vif"
-gateway_default="10.10.10.200"
 usage()
 {
 cat << usage_string
 nm2/nm2_set_gateway.sh [-h] arguments
 Description:
-    - Script configures interfaces gateway through Wifi_inet_Config 'gateway' field and checks if it is propagated
-      into Wifi_Inet_State table and to the system, fails otherwise
+    - Script configures the WAN uplink interface Wifi_inet_Config 'gateway' field and checks if the value is propagated
+      into Wifi_Inet_State table and to the system default route, fails otherwise.
 Arguments:
     -h  show this help message
     \$1 (if_name) : if_name field in Wifi_Inet_Config : (string)(required)
-    \$2 (if_type) : if_type field in Wifi_Inet_Config : (string)(optional) : (default:${if_type_default})
-    \$3 (gateway) : gateway field in Wifi_Inet_Config : (string)(optional) : (default:${gateway_default})
-Testcase procedure:
-    - On DEVICE: Run: ./${manager_setup_file} (see ${manager_setup_file} -h)
-          In case of if_type==vif:
-                 Create radio-vif interface (see ${create_radio_vif_file} -h)
-                 Run: ./nm2/nm2_set_gateway.sh <IF-NAME> <IF-TYPE> <GATEWAY>
 Script usage example:
-    ./nm2/nm2_set_gateway.sh eth0 eth 10.10.10.50
-    ./nm2/nm2_set_gateway.sh wifi0 vif
+    ./nm2/nm2_set_gateway.sh eth0
 usage_string
 }
 
@@ -40,10 +26,9 @@ case "${1}" in
 esac
 
 NARGS=1
-[ $# -lt ${NARGS} ] && usage && raise "Requires at least ${NARGS} input argument(s)" -l "nm2/nm2_set_gateway.sh" -arg
+[ $# -ne ${NARGS} ] && usage && raise "Requires exactly ${NARGS} input argument(s)" -l "nm2/nm2_set_gateway.sh" -arg
 if_name=$1
-if_type=${2:-${if_type_default}}
-gateway=${3:-${gateway_default}}
+gateway="10.10.10.50"
 
 trap '
     fut_ec=$?
@@ -62,10 +47,10 @@ create_inet_entry \
     -if_name "$if_name" \
     -enabled true \
     -network true \
-    -ip_assign_scheme static \
-    -inet_addr 10.10.10.30 \
+    -ip_assign_scheme "static" \
+    -inet_addr "10.10.10.30" \
     -netmask "255.255.255.0" \
-    -if_type "$if_type" &&
+    -if_type "eth" &&
         log "nm2/nm2_set_gateway.sh: Interface $if_name created - Success" ||
         raise "Failed to create $if_name interface" -l "nm2/nm2_set_gateway.sh" -ds
 
@@ -94,8 +79,7 @@ wait_ovsdb_entry Wifi_Inet_State -w if_name "$if_name" -is ip_assign_scheme none
     raise "wait_ovsdb_entry - Failed to reflect Wifi_Inet_Config to Wifi_Inet_State::ip_assign_scheme is not 'none'" -l "nm2/nm2_set_gateway.sh" -tc
 
 # Wifi_Inet_State::gateway field can either be empty or "0.0.0.0"
-wait_ovsdb_entry Wifi_Inet_State -w if_name "$if_name" -is gateway "0.0.0.0"
-if [ $? -eq 0 ]; then
+if wait_ovsdb_entry Wifi_Inet_State -w if_name "$if_name" -is gateway "0.0.0.0"; then
     log "nm2/nm2_set_gateway.sh: wait_ovsdb_entry - Wifi_Inet_Config reflected to Wifi_Inet_State::gateway is '0.0.0.0' - Success"
 else
     log "nm2/nm2_set_gateway.sh: wait_ovsdb_entry - Wifi_Inet_State::gateway is not '0.0.0.0'"

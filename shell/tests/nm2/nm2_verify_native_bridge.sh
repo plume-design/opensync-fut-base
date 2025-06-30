@@ -1,12 +1,10 @@
 #!/bin/sh
 
-# FUT environment loading
-# shellcheck disable=SC1091
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
-[ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
-[ -e "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "${PLATFORM_OVERRIDE_FILE}" ] && . "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
+[ -e "${MODEL_OVERRIDE_FILE}" ] && . "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
 
 tc_name="nm2/nm2_verify_native_bridge.sh"
 manager_setup_file="nm2/nm2_setup.sh"
@@ -33,9 +31,6 @@ usage_string
 case "${1}" in
     -h | --help)  usage ; exit 0 ;;
 esac
-
-linux_native_bridge_enabled ||
-    raise "linux_native_bridge_enabled is false - The test case is only applicable only when Native Linux Bridge is enabled" -l "$tc_name" -s
 
 NARGS=2
 [ $# -ne ${NARGS} ] && usage && raise "Requires exactly ${NARGS} input argument(s)" -l "${tc_name}" -arg
@@ -88,8 +83,7 @@ wait_for_function_response 0 "ovsdb_create_bridge $bridge" &&
 
 # Check if the bridge is configured in the systema (LEVEL2)
 sleep $NM2_DELAY
-brctl show | grep -q "$bridge"
-if [ $? = 0 ]; then
+if brctl show | grep -q "$bridge"; then
     log "$tc_name: - LEVEL2 - bridge '$bridge' created - Success"
 else
     raise "- LEVEL2 - bridge '$bridge' not created" -l "$tc_name" -tc
@@ -142,22 +136,15 @@ remove_port_from_bridge "$bridge" "$if_name"
 sleep $NM2_DELAY
 
 # validate is the interface is removed from the bridge
-check_if_port_in_bridge "$bridge" "$if_name"
-# returns 0 if port is found in the bridge
-if [ "$?" -eq 0 ]; then
-    log "$tc_name: Interface $if_name not removed from the bridge $bridge - Fail"
+check_if_port_in_bridge "$bridge" "$if_name" &&
     raise "Interface $if_name exists on system, but should NOT" -l "$tc_name" -tc
-fi
 
 # clean up Bridge, Interface and Port tables
 ovsdb_delete_bridge "$bridge"
 sleep $NM2_DELAY
 # nb_check_if_bridge_present "$bridge"
-brctl show | grep -q "$bridge"
-if [ "$?" -eq 0 ]; then
-    log "$tc_name: Bridge $bridge not removed from the system - Fail"
+brctl show | grep -q "$bridge" &&
     raise "Interface $bridge exists on system, but should NOT" -l "$tc_name" -tc
-fi
 
 log "$tc_name: Remove interface $if_name"
 delete_inet_interface "$if_name" &&

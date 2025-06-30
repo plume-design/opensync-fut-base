@@ -1,12 +1,10 @@
 #!/bin/sh
 
-# FUT environment loading
-# shellcheck disable=SC1091
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
-[ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
-[ -e "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "${PLATFORM_OVERRIDE_FILE}" ] && . "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
+[ -e "${MODEL_OVERRIDE_FILE}" ] && . "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
 
 usage()
 {
@@ -32,8 +30,7 @@ bridge=${1}
 of_port=30001
 tap_ifname=${bridge}.dpi
 
-check_if_port_in_bridge "${bridge}" "${tap_ifname}"
-if [ $? = 0 ]; then
+if check_if_port_in_bridge "${bridge}" "${tap_ifname}"; then
     log -deb "tools/device/configure_dpi_tap_interface.sh: Port '${tap_ifname}' exists in bridge '${bridge}', removing..."
     remove_port_from_bridge "${bridge}" "${tap_ifname}" &&
         log -deb " tools/device/configure_dpi_tap_interface.sh: remove_port_from_bridge ${bridge} ${tap_ifname} - Success" ||

@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env sh
 
 # This script is used for a manual shellcheck of fut-base scripts.
 # To run shellcheck on all fut-base directories that contain shell

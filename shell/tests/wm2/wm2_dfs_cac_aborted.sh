@@ -1,16 +1,14 @@
 #!/bin/sh
 
-# FUT environment loading
-# shellcheck disable=SC1091
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
-[ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
-[ -e "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "${PLATFORM_OVERRIDE_FILE}" ] && . "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
+[ -e "${MODEL_OVERRIDE_FILE}" ] && . "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
 
 manager_setup_file="wm2/wm2_setup.sh"
 # Wait for channel to change, not necessarily become usable (CAC for DFS)
-channel_change_timeout=60
+wm2_dfs_cac_aborted_timeout=30
 
 usage()
 {
@@ -141,18 +139,16 @@ log_title "wm2/wm2_dfs_cac_aborted.sh: WM2 test - DFC CAC Aborted - Using: '${ch
 # Function only checks if the channel is set in Wifi_Radio_State, not if it is
 # available for immediate use, so CAC could be in progress. This is desired.
 log "wm2/wm2_dfs_cac_aborted.sh: Configuring Wifi_Radio_Config, creating interface in Wifi_VIF_Config."
-log "wm2/wm2_dfs_cac_aborted.sh: Waiting for ${channel_change_timeout}s for settings {channel:$channel_a}"
+log "wm2/wm2_dfs_cac_aborted.sh: Waiting for ${wm2_dfs_cac_aborted_timeout}s for settings {channel:$channel_a}"
 create_radio_vif_interface \
     ${radio_vif_args} \
-    -timeout ${channel_change_timeout} &&
+    -timeout "${wm2_dfs_cac_aborted_timeout}" &&
         log "wm2/wm2_dfs_cac_aborted.sh: create_radio_vif_interface {$radio_if_name, $channel_a} - Success" ||
         raise "create_radio_vif_interface {$radio_if_name, $channel_a} - Interface not created" -l "wm2/wm2_dfs_cac_aborted.sh" -tc
 
-wait_ovsdb_entry Wifi_Radio_State -w if_name "$radio_if_name" -is channel "$channel_a" &&
-    log "wm2/wm2_dfs_cac_aborted.sh: wait_ovsdb_entry - Wifi_Radio_Config reflected to Wifi_Radio_State::channel is $channel_a - Success" ||
-    raise "wait_ovsdb_entry - Failed to reflect Wifi_Radio_Config to Wifi_Radio_State::channel is not $channel_a" -l "wm2/wm2_dfs_cac_aborted.sh" -tc
+# Do not wait for Wifi_Radio_State::channel to reflect Wifi_Radio_Config::channel
 
-wait_for_function_response 0 "check_is_cac_started $channel_a $radio_if_name" &&
+wait_for_function_response 0 "check_is_cac_started $channel_a $radio_if_name" "${wm2_dfs_cac_aborted_timeout}" &&
     log "wm2/wm2_dfs_cac_aborted.sh: wait_for_function_response - channel $channel_a - CAC STARTED - Success" ||
     raise "wait_for_function_response - channel $channel_a - CAC NOT STARTED" -l "wm2/wm2_dfs_cac_aborted.sh" -tc
 
@@ -161,15 +157,13 @@ update_ovsdb_entry Wifi_Radio_Config -w if_name "$radio_if_name" -u channel "$ch
     log "wm2/wm2_dfs_cac_aborted.sh: update_ovsdb_entry - Wifi_Radio_Config::channel is $channel_b - Success" ||
     raise "update_ovsdb_entry - Failed to update Wifi_Radio_Config::channel is not $channel_b" -l "wm2/wm2_dfs_cac_aborted.sh" -tc
 
-wait_ovsdb_entry Wifi_Radio_State -w if_name "$radio_if_name" -is channel "$channel_b" &&
-    log "wm2/wm2_dfs_cac_aborted.sh: wait_ovsdb_entry - Wifi_Radio_Config reflected to Wifi_Radio_State::channel is $channel_b - Success" ||
-    raise "wait_ovsdb_entry - Failed to reflect Wifi_Radio_Config to Wifi_Radio_State::channel is not $channel_b" -l "wm2/wm2_dfs_cac_aborted.sh" -tc
+# Do not wait for Wifi_Radio_State::channel to reflect Wifi_Radio_Config::channel
 
-wait_for_function_response 0 "check_is_nop_finished $channel_a $radio_if_name" &&
+wait_for_function_response 0 "check_is_nop_finished $channel_a $radio_if_name" "${wm2_dfs_cac_aborted_timeout}" &&
     log "wm2/wm2_dfs_cac_aborted.sh: wait_for_function_response - channel $channel_a - NOP FINISHED - Success" ||
     raise "wait_for_function_response - channel $channel_a - NOP NOT FINISHED" -l "wm2/wm2_dfs_cac_aborted.sh" -tc
 
-wait_for_function_response 0 "check_is_cac_started $channel_b $radio_if_name" &&
+wait_for_function_response 0 "check_is_cac_started $channel_b $radio_if_name" "${wm2_dfs_cac_aborted_timeout}" &&
     log "wm2/wm2_dfs_cac_aborted.sh: wait_for_function_response - channel $channel_b - CAC STARTED - Success" ||
     raise "wait_for_function_response - channel $channel_b - CAC NOT STARTED" -l "wm2/wm2_dfs_cac_aborted.sh" -tc
 

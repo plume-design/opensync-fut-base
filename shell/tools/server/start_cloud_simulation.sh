@@ -1,15 +1,10 @@
 #!/usr/bin/env bash
 
 current_dir=$(dirname "$(realpath "$BASH_SOURCE")")
-fut_topdir="$(realpath "$current_dir"/../..)"
+fut_topdir="$(realpath "$current_dir"/../../..)"
+source "${fut_topdir}/shell/lib/rpi_lib.sh"
 
-# FUT environment loading
-source "${fut_topdir}"/config/default_shell.sh
-# Ignore errors for fut_set_env.sh sourcing
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh &> /dev/null
-source "$fut_topdir/lib/rpi_lib.sh"
-
-help()
+usage()
 {
 cat << usage_string
 Usage: ${MY_NAME} [--help|-h] [--stop|-s]
@@ -31,7 +26,6 @@ if [[ $# -eq 0 ]]; then
     exit
 fi
 
-ARGS=""
 # parse command line arguments
 while [[ "${1}" == -* ]]; do
     option="${1}"
@@ -48,5 +42,5 @@ while [[ "${1}" == -* ]]; do
     esac
 done
 
-help
+usage
 exit 1

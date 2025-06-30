@@ -1,12 +1,10 @@
 #!/bin/sh
 
-# FUT environment loading
-# shellcheck disable=SC1091
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
-[ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
-[ -e "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "${PLATFORM_OVERRIDE_FILE}" ] && . "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
+[ -e "${MODEL_OVERRIDE_FILE}" ] && . "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
 
 brv_setup_file="brv/brv_setup.sh"
 usage()
@@ -32,7 +30,8 @@ esac
 log_title "brv/brv_ovs_check_version.sh: BRV test - Verify OVS version"
 
 ovs_ver="$(get_ovs_version)"
-[ "${?}" == 0 ] && [ -n "${ovs_ver}" ] &&
+# shellcheck disable=SC2181
+[ $? -eq 0 ] && [ -n "${ovs_ver}" ] &&
     log "brv/brv_ovs_check_version.sh: Retrieved OVS version: OVS Version: ${ovs_ver}" ||
     raise "Failed to retrieve OVS version from device" -l "brv/brv_ovs_check_version.sh" -tc
 

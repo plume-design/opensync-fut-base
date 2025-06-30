@@ -7,6 +7,7 @@
 #   echo
 #   printf
 #
+export FUT_BASE_LIB_SRC=true
 echo "${FUT_TOPDIR}/shell/lib/base_lib.sh sourced"
 
 ###############################################################################

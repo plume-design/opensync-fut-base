@@ -5,58 +5,6 @@ import shutil
 from pathlib import Path
 from typing import Callable
 
-import pytest
-
-from lib_testbed.generic.pytest_plugins.allure_environment import get_osrt_snapshot
-from lib_testbed.generic.util.allure_util import AllureUtil
-from lib_testbed.generic.util.logger import log
-
-
-@pytest.fixture(scope="session", autouse=True)
-def allure_environment(request, setup):
-    log.info("Adding environment variables to the Allure report.")
-    cfg = request.config
-
-    if not hasattr(cfg.option, "config_name"):
-        cfg.option.config_name = "TestBed"
-
-    # Docker env.list file
-    envlist_filepath = Path(__file__).absolute().parents[2].joinpath("docker/env.list")
-    if not envlist_filepath.is_file():
-        envlist_filepath = envlist_filepath.parent.joinpath("env.list.base")
-    with open(envlist_filepath, "r") as envlist_file:
-        env_vars = [line.rstrip("\n").split("=")[0] for line in envlist_file.readlines()]
-    for env_var in env_vars:
-        env_value = os.getenv(env_var)
-        AllureUtil(cfg).add_environment(env_var, env_value)
-
-    fut_configurator = pytest.fut_configurator
-    AllureUtil(cfg).add_environment("fut_base_dir", fut_configurator.fut_base_dir)
-    AllureUtil(cfg).add_environment("testbed_name", fut_configurator.testbed_name)
-
-    # Environment
-    AllureUtil(cfg).add_environment("fut_release_version", fut_configurator.fut_release_version)
-
-    # Device
-    for device_nickname in ["server", "gw", "l1", "l2", "w1", "w2"]:
-        try:
-            device = getattr(pytest, device_nickname)
-        except AttributeError:
-            continue
-
-        AllureUtil(cfg).add_environment(f"{device.name}_version", device.version)
-        AllureUtil(cfg).add_environment(f"{device.name}_device_type", device.device_type)
-        AllureUtil(cfg).add_environment(f"{device.name}_username", device.username)
-        AllureUtil(cfg).add_environment(f"{device.name}_password", device.password)
-        AllureUtil(cfg).add_environment(f"{device.name}_model", device.model)
-        if device_nickname in ["gw", "l1", "l2"]:
-            AllureUtil(cfg).add_environment(f"{device.name}_bridge_type", device.get_bridge_type())
-        elif device_nickname in ["server"]:
-            AllureUtil(cfg).add_environment("opensync_root", device.opensync_root)
-            snapshot = get_osrt_snapshot(device.device_api)
-            if snapshot:
-                AllureUtil(cfg).add_environment("osrt_snapshot", snapshot)
-
 
 def _create_backup_dir(src_path: str) -> None:
     try:

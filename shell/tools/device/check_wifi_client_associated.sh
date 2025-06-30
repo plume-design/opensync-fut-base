@@ -1,12 +1,10 @@
 #!/bin/sh
 
-# FUT environment loading
-# shellcheck disable=SC1091
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
-[ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
-[ -e "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "${PLATFORM_OVERRIDE_FILE}" ] && . "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
+[ -e "${MODEL_OVERRIDE_FILE}" ] && . "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
 
 usage() {
     cat <<usage_string
@@ -42,12 +40,6 @@ client_mac=${1}
 
 log_title "tools/device/check_wifi_client_associated.sh: Verify that the client is associated to AP"
 
-wait_ovsdb_entry Wifi_Associated_Clients -w mac "$client_mac"
-if [ $? -eq 0 ]; then
-    log "tools/device/check_wifi_client_associated.sh: Valid client mac $client_mac is populated in the Wifi_Associated_Clients table - Success"
-    exit 0
-else
-    log "tools/device/check_wifi_client_associated.sh: Client mac address $client_mac is not populated in the Wifi_Associated_Clients table."
-    exit 1
-fi
-
+wait_ovsdb_entry Wifi_Associated_Clients -w mac "$client_mac" &&
+    log "tools/device/check_wifi_client_associated.sh: Valid client mac $client_mac is populated in the Wifi_Associated_Clients table - Success" ||
+    raise "Client mac address $client_mac is not populated in the Wifi_Associated_Clients table." -l "tools/device/check_wifi_client_associated.sh" -tc

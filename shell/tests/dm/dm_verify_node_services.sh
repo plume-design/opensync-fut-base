@@ -1,12 +1,10 @@
 #!/bin/sh
 
-# FUT environment loading
-# shellcheck disable=SC1091
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
-[ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
-[ -e "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "${PLATFORM_OVERRIDE_FILE}" ] && . "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
+[ -e "${MODEL_OVERRIDE_FILE}" ] && . "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
 
 manager_setup_file="dm/dm_setup.sh"
 usage()
@@ -59,9 +57,10 @@ check_ovsdb_entry Node_Services -w service "$service" &&
     log "dm/dm_verify_node_services.sh: Node_Services table contains $service - Success" ||
     raise "Node_Services table does not contain $service" -l "dm/dm_verify_node_services.sh" -tc
 
-if [ $(get_ovsdb_entry_value Node_Services enable -w service $service) == "true" ]; then
+if [ "$(get_ovsdb_entry_value Node_Services enable -w service $service)" == "true" ]; then
     log "dm/dm_verify_node_services.sh: $service from Node_Services table that have enable field set to true"
-    if [ -n "$($(get_process_cmd) | grep /usr/opensync/bin/$service | grep -v 'grep' | wc -l)" ]; then
+    ps_cmd=$(get_process_cmd)
+    if [ -n "$(eval ${ps_cmd} | grep /usr/opensync/bin/$service | grep -v 'grep' | wc -l)" ]; then
         log "dm/dm_verify_node_services.sh: $service from Node_Services table is running - Success"
     else
         raise "$service from Node_Services table is not running" -l "dm/dm_verify_node_services.sh" -tc

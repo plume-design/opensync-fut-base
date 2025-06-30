@@ -55,6 +55,7 @@ fut_required_busybox_builtins = [
     "ps",
     "rm",
     "route",
+    "pkill",
     "sed",
     "seq",
     "sh",

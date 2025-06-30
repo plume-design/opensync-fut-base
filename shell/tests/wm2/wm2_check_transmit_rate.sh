@@ -1,13 +1,9 @@
 #!/usr/bin/env bash
 
+# Executed on client devices
 current_dir=$(dirname "$(realpath "$BASH_SOURCE")")
-fut_topdir="$(realpath "$current_dir"/../..)"
-
-# FUT environment loading
-source "${fut_topdir}"/config/default_shell.sh
-# Ignore errors for fut_set_env.sh sourcing
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${fut_topdir}"/lib/unit_lib.sh
+fut_topdir="$(realpath "$current_dir"/../../..)"
+source "${fut_topdir}"/shell/lib/base_lib.sh
 
 usage()
 {
@@ -54,10 +50,7 @@ if [ ! -e "$packet_file" ]; then
 fi
 
 # Parse the file for specified transmit rate and source MAC address
-awk "/$transmit_rate Mb/ && /SA:$source_mac Beacon/" "$packet_file" | grep .
-
-if [ $? -ne 0 ]; then
+awk "/$transmit_rate Mb/ && /SA:$source_mac Beacon/" "$packet_file" | grep . ||
     raise "The packet capture file does not contain the specified data transmit rate: $transmit_rate." -l "wm2/wm2_check_transmit_rate.sh" -tc
-fi
 
 pass

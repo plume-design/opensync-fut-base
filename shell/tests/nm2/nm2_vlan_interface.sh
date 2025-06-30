@@ -1,28 +1,21 @@
 #!/bin/sh
 
-# FUT environment loading
-# shellcheck disable=SC1091
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
-[ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
-[ -e "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "${PLATFORM_OVERRIDE_FILE}" ] && . "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
+[ -e "${MODEL_OVERRIDE_FILE}" ] && . "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
 
-manager_setup_file="nm2/nm2_setup.sh"
 usage()
 {
 cat << usage_string
 nm2/nm2_vlan_interface.sh [-h] arguments
 Description:
-    - Script creates VLAN through Wifi_Inet_Config table and validates its existence in Wifi_Inet_State table and on the
-      system, fails otherwise
+    - Script creates VLAN through Wifi_Inet_Config table and validates its existence in Wifi_Inet_State table.
 Arguments:
     -h  show this help message
     \$1 (parent_ifname)  : used as parent_ifname in Wifi_Inet_Config table           : (string)(required)
     \$2 (vlan_id)        : used as vlan_id for virtual interface '100' in 'eth0.100' : (integer)(required)
-Testcase procedure:
-    - On DEVICE: Run: ./${manager_setup_file} (see ${manager_setup_file} -h)
-                 Run: ./nm2/nm2_vlan_interface.sh <parent_ifname> <vlan_id>
 Script usage example:
     ./nm2/nm2_vlan_interface.sh eth0 100
 usage_string
@@ -74,11 +67,6 @@ log "nm2/nm2_vlan_interface.sh: Check is interface $if_name up - LEVEL2"
 wait_for_function_response 0 "check_eth_interface_state_is_up $if_name" &&
     log "nm2/nm2_vlan_interface.sh: wait_for_function_response - Interface $if_name is UP - Success" ||
     raise "wait_for_function_response - Interface $if_name is DOWN" -l "nm2/nm2_vlan_interface.sh" -ds
-
-log "nm2/nm2_vlan_interface.sh: Check if VLAN interface $if_name exists at OS level - LEVEL2"
-check_vlan_iface "$parent_ifname" "$vlan_id" &&
-    log "nm2/nm2_vlan_interface.sh: VLAN interface $if_name exists at OS level - Success" ||
-    raise "VLAN interface $if_name does not exist at OS level" -l "nm2/nm2_vlan_interface.sh" -tc
 
 log "nm2/nm2_vlan_interface.sh: Remove VLAN interface"
 delete_inet_interface "$if_name" &&

@@ -1,9 +1,8 @@
 #!/bin/sh
 
-# shellcheck disable=SC1091
-source /tmp/fut-base/shell/config/default_shell.sh > /dev/null
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh > /dev/null
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh" > /dev/null
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh > /dev/null
+. /tmp/fut-base/shell/config/default_shell.sh > /dev/null
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh" > /dev/null
 
 usage()
 {
@@ -33,6 +32,7 @@ ping_log_file=${2}
 # Clear the log files contents
 echo "" > "$ping_log_file"
 
+# shellcheck disable=SC2034
 for i in $(seq 1 300); do
     { date && ping -c 1 "$ip_address"; } >> "$ping_log_file"
     sleep 1

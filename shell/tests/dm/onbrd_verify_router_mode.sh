@@ -1,12 +1,10 @@
 #!/bin/sh
 
-# FUT environment loading
-# shellcheck disable=SC1091
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
-[ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
-[ -e "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "${PLATFORM_OVERRIDE_FILE}" ] && . "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
+[ -e "${MODEL_OVERRIDE_FILE}" ] && . "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
 
 manager_setup_file="onbrd/onbrd_setup.sh"
 
@@ -104,11 +102,11 @@ wait_ovsdb_entry Wifi_Inet_State -w if_name "$lan_bridge" -is network true -is e
     raise "wait_ovsdb_entry - Failed to update Wifi_Inet_State::network and Wifi_Inet_State::enabled" -l "onbrd/onbrd_verify_router_mode.sh" -tc
 
 log "onbrd/onbrd_verify_router_mode.sh: Setting DHCP range on $lan_bridge to '$dhcp_start_pool' '$dhcp_end_pool'"
-update_ovsdb_entry Wifi_Inet_Config -w if_name "$lan_bridge" -u dhcpd '${dhcpd}' &&
+update_ovsdb_entry Wifi_Inet_Config -w if_name "$lan_bridge" -u dhcpd ${dhcpd} &&
     log "onbrd/onbrd_verify_router_mode.sh: update_ovsdb_entry - Wifi_Inet_Config::dhcpd is updated - Success" ||
     raise "update_ovsdb_entry - Failed to update Wifi_Inet_Config::dhcpd" -l "onbrd/onbrd_verify_router_mode.sh" -fc
 
-wait_ovsdb_entry Wifi_Inet_State -w if_name "$lan_bridge" -is dhcpd '${dhcpd}' &&
+wait_ovsdb_entry Wifi_Inet_State -w if_name "$lan_bridge" -is dhcpd ${dhcpd} &&
     log "onbrd/onbrd_verify_router_mode.sh: wait_ovsdb_entry - Wifi_Inet_Config reflected to Wifi_Inet_State::dhcpd is updated - Success" ||
     raise "wait_ovsdb_entry - Failed to reflect Wifi_Inet_Config to Wifi_Inet_State::dhcpd" -l "onbrd/onbrd_verify_router_mode.sh" -tc
 

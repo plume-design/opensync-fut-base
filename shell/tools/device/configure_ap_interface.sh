@@ -1,11 +1,9 @@
 #!/bin/sh
-# FUT environment loading
-# shellcheck disable=SC1091
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
-[ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" &> /dev/null
-[ -e "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" &> /dev/null
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "${PLATFORM_OVERRIDE_FILE}" ] && . "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
+[ -e "${MODEL_OVERRIDE_FILE}" ] && . "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
 usage()
 {
 cat << usage_string
@@ -65,6 +63,8 @@ trap '
     trap - EXIT INT
     fut_info_dump_line
     print_tables Wifi_Radio_Config Wifi_Radio_State Wifi_VIF_Config Wifi_VIF_State Wifi_Inet_Config Wifi_Inet_State || true
+    show_bridge_details
+    print_tables Interface Port Bridge || true
     fut_info_dump_line
     exit $fut_ec
 ' EXIT INT TERM
@@ -85,7 +85,6 @@ while [ -n "$1" ]; do
         -ht_mode | \
         -radio_if_name | \
         -ap_bridge | \
-        -bridge | \
         -enabled | \
         -mac_list | \
         -mac_list_type | \
@@ -93,12 +92,18 @@ while [ -n "$1" ]; do
         -multi_ap | \
         -ssid | \
         -ssid_broadcast | \
+        -tx_power | \
         -vif_radio_idx | \
         -wpa | \
         -wpa_key_mgmt | \
         -wpa_oftags | \
         -wpa_psks)
             radio_vif_args="${radio_vif_args} -${option#?} ${1}"
+            shift
+            ;;
+        -bridge)
+            radio_vif_args="${radio_vif_args} -bridge ${1}"
+            bridge=$1
             shift
             ;;
         -broadcast | \
@@ -148,10 +153,10 @@ if [ "$perform_network_config" = "true" ]; then
         raise "Inet interface ${network_if_name} not created" -l "tools/device/configure_ap_interface.sh" -tc
 fi
 
-# Add AP to bridge if the bridge argument was provided
+# Add network interface to bridge if the bridge argument was provided
 if [ "$bridge" ]; then
-    add_port_to_bridge "${bridge}" "${vif_if_name}" &&
-        log -deb "tools/device/configure_ap_interface.sh: Interface ${vif_if_name} added to bridge ${bridge} - Success" ||
-        raise "Failed to add interface ${vif_if_name} to bridge ${bridge}" -l "tools/device/configure_ap_interface.sh" -tc
+    add_port_to_bridge "${bridge}" "${network_if_name}" &&
+        log -deb "tools/device/configure_ap_interface.sh: Interface ${network_if_name} added to bridge ${bridge} - Success" ||
+        raise "Failed to add interface ${network_if_name} to bridge ${bridge}" -l "tools/device/configure_ap_interface.sh" -tc
 fi
 exit 0

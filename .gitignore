@@ -4,6 +4,7 @@
 __pycache__/
 allure?results/
 allure?report/
+config/test_case/full_test_config.json
 docker/env.list
 docker/env.list.git
 fut/.files

@@ -1,12 +1,10 @@
 #!/bin/sh
 
-# FUT environment loading
-# shellcheck disable=SC1091
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
-[ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
-[ -e "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "${PLATFORM_OVERRIDE_FILE}" ] && . "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
+[ -e "${MODEL_OVERRIDE_FILE}" ] && . "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
 
 manager_setup_file="um/um_setup.sh"
 um_resource_path="resource/um/"
@@ -89,16 +87,26 @@ if [ -n "$fw_path" ] && [ -n "$fw_name" ]; then
 fi
 
 start_time=$(date -D "%H:%M:%S"  +"%Y.%m.%d-%H:%M:%S")
-
-# Even if the wait condition is met, and the 'upgrade_status' becomes the correct code, the next step happens so quickly,
-# that printing the OVSDB contents for logging purposes already displays the next status code, which may falsely appear incorrect.
-upg_start_code=$(get_um_code "UPG_STS_FW_WR_START")
-log "um/um_set_upgrade_timer.sh: Waiting for UM upgrade start"
-wait_ovsdb_entry AWLAN_Node -is upgrade_status "$upg_start_code" &&
-    log "um/um_set_upgrade_timer.sh: wait_ovsdb_entry - AWLAN_Node::upgrade_status is $upg_start_code - Success" ||
-    raise "wait_ovsdb_entry - AWLAN_Node::upgrade_status is not $upg_start_code" -l "um/um_set_upgrade_timer.sh" -tc
-
+# Some models do not distinguish between image check and flash write
+for fw_fail_enum in "UPG_ERR_IMG_FAIL" "UPG_ERR_FL_WRITE"; do
+    upg_fail_code=$(get_um_code "${fw_fail_enum}")
+    # Even if the wait condition is met, and the 'upgrade_status' becomes the correct code, the next step happens so quickly,
+    # that printing the OVSDB contents for logging purposes already displays the next status code, which may falsely appear incorrect.
+    log "um/um_set_upgrade_timer.sh: Waiting for AWLAN_Node::upgrade_status to become ${fw_fail_enum} ($upg_fail_code)"
+    wait_ovsdb_entry AWLAN_Node -is upgrade_status "$upg_fail_code"
+    fw_fail_ec=$?
+    if [ $fw_fail_ec = 0 ]; then
+        log "um/um_set_upgrade_timer.sh: wait_ovsdb_entry - AWLAN_Node::upgrade_status is $upg_fail_code - Success"
+        break
+    else
+        log -err "um/um_set_upgrade_timer.sh: FAIL: wait_ovsdb_entry - AWLAN_Node::upgrade_status is not $upg_fail_code"
+    fi
+done
 end_time=$(date -D "%H:%M:%S"  +"%Y.%m.%d-%H:%M:%S")
+
+[ $fw_fail_ec = 0 ] &&
+    log "um/um_set_upgrade_timer.sh: wait_ovsdb_entry - AWLAN_Node::upgrade_status is $upg_fail_code - Success" ||
+    raise "wait_ovsdb_entry - AWLAN_Node::upgrade_status is not $upg_fail_code" -l "um/um_set_upgrade_timer.sh" -tc
 
 t1=$(date -u -d "$start_time" +"%s")
 t2=$(date -u -d "$end_time" +"%s")
@@ -112,12 +120,5 @@ if [ "$upgrade_time_lower" -le "$fw_up_timer" ] && [ "$upgrade_time_upper" -ge "
 else
     raise "Upgrade DID NOT start in upgrade_timer=${fw_up_timer} seconds, but finished after ${upgrade_time}" -l "um/um_set_upgrade_timer.sh" -tc
 fi
-
-# For the purpose of the test procedure, the image is removed to prevent actual upgrade. This step is also tested.
-upg_err_code=$(get_um_code "UPG_ERR_IMG_FAIL")
-log "um/um_set_upgrade_timer.sh: Waiting for UM upgrade error"
-wait_ovsdb_entry AWLAN_Node -is upgrade_status "$upg_err_code" &&
-    log "um/um_set_upgrade_timer.sh: wait_ovsdb_entry - AWLAN_Node::upgrade_status is $upg_err_code - Success" ||
-    raise "wait_ovsdb_entry - AWLAN_Node::upgrade_status is not $upg_err_code" -l "um/um_set_upgrade_timer.sh" -tc
 
 pass

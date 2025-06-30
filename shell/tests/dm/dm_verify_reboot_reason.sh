@@ -1,12 +1,10 @@
 #!/bin/sh
 
-# FUT environment loading
-# shellcheck disable=SC1091
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
-[ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
-[ -e "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "${PLATFORM_OVERRIDE_FILE}" ] && . "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
+[ -e "${MODEL_OVERRIDE_FILE}" ] && . "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
 
 dm_setup_file="dm/dm_setup.sh"
 usage()
@@ -60,8 +58,7 @@ log_title "dm/dm_verify_reboot_reason.sh: DM test - Verify last reboot reason ma
     log "dm/dm_verify_reboot_reason.sh: reboot file $reboot_file_path is not empty - Success" ||
     raise "reboot file $reboot_file_path is empty" -l "dm/dm_verify_reboot_reason.sh" -tc
 
-cat $reboot_file_path | grep -q "REBOOT"
-if [ $? = 0 ]; then
+if cat $reboot_file_path | grep -q "REBOOT"; then
     log "dm/dm_verify_reboot_reason.sh: REBOOT string found in file $reboot_file_path"
     reason=$(cat $reboot_file_path | awk '{print $2}')
     case "$reason_to_check" in

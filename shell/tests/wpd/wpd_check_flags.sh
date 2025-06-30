@@ -1,10 +1,10 @@
 #!/bin/sh
 
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
-[ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
-[ -e "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "${PLATFORM_OVERRIDE_FILE}" ] && . "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
+[ -e "${MODEL_OVERRIDE_FILE}" ] && . "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
 
 usage()
 {
@@ -68,7 +68,7 @@ test -n ${wpd_pid} &&
     raise "No WPD in daemon mode" -l "wpd/wpd_check_flags.sh" -tc
 
 log "wpd/wpd_check_flags.sh: Flush logs by killing all background processes."
-kill $(jobs -p) >/dev/null 2>&1 || true
+jobs -p | xargs -r kill >/dev/null 2>&1 || true
 
 log "wpd/wpd_check_flags.sh: Inspecting logs for correct entries."
 test_str="Starting WPD (Watchdog Proxy Daemon)"

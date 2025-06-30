@@ -9,17 +9,18 @@ directory and verifies if a test case definition is present in the
 import glob
 import os
 from pathlib import Path
+from pprint import pprint
 
 
 def main():
     fut_base_dir = Path(__file__).absolute().parents[2].as_posix()
-    stream = os.popen(rf"cd {fut_base_dir}/test && grep -rohP '(?<=test_)(?s).*(?=\(self, cfg\))'")
+    stream = os.popen(rf"cd {fut_base_dir}/test && grep -rohP '(?<=test_)(?s).*(?=\(.*\):)'")
     test_cases = stream.read()
-    test_case_list = test_cases.strip().split("\n")
+    test_case_list = sorted(test_cases.strip().split("\n"))
     definition_list = []
     implementation_list = [test_case for test_case in test_case_list if not test_case.endswith("setup")]
 
-    for file in glob.glob(f"{fut_base_dir}/doc/definitions/**/*.md", recursive=True):
+    for file in glob.glob(f"{fut_base_dir}/doc/definitions/*.md", recursive=True):
         file_name = os.path.split(file)[1].split(".md")[0]
         definition_list.append(file_name)
         definition_list = [
@@ -43,16 +44,14 @@ def main():
     if not implemented_but_not_defined:
         print("All implemented FUT tests have been defined.")
     else:
-        print(
-            f"The following tests have no definition in the fut_base/doc/definitions/ directory: {implemented_but_not_defined}",
-        )
+        print("The following tests have no definition in the fut_base/doc/definitions/ directory:")
+        pprint(sorted(implemented_but_not_defined))
 
     if not defined_but_not_implemented:
         print("All defined FUT tests have been implemented.")
     else:
-        print(
-            f"The following defined in the fut_base/doc/definitions/ directory have not been implemented: {defined_but_not_implemented}",
-        )
+        print("The following defined in the fut_base/doc/definitions/ directory have not been implemented:")
+        pprint(sorted(defined_but_not_implemented))
 
 
 if __name__ == "__main__":

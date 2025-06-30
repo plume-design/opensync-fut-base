@@ -1,10 +1,10 @@
 #!/bin/sh
 
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
-[ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
-[ -e "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "${PLATFORM_OVERRIDE_FILE}" ] && . "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
+[ -e "${MODEL_OVERRIDE_FILE}" ] && . "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
 
 usage()
 {
@@ -36,10 +36,3 @@ empty_ovsdb_table AW_Debug &&
 set_manager_log TPSM TRACE &&
     log -deb "tpsm/tpsm_setup.sh - Manager log for TPSM set to TRACE - Success" ||
     raise "set_manager_log TPSM TRACE - Could not set manager log severity" -l "tpsm/tpsm_setup.sh" -ds
-
-for if_name in "$@"
-do
-    wait_ovsdb_entry Wifi_Radio_State -w if_name "$if_name" -is if_name "$if_name" &&
-        log -deb "tpsm/tpsm_setup.sh - Wifi_Radio_State::if_name '$if_name' present - Success" ||
-        raise "Wifi_Radio_State::if_name for '$if_name' does not exist" -l "tpsm/tpsm_setup.sh" -ds
-done

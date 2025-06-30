@@ -1,10 +1,8 @@
 #!/bin/sh
 
-# FUT environment loading
-# shellcheck disable=SC1091
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
 
 usage()
 {
@@ -42,7 +40,8 @@ ebtable_target="${4}"
 ebtable_priority="${5}"
 update_target="${6}"
 dev_mac="11:11:11:11:11:11"
-ebtable_rule='-d ${devices_tag}'
+# shellcheck disable=SC2016
+ebtable_rule='-d ${devices_tag}'  # This notation is intentional
 openflow_tag="devices_tag"
 
 log_title "/nfm/nfm_native_ebtable_template_check.sh: Configuring and validating ebtables template rules"

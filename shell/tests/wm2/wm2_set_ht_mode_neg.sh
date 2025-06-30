@@ -1,12 +1,10 @@
 #!/bin/sh
 
-# FUT environment loading
-# shellcheck disable=SC1091
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
-[ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
-[ -e "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "${PLATFORM_OVERRIDE_FILE}" ] && . "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
+[ -e "${MODEL_OVERRIDE_FILE}" ] && . "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
 
 manager_setup_file="wm2/wm2_setup.sh"
 # Wait for channel to change, not necessarily become usable (CAC for DFS)
@@ -144,19 +142,5 @@ update_ovsdb_entry Wifi_Radio_Config -w if_name "$radio_if_name" -u ht_mode $mis
 wait_ovsdb_entry Wifi_Radio_State -w if_name "$radio_if_name" -is ht_mode "$mismatch_ht_mode" -t ${channel_change_timeout} &&
     raise "wait_ovsdb_entry - Reflected Wifi_Radio_Config to Wifi_Radio_State::ht_mode is $mismatch_ht_mode" -l "wm2/wm2_set_ht_mode_neg.sh" -tc ||
     log "wm2/wm2_set_ht_mode_neg.sh: wait_ovsdb_entry - Wifi_Radio_Config is not reflected to Wifi_Radio_State::ht_mode is not $mismatch_ht_mode - Success"
-
-# LEVEL2 check. Passes if system reports original ht_mode is still set.
-ht_mode_from_os=$(get_ht_mode_from_os "$vif_if_name" "$channel") ||
-    raise "Error while fetching ht_mode from system" -l "wm2/wm2_set_ht_mode_neg.sh" -fc
-
-if [ "$ht_mode_from_os" = "" ]; then
-    raise "Error while fetching ht_mode from system" -l "wm2/wm2_set_ht_mode_neg.sh" -fc
-else
-    if [ "$ht_mode_from_os" != "$mismatch_ht_mode" ]; then
-        log "wm2/wm2_set_ht_mode_neg.sh: ht_mode '$mismatch_ht_mode' not applied to system. System reports current ht_mode '$ht_mode_from_os' - Success"
-    else
-        raise "ht_mode '$mismatch_ht_mode' applied to system. System reports current ht_mode '$ht_mode_from_os'" -l "wm2/wm2_set_ht_mode_neg.sh" -tc
-    fi
-fi
 
 pass

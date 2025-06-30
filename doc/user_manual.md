@@ -1,36 +1,54 @@
-# Functional Unit Testing User Manual
+# User Manual: Functional Unit Testing (FUT) for OpenSync
 
-**Functional Unit Testing - FUT** is a framework for verifying the integration of the OpenSync stack on your device.
+## Table of Contents
 
-The focus of testing is the **OpenSync Northbound API - OVSDB** that is used to communicate to cloud services. FUT
-assumes that testing the individual component parts gives a good indication of the quality of the entire OpenSync
-integration on your device, while not being comprehensive.
+- [1. Introduction to FUT](#1-introduction-to-fut)
+    - [1.1. Key Requirements](#11-key-requirements)
+    - [1.2. Supported Versions](#12-supported-versions)
+    - [1.3. Glossary of Terms](#13-glossary)
+- [2. Setting Up Your FUT Environment](#2-setting-up-your-fut-environment)
+    - [2.1. Repository and Directory Structure](#21-repository-and-directory-structure)
+    - [2.2. Configuration Files](#22-configuration-files)
+    - [2.3. Adding Support for a New Testbed and Model](#23-adding-support-for-a-new-testbed-and-model)
+- [3. Executing Tests](#3-executing-tests)
+    - [3.1. The FUT Framework Components](#31-the-fut-framework-components)
+    - [3.2. Test Execution Guide](#32-test-execution-guide)
+    - [3.3. Generating and Viewing Test Reports](#33-generating-and-viewing-test-reports)
+- [4. Troubleshooting and Known Issues](#4-troubleshooting-and-known-issues)
+    - [4.1. Inspecting Logs](#41-inspecting-logs)
+    - [4.2. Manual Shell Script Execution](#42-manual-shell-script-execution)
+    - [4.3. Using the Python Debugger](#43-using-the-python-debugger)
+    - [4.4. Known Issues](#44-known-issues)
+- [5. Additional Information](#5-additional-information)
 
-FUT is an example of **white box testing**, so complete access to the device is required.
+## 1. Introduction to FUT
 
-FUT is important in the early stages of the OpenSync integration process, since it allows the developer to verify
-features before connecting to cloud services. To ensure reliability of FUT test results, devices under test must not be
-connected to any cloud service, as FUT uses the same Northbound API as the cloud services and the two would interfere.
+**Functional Unit Testing (FUT)** is a white-box testing framework designed to verify the integration of the OpenSync
+stack on a device. It focuses on testing the OpenSync Northbound API (OVSDB), which is the communication layer to cloud
+services. By testing individual components, FUT provides a strong indication of the overall quality of the OpenSync
+integration.
 
-To ensure a stable test development and execution environment for FUT, a testbed is required. **Comprehensive Reference
-Apparatus for Testing OpenSync (CRATOS)** is a product, whose design specification and assembly instruction is freely
-available online for the purpose of testing OpenSync devices. CRATOS is a prerequisite for using testing tools for
-OpenSync devices.
+FUT is useful in the early stages of development, allowing developers to validate features before connecting to a live
+cloud environment. To ensure reliable and repeatable results, devices under test (DUTs) must not be connected to any
+cloud service during testing, as FUT and cloud services would interfere by using the same **Northbound API (OVSDB)**.
 
-Test cases verify individual features at a higher level than C source code unit testing and at a lower level than system
-end-to-end testing, which requires cloud services as well as OpenSync. This makes FUT faster and more specific than
-later stages, while being more user-friendly than previous testing stages.
+### 1.1 Key Requirements
 
-## Supported OpenSync versions
+- **Testbed:** FUT requires a standardized testbed environment.
+    - **CRATOS (Comprehensive Reference Apparatus for Testing OpenSync)** is the specified testbed for this purpose.
+- **Device Access:** Full management SSH access to the device is necessary, including `root` privileges and `scp`
+  capabilities for script transfer.
+- **Environment:** The FUT framework runs within a **Docker** container and uses **Pytest** for test automation and
+  **Allure** for reporting.
+- **Directory Structure:** A specific directory and repository structure must be maintained for FUT to function
+  correctly.
 
-The supported versions of OpenSync are listed in the [release notes](./release_notes.md) document.
+### 1.2. Supported Versions
 
-## Supported testbed device versions
+- OpenSync: See the [release notes](./release_notes.md) document.
+- Testbed Devices: See the config/rules/fut_version_map.yaml file.
 
-The supported versions of the testbed device are listed in the [FUT version map](../config/rules/fut_version_map.yaml)
-configuration file.
-
-## Glossary
+### 1.3 Glossary
 
 | Term or abbreviation | Meaning                                                                                              |
 |----------------------|------------------------------------------------------------------------------------------------------|
@@ -50,450 +68,191 @@ configuration file.
 | Test report          | An interactive web form test report generated from pytest results by the Allure framework.           |
 | VLAN                 | Virtual Local Area Network.                                                                          |
 
-## Requirements
+## 2. Setting Up Your FUT Environment
 
-- The full source code is present in several git repositories, see the chapter
-  [Directory and repository structure](./user_manual.md#Directory-and-repository-structure).
+### 2.1. Repository and Directory Structure
 
-- The required test environment for executing FUT is
-  [CRATOS](https://opensync.atlassian.net/wiki/spaces/OCC/pages/39920140747/).
+FUT's modular design relies on multiple Git repositories. It is essential to clone these repositories into the correct
+parent directories with the correct names. Refer to the [repository structure](./repository_structure.md) document for a
+detailed list of required repositories.
 
-- FUT uses the [pytest](https://pytest.org) test framework.
-
-- FUT uses the [Allure](https://docs.qameta.io/allure/) reporting framework.
-
-- FUT uses the [Docker](https://www.docker.com/) containerization environment.
-
-- FUT requires full management ssh access to the device on VLAN4, preferably via WAN port, optionally via LAN port.
-
-- FUT requires the `scp` command on the device in order to transfer shell scripts to the OpenSync device.
-
-- FUT requires access to a superuser (`root`) in order to execute shell scripts on the OpenSync device.
-
-- FUT requires the `/tmp` directory to be mounted with an `exec` flag to allow script execution on the OpenSync device.
-
-## Directory and repository structure
-
-Functional unit testing has a modular design. To separate component parts into units, separate git repositories are
-used. These need to be manually cloned into the **correct directory structure** and **correct names**. Read about the
-required repositories in [repository structure](repository_structure.md) document.
-
-The commands used to create the correct parent directories and clone the repositories into the correct directory names
-look like:
-
-```bash
-mkdir -p parent/dir/
-git clone git@github.com:organization/repository_name.git parent/dir/directory_name
-```
-
-This is the FUT directory structure with inline explanation for each directory:
+FUT directory structure with inline explanation for each directory:
 
 ```plaintext
-fut-base      Top directory of the FUT directory tree. This is where you run tests from.
-  config      Configuration files: testbed, test case configuration generator inputs, model properties.
-  doc         Documentation: manuals and test case descriptions.
-  docker      FUT Docker files.
-  framework   Framework Python files, modules and utilities.
-  internal    Placeholder for files that should remain internal, extended by each user.
-  lib_testbed Common framework library: testbed and device API library.
-  resource    Cache directory containing resources needed for execution: firmware image, unit tests, etc.
-  self_test   Code coverage and unit tests for the FUT framework.
-  shell       Shell files: test cases, tools, libraries, override files.
-  test        Pytest helper scripts for test case collection.
+fut-base       Top directory of the FUT directory tree. This is where you run tests from.
+  config       Configuration files: testbed, test case configuration generator inputs, model properties.
+  doc          Documentation: manuals and test case descriptions.
+  docker       FUT Docker files.
+  framework    Framework Python files, modules and utilities.
+  internal     Placeholder for files that should remain internal, extended by each user.
+  lib_testbed  Common framework library: testbed and device API library.
+  resource     Cache directory containing resources needed for execution: firmware image, unit tests, etc.
+  self_test    Code coverage and unit tests for the FUT framework.
+  shell        Shell files: test cases, tools, libraries, override files.
+  test         Pytest helper scripts for test case collection.
 ```
 
-## Components
+### 2.2 Configuration Files
 
-FUT is made of three main components:
+FUT uses three main categories of configuration files:
 
-- **Test scripts**: any script running on OpenSync devices is implemented in shell to maximize portability.
-- **Framework**: python3 and pytest library provide most of the functionality.
-- **Configuration**: splitting the configuration files into categories, apart from the framework, provides flexibility.
+1. **Testbed Configuration (Location Files):**
+    - Defines the properties of your physical CRATOS testbed, such as IP addresses, credentials, device models, and
+      client types.
+2. **Device Configuration (Model Properties):**
+    - Provides device-specific information like regulatory domain, radio interface names, and supported bands.
+3. **Test Case Configuration:**
+    - A combination of generic, platform-specific, and model-specific parameters that are used to generate the final
+      test case inputs. These files determine which tests are run and with what parameters.
+    - For a detailed explanation, see the [Test Case Configuration Generators and
+      Inputs](./test_case_configuration_generators_and_inputs.md) document.
 
-The primary mode of test case execution is by invoking the framework. The framework collects all configuration and
-executes shell scripts on the devices within the testbed. For the purposes of development and debugging, the shell
-scripts are also executable manually by providing input parameters. Some dependencies do exist, like prior setup steps
-or environment variables. Shell scripts are all part of this repository.
+### 2.3 Adding Support for a New Testbed and Model
 
-### Configuration files
+To enable FUT for a new device model, follow these steps:
 
-There are three categories of configuration files used within FUT:
+1. Create a location configuration file: `config/locations/<your_testbed_name>.yaml`.
+    - Copy the example file from `config/locations/example.yaml` to `config/locations/<your_testbed_name>.yaml` and
+      customize it for your setup.
+2. Create a model properties file: `config/model_properties/reference/<my_model>.yaml`.
+    - Reference model files are located in `config/model_properties/reference/`. You can copy an existing file, rename
+      it to `<my_model>.yaml`, modify its contents, and place it in the `model_properties/internal` directory.
+3. (Optional) Add Pod API support for the device's platform and model in `lib_testbed/generic/pod/<my_platform>/` if not
+   yet supported.
+4. (Optional) Add model/platform-specific test case inputs in `config/test_case/platform/<my_platform>/` and
+   `config/test_case/model/<my_model>/`.
 
-1. **Testbed configuration**: also referred to as a **location file**. These are properties of the physical testbed
-   (CRATOS), such as the testbed IP address, username and password, device models, client types, etc. You need to set
-   these correctly once when initially setting up a new physical testbed.
+## 3. Executing Tests
 
-2. **Device configuration**: also referred to as **model properties files**. These are model or device-specific
-   parameters, such as regulatory domain information, radio interface names, supported bands, model string, etc.
+### 3.1 The FUT Framework Components
 
-3. **Test case configuration**: sometimes referred to as test case configuration generator inputs. These are a
-   combination of generic parameters and values, combined with platform-specific and model-specific ones, that serve as
-   inputs to generators that expand them into input parameters for all suites of test cases. These govern how many tests
-   are executed for a given model and which input parameters are used for those test cases. For more read the separate
-   document on [test case configuration generators and inputs](test_case_configuration_generators_and_inputs.md).
+- **Shell Scripts:** Test cases executed on the device are written in shell to ensure maximum portability. These scripts
+  reside in the **shell/** directory.
+- **Python Framework:** Built on pytest, the framework manages configuration, orchestrates test execution on devices,
+  and gathers results.
+- **Configuration:** The flexible configuration file system allows for adaptation to different devices and testbeds.
 
-Configuration files are either YAML files or Python files containing dictionaries. These configuration files are
-directly imported into the runtime environment during test case execution. It is important to maintain the correct
-syntax and structure of the configuration files, while the values of the parameters in these configuration files should
-be adapted to your model. Some platforms and device models are already supported, but you should provide support for
-your own model before executing test cases.
+### 3.2 Test Execution Guide
 
-#### Testbed configuration with location files
+1. **Enter the FUT Docker environment:**
 
-The testbed configuration file or **"location file"** `config/locations/<testbed_name>.yaml` defines
-parameters, that are specific to each testbed. The FUT framework must be aware of the devices inside the testbed to be
-able to load the correct device and test case configuration files.
+    - The FUT framework must be run from within its Docker container
+    - After the command brings up and enters the Docker container, the default terminal prompt should be prepended with
+      `(DOCKER:fut-extra)`.
 
-There is an example location file provided in `config/locations/example.yaml` with all the required and optional fields,
-with commentary on how to modify the values for your use case. If there are any values that do not apply, the keys or
-entire sections may be removed or values simply set to `null`. The example file should be copied, using a name that
-matches the server hostname of your testbed, then edited to supply the actual values describing the testbed.
+    ```bash
+    ./docker/dock-run
+    ```
 
-#### Device configuration with model properties files
+2. **Load your testbed configuration:**
 
-The device configuration file or **model properties file** `config/model_properties/reference/<my_model>.yaml` provides
-device-specific information, that is applicable across testing frameworks and tech stack and could also be used as
-configuration files for cloud services.
+    - Use the osrt tool to load your location file and set up the environment for your specific testbed.
 
-The `config/model_properties/reference` directory contains files for so-called *reference* models. A few device models
-were selected as references for each chip vendor, radio band configuration and Wi-Fi capabilities. Any of the existing
-reference model configuration files can be copied, renamed and the content modified to fit a new device model. The new
-file should be placed in the `model_properties/internal` directory until the device can be considered as reference.
+    ```bash
+    osrt shell <your_testbed_name>
+    ```
 
-## FUT framework
+3. **Run tests with Pytest**
 
-The FUT framework is written in `python3` and builds around the functionality of the `pytest` framework. The purpose of
-the framework is to collect the right configuration files and parameters, feed them into pytest and execute shell
-scripts on the OpenSync devices. In order to access these devices, the framework implements device access and remote
-execution functionality. After test script execution, the framework collects results and compares them to the expected
-values. It finally constructs an Allure report from the test execution results.
+    - You can now execute tests by invoking `pytest`.
+    - Run all tests with verbose logging:
 
-### Test automation with [pytest](https://pytest.org)
+    ```bash
+    pytest test/ -v
+    ```
 
-The FUT framework extends the functionality provided by the pytest framework. See the
-[official documentation](https://pytest.org) for more info.
+    - Run specific test suites:
 
-### Execution environment with Docker
+    ```bash
+    pytest test/suite_a_test.py test/suite_b_test.py -v
+    ```
 
-**The FUT framework requires Docker containerization for its execution environment.** Executing the FUT framework
-without the Docker environment is not supported.
+    - Run specific test cases by name:
 
-The `docker/dock-run` script builds a Docker image and spins up a container to provide the environment for all test case
-executions as well as a web GUI with an Allure report generator.
+    ```bash
+    pytest --run_test test_my_test_a,test_my_test_b -v
+    ```
 
-To build the Docker image and enter a `bash` environment inside the Docker container, run:
+    - Get a list of all available test cases:
 
-```bash
-./docker/dock-run
-```
+    ```bash
+    pytest --collect-only
+    ```
 
-After the command brings up and enters the Docker container, the default terminal prompt should be prepended with
-`(DOCKER:fut-extra)`.
+4. **osrt tools**
 
-The first Docker image build time may take some time depending on your system. Once the image is built, any changes to
-the Docker recipe use the cache and are much faster. Docker containers also reuse the same image every time, so if there
-are no changes to the image, there is no additional build time and the container is spun up from the cached image.
+    The `osrt`command line tools are a good way to manually interact with the testbed for debugging or development
+    purposes. The tools are invoked using the following syntax:
 
-### Quick guide to executing test cases
+    ```bash
+    osrt [OPTIONS] COMMAND [ARGS]
+    ```
 
-The most common way of executing test cases is by using the FUT framework. The FUT framework runs inside a Docker
-container, which is started on your local machine. The machine needs to have access to the desired testbed.
+    For a complete list of commands, use:
 
-Create and enter the interactive Docker environment. This will build the required Docker image, create an interactive
-container and enter that container.
+    ```bash
+    osrt tree
+    ```
 
-To finalize the environment setup, you need to specify details of the physical testbed by invoking the `osrt shell`
-tool. This tool loads the testbed `location file`. The testbed name is the same as the location filename, without the
-`.yaml` suffix. To load the location file `config/locations/mytestbedname.yaml`, run:
-
-```bash
-osrt shell mytestbedname
-```
-
-All test case execution options and usage of command line tools are now enabled. The testbed toolset provides
-functionalities to control and manage various components of a testbed environment. Below is a summary of its main
-options and commands.
-
-| Option           | Description                                              |
-|------------------|----------------------------------------------------------|
-| --debug/-D       | Enable debug logs                                        |
-| --disable-colors | Disable colors across tool output to improve readability |
-| --help/-h        | Show help                                                |
-
-| Command            | Description                                                      |
-|--------------------|------------------------------------------------------------------|
-| client             | OSRT client tool: manage, connect and disconnect testbed clients |
-| config             | Configuration helper toolset (location)                          |
-| pod                | Pod tool: control testbed nodes                                  |
-| reserve            | Testbed reservation tool                                         |
-| rpower             | Rpower control tool                                              |
-| run                | Execute COMMAND for TESTBED_NAME                                 |
-| sanity             | Sanity checker tool                                              |
-| server             | OSRT server tool                                                 |
-| shell              | Launch new subshell for specified TESTBED_NAME                   |
-| switch             | Network switch control tool                                      |
-| testbed            | Testbed recovery and information tool                            |
-| validate-locations | Validate LOCATIONS config file/files                             |
-
-Tools are invoked using the following syntax:
-
-```bash
-osrt [OPTIONS] COMMAND [ARGS]
-```
-
-Further information about specific commands and their options can be acquired by utilizing the `--help` flag. Example:
-
-```bash
-osrt pod --help
-```
-
-After this step, the FUT framework is invoked by calling `pytest` directly. To run `pytest` directly using all default
-settings, executing all possible test suites and providing a verbose output, run:
-
-```bash
-pytest test/ -v
-```
-
-In order to generate results appropriate for the `Allure` report generation tool, `pytest` needs to specify the result
-output directory:
-
-```bash
-pytest test/
-pytest --alluredir allure-results -v
-```
-
-It is possible to provide a suite or list of suites that you wish pytest to include in the test collection:
-
-```bash
-pytest test/my_suite_a_test.py -v
-pytest test/first_suite_test.py test/second_suite_test.py -v
-```
-
-It is also possible to provide a single test case or a comma-separated list of test cases from any test suite:
-
-```bash
-pytest --run_test test_some_procedure -v
-pytest --run_test test_my_procedure,test_another_procedure -v
-```
-
-There is a feature built into the FUT framework that aborts testing altogether if OpenSync process restart is detected
-on the device. By using the following flag, the detection can be made less strict, meaning it only fails one test case
-instead of aborting the entire test run:
-
-```bash
-pytest test/ --disable_strict_process_restart_detection
-```
-
-The test cases need to be listed with the `test_` prefix or `_test` suffix which is required by `pytest` in order to
-collect a python function as a test case. The name must match exactly. To get a list of all available test cases that
-can be used with the above command, run:
-
-```bash
-pytest --collect-only
-```
-
-To get a list of all the default execution options as well as custom execution options created by pytest plugins that
-the FUT framework provides, run:
-
-```bash
-pytest --help
-```
+    For more help on any command, option or argument, use the `-h` flag:
 
-### Test results with Pytest
-
-After the tests are executed, they yield test results. The `pytest` library uses the term `outcome` and there are three
-possible values: `passed`, `failed` or `skipped`.
-
-A test case is marked as `passed` when all assertions evaluate to `True`. Similarly, a test case is marked as `failed`
-when any of the assertions evaluate to `False`. Test cases may have a single assertion statement or several, depending
-on the test case implementation. Assertions are usually only part of the "test case step". Any errors that happen before
-the test case step, perhaps during setup or initialization, or after the test case step should rather throw an exception
-and should be considered as a problem in the framework rather than the subject of the test case.
-
-A test case is marked as `skipped` only when the `pytest.skip()` function is called. The FUT framework does this in
-these cases:
-
-- There is a `skip` key in the test case configuration parameters. You explicitly requested the skip.
-- There is a `skip condition` during shell test case execution, and a special exit code is propagated to the framework.
-  Some required condition that can only be verified during shell script execution has not been met.
-- The test case has a dependency on another failing test case or function within the framework. Usually these are setup
-  steps or checks for device readiness.
-
-When an exception is raised instead of an assertion being false, pytest treats this as a framework issue and not a test
-case failure. There is no outcome in this case, and the next test case will be executed. When viewing an Allure test
-report, the test case will be categorized as `broken`.
+### 3.3 Generating and Viewing Test Reports
 
-#### Processing Pytest test results based on reference test runs
-
-You may sometimes want to execute all available tests for one model, but focus only on failures that are not expected
-and ignore those failures that have previously happened on test runs that you deem `reference`. One example where this
-may happen is detecting regressions on newer versions of firmware, while allowing the possibility that some tests fail
-due to known bugs and issues.
-
-The tool `framework/tools/result_post_processing.py` offers to process the results of the current test run by providing
-a reference test run from which to determine the test cases to ignore. The tool offers the option to back up unprocessed
-results from the current test run before processing. After processing, any tests that have a status of `failed` or
-`broken` in both the current and reference test runs are simply removed.
-
-```bash
-./framework/tools/result_post_processing.py --current current/allure-results --reference reference/allure-results --backup
-```
-
-### Test reports with Allure
-
-The FUT framework uses the `Allure` framework for reporting and the `pytest-allure` plugin during test case execution to
-produce results in a format compatible with `Allure`. The report is an interactive web page that provides a visual
-representation of the results provided in the command line by the framework.
-
-Please note that in order to generate a report, pytest must generate the appropriate results during the test execution.
-The generated results are placed in the `allure-results` directory, if the correct input parameters are provided to
-pytest before test execution starts. It is not possible to create results appropriate for generating the report after
-test execution has started.
+To generate a detailed, interactive Allure report, you must first produce the necessary result files during the test
+run.
 
-The Allure report is generated using the `allure` command line tool present in the FUT Docker container on your local
-machine. First enter the Docker container. Create an Allure report your local machine in the directory `allure-report`
-and open the report in the default system web browser:
+1. Execute tests and collect Allure results
 
-```bash
-allure generate allure-results/ -o allure-report
-allure-show allure-report
-```
+    ```bash
+    pytest test/ --alluredir allure-results -v
+    ```
 
-## Shell files
+2. Generate and open the Allure report:
+    - After the test run is finished execute the following to generate an interactive web page that provides a visual
+  representation of the results:
 
-All test scripts and many supplementary tools are written as shell files to ensure maximum portability. An attempt is
-made to approach [POSIX](https://en.wikipedia.org/wiki/POSIX) compliance and avoid commands specific to the `bash`
-interpreter, as this may not be present on all devices.
+    ```bash
+    allure generate allure-results/ -o allure-report
+    allure-show allure-report
+    ```
 
-Shell scripts are present in the same code repository as the FUT framework, in the `shell` directory. All tests and
-tools use common library functions located in the `shell/lib/` subdirectory. These are general purpose and reusable
-parts of the code.
+## 4. Troubleshooting and Known Issues
 
-All shell test scripts, libraries, tools and functions are well documented and should provide enough information to the
-user to use consistently and implement into any contribution.
+### 4.1 Inspecting Logs
 
-### Testcases
+Logs are your primary tool for debugging. They are available in the console during execution and are embedded within
+the Allure report for each test case. Log types include:
 
-Shell test scripts are located in the `shell/tests` subdirectory but cannot all be guaranteed complete portability
-between device platforms and models. Specifically, the use of system tools is SDK and driver-dependent. This is why
-override files are sourced after the common library files.
+- **FUT shell logs:** stdout and stderr from the scripts run on the device.
+- **FUT framework logs:** Python-level warnings, errors, and debug messages.
+- **OpenSync system logs (logread):** Captured from the device upon test failure.
 
-### Library override files
+### 4.2 Manual Shell Script Execution
 
-FUT implements shell script sourcing in hierarchical order. First, the common libraries are sourced. Second, the
-platform-specific library override files are sourced. Third, the model-specific library override files are sourced. The
-latter two may or may not implement shell functions with the same name as the common libraries, but with
-platform-specific or model-specific implementation, that overrides the implementation in the previously sourced file.
+For deep debugging, you can execute shell scripts manually. The Allure report for a failed test case lists the exact
+sequence of shell commands and their parameters, which you can replicate directly on the device.
 
-Some functions in the common shell library files are implemented as `stubs` and will force at least one override
-implementation in either the platform or the model override file. Other common library functions may still require
-override if they are failing, depending on platform and model implementation specifics. The best practice is to mimic
-the implementation in the common shell library files when contributing, as the input parameters, logging, assertions and
-return values need to match to maintain portability.
-
-The directory containing both platform and model specific override files is `shell/lib/override`. The platform override
-files `<my_platform>_platform_override.sh` apply to several models of the same platform and the model override file
-`<my_model>_lib_override.sh` applies to only one model.
-
-## Adding support for your own device model
-
-Several reference device models and platforms are already supported in FUT out of the box. For new OpenSync
-integrations, however, a new device model and optionally a new platform needs to be supported. These are the steps
-required to support FUT execution on a new device model:
-
-1. Add a model_properties configuration file `config/model_properties/reference/<my_model>.yaml`
-2. Add pod API support for the device platform `pod_lib.py` and model `<my_model>/pod_lib.py` to the framework in the
-   `lib_testbed/generic/pod/<my_platform>/` directory.
-3. Add model and platform-specific test case configuration generator inputs (optional) in
-   `config/test_case/platform/<my_platform>/*_inputs.py` and `config/test_case/model/<my_model>/*_inputs.py`.
-4. Add model and platform specific shell library override files (optional) `<my_platform>_platform_override.sh` and
-   `<my_model>_lib_override.sh` in the `shell/lib/override/` directory.
-
-Creating a location file is not on the list, as this is a required step for each new physical testbed regardless of the
-device model contained within the testbed.
-
-## Framework pre-test setup
-
-Before any test cases are run, the FUT framework conducts setup steps which ensure that the devices are ready for test
-execution. The tests which will be executed dictate the list of devices for which the setup steps will be performed. The
-required devices for each test suite can be seen in the following YAML file:
-`fut-base/config/rules/test_suite_device_requirements.yaml`
-
-The pre-setup steps entail the following:
-
-- Creation of the FUT configurator object
-    - Requires the correctly configured location files
-    - Requires the correctly configured model property files
-- Creation of the server, node and client handlers
-    - Requires SSH connectivity to all relevant devices
-    - Requires retrieval of the device version
-- Transfer of all necessary files to the server, node and client devices
-- Creation of the FUT docker container on the server device
-- Retrieval and validation of the GW, L1 and L2 regulatory domains
-- Setting the L1 and L2 devices to a state that should be equal to the state right after the booting procedure
-
-The pre-setup steps can be seen in more detail by inspecting the `fut-base/framework/tools/fut_setup.py` python script.
-
-## Troubleshooting
-
-After a test case failure, you may want to investigate the cause of the failure. This may be due to a bug in the
-OpenSync integration on the device or some other error. The recommended steps in the root cause analysis are:
-
-- Examining the logs and test report
-- Attempting to recreate the issue
-- Using the Python debugger and executing shell scripts manually to pinpoint the cause of the issue
-
-The subsections below provide ways to troubleshoot test case failures and other errors.
-
-### Inspecting logs
-
-The FUT framework and the shell scripts provide log messages that can be inspected in case of test case failures or
-other errors. These can be inspected in the terminal where FUT tests were run, or after test run completion in the
-Allure report.
-
-The Allure report colors the passed testcases green and failed testcases red. Clicking on the name of individual failed
-test cases opens a detailed view of its steps. Each step is also colored green or red depending on the outcome.
-
-There are several types of logs generated during test execution:
-
-- FUT shell log messages: captured stdout and stderr from each testbed device.
-- FUT framework log messages: warnings, notices, errors and debug messages of all python code.
-- OpenSync system logs from individual devices (upon failure): sometimes called "logread".
-- Other log messages, such as "info dump" (additional OVSDB and system information in each shell script).
-
-### Manual shell script execution following the test case recipe from the Allure report
-
-FUT allows you to execute the test cases manually, without requiring the automation that the FUT framework provides.
-This method is intended for debugging or test case development, as many of the steps usually done by the framework must
-be done by hand. For example transferring the files to the devices, determining the input parameters, etc.
-
-The manual test case execution procedure simply follows the same steps as the framework automation executes. These steps
-are listed in the generated Allure report in the FUT framework.
-
-This provides more granularity in determining where an issue occurs and gives you the option to prepare all previous
-steps and investigate the failing shell script. Most shell scripts document the usage as code commentary.
-
-### Using the Python debugger with the FUT framework
+### 4.3 Using the Python Debugger
 
 The `pytest` framework already provides the option to start the interactive Python debugger. The interactive debugger is
-entered on errors, on `KeyboardInterrupt` or when the code includes the `pdb.set_trace()` directive. Run:
+entered on errors, on `KeyboardInterrupt` or when the code includes the `pdb.set_trace()` directive. To use it invoke
+the `pytest` command using the `--pdb` flag:
 
 ```bash
 pytest test/ --pdb
 ```
 
-### Testbed issues
+### 4.4. Known Issues
 
-Refer to the CRATOS webpage for details on any issues regarding troubleshooting of the testbed on the following topics:
+Tests that are expected to fail due to known bugs or device limitations can be tracked and managed. This is done to
+avoid cluttering test reports with expected failures while still providing visibility. These known issues are often
+dependent on the specific firmware version of the device.
 
-- Device wiring diagram
-- Configuring the server
-- Configuring the network switch
-- Device connectivity and IP reservations
-- Device versions
-- Restoring defaults
+For a detailed explanation of how to define and manage these version-dependent test configurations, please refer to the
+[Managing Known Issues](./test_case_configuration_generators_and_inputs.md#5-managing-known-issues) section in the
+configuration generators document.
 
-## Additional information
+## 5. Additional Information
 
 The table below lists ports used in the FUT framework and test cases.
 
@@ -507,4 +266,5 @@ The table below lists ports used in the FUT framework and test cases.
 | 8080  | Port forwarding to network switch GUI                               |
 | 8443  | Custom FUT nginx instance port with SSL encryption                  |
 | 9000  | Port forwarding to PDU GUI                                          |
-| 65000 | Connection to simulated "FUT Cloud" port                            |
+| 65001 | Connection to simulated "FUT Cloud" port                            |
+| 65002 | Connection to MQTT broker running on the testbed server             |

@@ -1,12 +1,10 @@
 #!/bin/sh
 
-# FUT environment loading
-# shellcheck disable=SC1091
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
-[ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
-[ -e "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "${PLATFORM_OVERRIDE_FILE}" ] && . "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
+[ -e "${MODEL_OVERRIDE_FILE}" ] && . "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
 
 usage()
 {
@@ -44,12 +42,8 @@ ookla_bin="${OPENSYNC_ROOTDIR}/bin/ookla"
     log "tpsm/tpsm_verify_ookla_speedtest_sdn_endpoint_config.sh: ookla speedtest binary is present on system - Success" ||
     raise "Ookla speedtest binary is not present on system" -l "tpsm/tpsm_verify_ookla_speedtest_sdn_endpoint_config.sh" -s
 
-speed_test_result=$(${ookla_bin} --upload-conn-range=16 -fjson -c ${config_path} -f human-readable 2>/dev/null)
-if [ $? -eq 0 ]; then
-    log "tpsm/tpsm_verify_ookla_speedtest_sdn_endpoint_config.sh: Speedtest process started with below details:"
-    echo "$speed_test_result"
-else
+speed_test_result=$(${ookla_bin} --upload-conn-range=16 -fjson -c ${config_path} -f human-readable 2>/dev/null) &&
+    log "tpsm/tpsm_verify_ookla_speedtest_sdn_endpoint_config.sh: Speedtest process details: ${speed_test_result}" ||
     raise "Speedtest process not started" -l "tpsm/tpsm_verify_ookla_speedtest_sdn_endpoint_config.sh" -tc
-fi
 
 pass

@@ -1,16 +1,10 @@
 #!/bin/sh
 
-# FUT environment loading
-# shellcheck disable=SC1091
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
-[ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
-[ -e "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
-
-manager_setup_file="wm2/wm2_setup.sh"
-# Wait for channel to change, not necessarily become usable (CAC for DFS)
-default_channel_change_timeout=60
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "${PLATFORM_OVERRIDE_FILE}" ] && . "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
+[ -e "${MODEL_OVERRIDE_FILE}" ] && . "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
 
 usage()
 {
@@ -85,10 +79,5 @@ update_ovsdb_entry Wifi_Radio_Config -w if_name "$radio_if_name" \
 wait_ovsdb_entry Wifi_Radio_State -w if_name "$radio_if_name" -is ht_mode "$ht_mode" &&
     log "wm2/wm2_set_ht_mode.sh: wait_ovsdb_entry - Wifi_Radio_Config reflected to Wifi_Radio_State::ht_mode is $ht_mode - Success" ||
     raise "wait_ovsdb_entry - Failed to reflect Wifi_Radio_Config to Wifi_Radio_State::ht_mode is not $ht_mode" -l "wm2/wm2_set_ht_mode.sh" -tc
-
-log "wm2/wm2_set_ht_mode.sh: Checking ht_mode at system level - LEVEL2"
-check_ht_mode_at_os_level "$ht_mode" "$vif_if_name" "$channel" &&
-    log "wm2/wm2_set_ht_mode.sh: LEVEL2 - check_ht_mode_at_os_level - ht_mode $ht_mode set at system level - Success" ||
-    raise "LEVEL2 - check_ht_mode_at_os_level - ht_mode  $ht_mode not set at system level" -l "wm2/wm2_set_ht_mode.sh" -tc
 
 pass

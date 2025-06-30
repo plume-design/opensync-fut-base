@@ -1,10 +1,10 @@
 #!/bin/sh
 
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
-[ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
-[ -e "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "${PLATFORM_OVERRIDE_FILE}" ] && . "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
+[ -e "${MODEL_OVERRIDE_FILE}" ] && . "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
 
 usage()
 {
@@ -28,7 +28,7 @@ trap '
     trap - EXIT INT
     if [ $fut_ec -ne 0 ]; then
         fut_info_dump_line
-        print_tables Wifi_Radio_Config Wifi_Radio_State Wifi_VIF_Config Wifi_VIF_State
+        print_tables Wifi_Radio_Config Wifi_Radio_State Wifi_VIF_Config Wifi_VIF_State Wifi_Inet_Config Wifi_Inet_State
         fut_info_dump_line
     fi
     exit $fut_ec
@@ -50,7 +50,13 @@ wireless_manager=${1:-"$(get_wireless_manager_name)"}
 [ $# -ge 1 ] && shift
 
 log "wm2/wm2_setup.sh - OpenSync wireless manager '${wireless_manager}' is enabled on the device - Success"
-FUT_OS_WIRELESS_MGR_UC="$(echo ${wireless_manager:?} | awk '{print toupper($0)}')"
+
+# The correct values for the AW_Debug::name field are either OW or WM, depending on the wireless manager
+if [ "$wireless_manager" = "owm" ]; then
+    FUT_OS_WIRELESS_MGR_UC="OW"
+else
+    FUT_OS_WIRELESS_MGR_UC="WM"
+fi
 
 set_manager_log ${FUT_OS_WIRELESS_MGR_UC:?} TRACE &&
     log -deb "wm2/wm2_setup.sh - Manager log for ${FUT_OS_WIRELESS_MGR_UC:?} set to TRACE - Success" ||
@@ -59,10 +65,3 @@ set_manager_log ${FUT_OS_WIRELESS_MGR_UC:?} TRACE &&
 vif_reset &&
     log -deb "wm2/wm2_setup.sh - vif_reset - Success" ||
     raise "vif_reset - Could not reset VIFs" -l "wm2/wm2_setup.sh" -fc
-
-for if_name in "$@"
-do
-    wait_ovsdb_entry Wifi_Radio_State -w if_name "$if_name" -is if_name "$if_name" &&
-        log -deb "wm2/wm2_setup.sh - Wifi_Radio_State::if_name '$if_name' present - Success" ||
-        raise "Wifi_Radio_State::if_name for '$if_name' does not exist" -l "wm2/wm2_setup.sh" -ds
-done

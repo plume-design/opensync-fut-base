@@ -41,12 +41,10 @@ test_inputs = {
         ],
     },
     "nfm_nat_loopback_check": {
-        "args_mapping": def_wifi_args[:] + ["topology"],
+        "args_mapping": def_wifi_args[:],
         "inputs": [
-            [44, "HT40", "5g", "line"],
-            [44, "HT40", "5g", "tree"],
-            [44, "HT40", "5gl", "line"],
-            [44, "HT40", "5gl", "tree"],
+            [44, "HT40", "5g"],
+            [44, "HT40", "5gl"],
         ],
     },
 }

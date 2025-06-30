@@ -1,10 +1,4 @@
 test_inputs = {
-    "cm2_ble_status_cloud_down": {
-        "default": {"test_script_timeout": 180},
-    },
-    "cm2_ble_status_internet_block": {
-        "default": {"test_script_timeout": 180},
-    },
     "cm2_cloud_down": {
         "default": {"test_script_timeout": 180},
         "args_mapping": ["unreachable_cloud_counter"],

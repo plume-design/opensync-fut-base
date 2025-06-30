@@ -22,7 +22,7 @@ if [ -f "${org_zone_policy}" ]; then
         fi
     fi
 else
-    echo "WARNING: ${org_zone_policy} is missing on RPI Server"
+    echo "WARNING: ${org_zone_policy} is missing on testbed Server"
     echo "WARNING: Some FUT testcases may fail!"
-    echo "WARNING: Consider upgrading to latest RPI Server image!"
+    echo "WARNING: Consider upgrading to latest testbed Server image!"
 fi

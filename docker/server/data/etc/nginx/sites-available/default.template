@@ -26,6 +26,6 @@ server {
     location ${OPENSYNC_ROOT}/resource/um/ {
         try_files $uri $uri/ =404;
         autoindex on;
-        limit_rate 1024k;
+        limit_rate 10240k;
     }
 }

@@ -1,12 +1,10 @@
 #!/bin/sh
 
-# FUT environment loading
-# shellcheck disable=SC1091
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
-[ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
-[ -e "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "${PLATFORM_OVERRIDE_FILE}" ] && . "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
+[ -e "${MODEL_OVERRIDE_FILE}" ] && . "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
 
 usage()
 {
@@ -66,7 +64,7 @@ insert_ovsdb_entry Wifi_Speedtest_Config -i test_type "OOKLA" -i testid "$testid
     log "tpsm/tpsm_verify_ookla_speedtest.sh: insert_ovsdb_entry - Wifi_Speedtest_Config::test_type - Success" ||
     raise "insert_ovsdb_entry - Failed to insert Wifi_Speedtest_Config::test_type" -l "tpsm/tpsm_verify_ookla_speedtest.sh" -tc
 
-sleep 1
+wait_for_function_exit_code 0 "pgrep $ookla_path" ${process_timeout:-30}
 
 pid_of_ookla=$(get_pid "$ookla_path")
 [ -n "$pid_of_ookla" ] &&

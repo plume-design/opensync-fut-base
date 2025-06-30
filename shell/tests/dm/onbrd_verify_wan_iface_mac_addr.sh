@@ -1,12 +1,10 @@
 #!/bin/sh
 
-# FUT environment loading
-# shellcheck disable=SC1091
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
-[ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
-[ -e "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "${PLATFORM_OVERRIDE_FILE}" ] && . "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
+[ -e "${MODEL_OVERRIDE_FILE}" ] && . "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
 
 manager_setup_file="onbrd/onbrd_setup.sh"
 usage()
@@ -72,8 +70,7 @@ elif [ $# -gt ${NARGS} ]; then
     raise "Requires at most ${NARGS} input argument(s)" -l "onbrd/onbrd_verify_wan_iface_mac_addr.sh" -arg
 fi
 
-# shellcheck disable=SC2060
-mac_address=$(get_radio_mac_from_system "$wan_if_name" | tr [A-Z] [a-z])
+mac_address=$(get_radio_mac_from_system "$wan_if_name" | tr '[A-Z]' '[a-z]')
 if [ -z "$mac_address" ]; then
     raise "Could not determine MAC for WAN interface '$wan_if_name' from system" -l "onbrd/onbrd_verify_wan_iface_mac_addr.sh" -tc
 fi

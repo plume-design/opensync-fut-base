@@ -2,7 +2,7 @@
 
 # Include basic environment config
 export FUT_UNIT_LIB_SRC=true
-[ "${FUT_BASE_LIB_SRC}" != true ] && source "${FUT_TOPDIR}/shell/lib/base_lib.sh"
+[ "${FUT_BASE_LIB_SRC}" != true ] && . "${FUT_TOPDIR}/shell/lib/base_lib.sh"
 echo "${FUT_TOPDIR}/shell/lib/unit_lib.sh sourced"
 
 ###############################################################################
@@ -73,34 +73,6 @@ add_tap_interface()
 
 ###############################################################################
 # DESCRIPTION:
-#   Function checks if beacon interval is applied at OS - LEVEL2.
-#   Function raises an exception if beacon interval is not applied.
-# STUB:
-#   This function is a stub. It always raises an exception and needs
-#   a function with the same name and usage in platform or device overrides.
-# INPUT PARAMETER(S):
-#   $1  Beacon interval (int, required)
-#   $2  VIF interface name (string, required)
-# RETURNS:
-#   0   Beacon interval on system matches expected value
-# USAGE EXAMPLE(S):
-#   check_beacon_interval_at_os_level 600 home-ap-U50
-###############################################################################
-check_beacon_interval_at_os_level()
-{
-    local NARGS=2
-    [ $# -ne ${NARGS} ] &&
-        raise "unit_lib:check_beacon_interval_at_os_level requires ${NARGS} input argument(s), $# given" -arg
-    bcn_int=$1
-    vif_if_name=$2
-
-    log -deb "unit_lib:check_beacon_interval_at_os_level - Checking Beacon interval for interface '$vif_if_name' at OS - LEVEL2"
-    # Provide override in platform specific file
-    raise "This is a stub function. Override implementation needed." -l "unit_lib:check_beacon_interval_at_os_level" -fc
-}
-
-###############################################################################
-# DESCRIPTION:
 #   Function compares CN (Common Name) of the certificate to
 #   several parameters:
 #       - device model string,
@@ -133,37 +105,6 @@ check_certificate_cn()
     echo "Device ID: $device_id"
     local wan_eth_mac=${4}
     echo "WAN eth port MAC address: $wan_eth_mac"
-
-    return 0
-}
-
-###############################################################################
-# DESCRIPTION:
-#   Function checks if channel is applied at OS - LEVEL2.
-#   Raises exception if actual channel does not match expected value
-# INPUT PARAMETER(S):
-#   $1  Channel (int, required)
-#   $2  VIF interface name (string, required)
-# RETURNS:
-#   0  if actual channel matches expected value
-#   See DESCRIPTION.
-# USAGE EXAMPLE(S):
-#   check_channel_at_os_level 1 home-ap-24
-###############################################################################
-check_channel_at_os_level()
-{
-    local NARGS=2
-    [ $# -ne ${NARGS} ] &&
-        raise "unit_lib:check_channel_at_os_level requires ${NARGS} input argument(s), $# given" -arg
-    # shellcheck disable=SC2034
-    channel=$1
-    # shellcheck disable=SC2034
-    vif_if_name=$2
-
-    log -deb "unit_lib:check_channel_at_os_level - Checking channel '$channel' at OS - LEVEL2"
-    wait_for_function_output $channel "get_channel_from_os $vif_if_name" &&
-        log -deb "unit_lib:check_channel_at_os_level - channel '$channel' is set at OS - LEVEL2 - Success" ||
-        raise "channel '$channel' is not set at OS - LEVEL2" -l "unit_lib:check_channel_at_os_level" -tc
 
     return 0
 }
@@ -269,9 +210,7 @@ check_eth_interface_state_is_up()
     [ $# -ne ${NARGS} ] &&
         raise "unit_lib:check_eth_interface_state_is_up requires ${NARGS} input argument(s), $# given" -arg
     if_name=$1
-
     ifconfig "$if_name" 2>/dev/null | grep Metric | grep UP
-    return $?
 }
 
 ###############################################################################
@@ -364,40 +303,6 @@ check_fw_pattern()
     return 0
 }
 
-###############################################################################
-# DESCRIPTION:
-#   Function checks if HT mode for interface on selected channel is
-#   applied at OS - LEVEL2.
-#   Raises exception if actual HT mode does not match expected value
-# INPUT PARAMETER(S):
-#   $1  HT mode (string, required)
-#   $2  VIF interface name (string, required)
-#   $3  Channel (int, required)
-# RETURNS:
-#   0  if actual HT mode matches expected value
-#   See DESCRIPTION.
-# USAGE EXAMPLE(S):
-#   check_ht_mode_at_os_level HT40 home-ap-24 2
-#   check_ht_mode_at_os_level HT20 home-ap-50 36
-###############################################################################
-check_ht_mode_at_os_level()
-{
-    local NARGS=3
-    [ $# -ne ${NARGS} ] &&
-        raise "unit_lib:check_ht_mode_at_os_level requires ${NARGS} input argument(s), $# given" -arg
-    # shellcheck disable=SC2034
-    ht_mode=$1
-    vif_if_name=$2
-    channel=$3
-
-    log -deb "unit_lib:check_ht_mode_at_os_level - Checking HT mode for channel '$channel' at OS - LEVEL2"
-    wait_for_function_output "$ht_mode" "get_ht_mode_from_os $vif_if_name $channel" &&
-        log -deb "unit_lib:check_ht_mode_at_os_level - HT Mode '$ht_mode' set at OS - LEVEL2 - Success" ||
-        raise "HT Mode '$ht_mode' is not set at OS - LEVEL2" -l "unit_lib:check_ht_mode_at_os_level" -tc
-
-    return 0
-}
-
 ##################################################################################
 # DESCRIPTION:
 #   Function validates the 'id' field of the AWLAN_Node table and raises an
@@ -472,11 +377,8 @@ check_if_port_in_bridge()
     bridge=$1
     port_name=$2
 
-    if linux_native_bridge_enabled; then
-        brctl show ${bridge} | grep -wF "${port_name}"
-    else
-        ovs-vsctl list-ports "$bridge" | grep -wF "$port_name"
-    fi
+    ovs-vsctl list-ports "$bridge" | grep -wF "$port_name"
+    # shellcheck disable=SC2181
     if [ "$?" = 0 ]; then
         log -deb "unit_lib:check_if_port_in_bridge - Port '$port_name' exists on bridge '$bridge'"
         return 0
@@ -504,8 +406,7 @@ check_interface_broadcast_set_on_system()
         raise "unit_lib:check_interface_broadcast_set_on_system requires ${NARGS} input argument(s), $# given" -arg
     if_name=$1
 
-    ifconfig "$if_name" | tr -s ' :' '@' | grep -e '^@inet@' | cut -d '@' -f 6
-    if [ $? -eq 0 ]; then
+    if ifconfig "$if_name" | tr -s ' :' '@' | grep -e '^@inet@' | cut -d '@' -f 6; then
         log -deb "unit_lib:check_interface_broadcast_set_on_system - Broadcast set for interface '${if_name}'"
         return 0
     else
@@ -531,11 +432,8 @@ check_interface_exists()
     [ $# -ne ${NARGS} ] &&
         raise "unit_lib:check_interface_exists requires ${NARGS} input argument(s), $# given" -arg
     local if_name=$1
-
     log -deb "unit_lib:check_interface_exists - Checking if interface '${if_name}' exists on OS - LEVEL2"
-
-    ifconfig | grep -wE "$if_name"
-    if [ "$?" -eq 0 ]; then
+    if ifconfig | grep -wE "$if_name"; then
         log -deb "unit_lib:check_interface_exists - Interface '${if_name}' exists on OS - LEVEL2"
         return 0
     else
@@ -584,8 +482,7 @@ check_interface_mtu_set_on_system()
         raise "unit_lib:check_interface_mtu_set_on_system requires ${NARGS} input argument(s), $# given" -arg
     if_name=$1
 
-    ifconfig "$if_name" | tr -s ' ' | grep "MTU" | cut -d ":" -f2 | awk '{print $1}'
-    if [ $? -eq 0 ]; then
+    if ifconfig "$if_name" | tr -s ' ' | grep "MTU" | cut -d ":" -f2 | awk '{print $1}'; then
         log -deb "unit_lib:check_interface_mtu_set_on_system - MTU set for interface '${if_name}'"
         return 0
     else
@@ -613,8 +510,7 @@ check_interface_nat_enabled()
         raise "unit_lib:check_interface_nat_enabled requires ${NARGS} input argument(s), $# given" -arg
     if_name=$1
 
-    iptables -t nat --list -v  | tr -s ' ' / | grep '/MASQUERADE/' | grep "$if_name"
-    if [ $? -eq 0 ]; then
+    if iptables -t nat --list -v  | tr -s ' ' / | grep '/MASQUERADE/' | grep "$if_name"; then
         log -deb "unit_lib:check_interface_nat_enabled - Interface '${if_name}' NAT enabled"
         return 0
     else
@@ -641,8 +537,7 @@ check_interface_netmask_set_on_system()
         raise "unit_lib:check_interface_netmask_set_on_system requires ${NARGS} input argument(s), $# given" -arg
     if_name=$1
 
-    ifconfig "$if_name" | tr -s ' :' '@' | grep -e '^@inet@' | cut -d '@' -f 8
-    if [ $? -eq 0 ]; then
+    if ifconfig "$if_name" | tr -s ' :' '@' | grep -e '^@inet@' | cut -d '@' -f 8; then
         log -deb "unit_lib:check_interface_netmask_set_on_system - Netmask set for interface '${if_name}'"
         return 0
     else
@@ -670,8 +565,7 @@ check_ip_port_forwarding()
         raise "unit_lib:check_ip_port_forwarding requires ${NARGS} input argument(s), $# given" -arg
     if_name=$1
 
-    iptables -t nat --list -v  | tr -s ' ' / | grep '/DNAT/' | grep "$if_name"
-    if [ $? -eq 0 ]; then
+    if iptables -t nat --list -v  | tr -s ' ' / | grep '/DNAT/' | grep "$if_name"; then
         log -deb "unit_lib:check_ip_port_forwarding - IP port forward set for interface '${if_name}'"
         return 0
     else
@@ -749,7 +643,7 @@ check_is_channel_allowed()
         raise "Wifi_Radio_State::allowed_channels for '$if_name' is empty" -l "unit_lib:check_is_channel_allowed" -ds
     fi
     log -deb "unit_lib:check_is_channel_allowed - allowed_channels: ${allowed_channels}"
-    contains_element "${channel}" $(echo ${allowed_channels} | sed 's/\[/ /g; s/\]/ /g; s/,/ /g;') &&
+    contains_element "${channel}" "$(echo ${allowed_channels} | sed 's/\[/ /g; s/\]/ /g; s/,/ /g;')" &&
         log -deb "unit_lib:check_is_channel_allowed - Channel '$channel' is allowed on radio '$if_name' - Success" ||
         raise "Wifi_Radio_State::allowed_channels for '$if_name' does not contain '$channel'" -l "unit_lib:check_is_channel_allowed" -ds
 
@@ -861,8 +755,7 @@ check_kconfig_option()
     if ! [ -f "${kconfig_path}" ]; then
         raise "kconfig file is not present on ${kconfig_path}" -l "unit_lib:check_kconfig_option" -ds
     fi
-    cat "${kconfig_path}" | grep -q "${kconfig_option_name}=${kconfig_option_value}"
-    return $?
+    grep -q "${kconfig_option_name}=${kconfig_option_value}" "${kconfig_path}"
 }
 
 ###############################################################################
@@ -886,10 +779,9 @@ check_kconfig_option_exists()
 
     kconfig_path="${OPENSYNC_ROOTDIR}/etc/kconfig"
     if ! [ -f "${kconfig_path}" ]; then
-        raise "kconfig file is not present on ${kconfig_path}" -l "unit_lib:check_kconfig_option" -ds
+        raise "kconfig file is not present on ${kconfig_path}" -l "unit_lib:check_kconfig_option_exists" -ds
     fi
     grep -qw "${kconfig_option_name}" "${kconfig_path}"
-    return $?
 }
 
 ##################################################################################
@@ -987,8 +879,7 @@ check_ovsdb_entry()
     done
     check_cmd="${OVSH} s $ovsdb_table $conditions_string"
     log -deb "unit_lib:check_ovsdb_entry - Checking if entry exists:\n\t$check_cmd"
-    eval "$check_cmd"
-    if [ "$?" == 0 ]; then
+    if eval "$check_cmd"; then
         log -deb "unit_lib:check_ovsdb_entry - Entry $ovsdb_table $conditions_string exists"
         return 0
     else
@@ -1031,12 +922,9 @@ check_ovsdb_entry_transact()
             -w)
                 echo ${2} | grep -e "[ \"]" -e '\\' &&
                     val_str="$2"
-                    echo "$2" | grep -q "map"
-                    if [ "$?" != "0" ]; then
-                        echo "$2" | grep -q "false\|true"
-                        if [ "$?" != "0" ]; then
-                            echo "$2" | grep -q "\""
-                            if [ "$?" != "0" ]; then
+                    if ! echo "$2" | grep -q "map"; then
+                        if ! echo "$2" | grep -q "false\|true"; then
+                            if ! echo "$2" | grep -q "\""; then
                                 [ "$2" -eq "$2" ] 2>/dev/null && is_number="0" || is_number="1"
                                 if [ "${is_number}" == "1" ]; then
                                     val_str='"'$2'"'
@@ -1057,10 +945,8 @@ check_ovsdb_entry_transact()
     transact_string=${transact_string//],]/]]}
 
     log -deb "unit_lib:check_ovsdb_entry - Transact string: ovsdb-client transact \'${transact_string}\'"
-    res=$(eval ovsdb-client transact \'${transact_string}\')
-    if [ "$?" == "0" ]; then
-        echo "${res}" | grep '\[{"rows":\[\]}\]'
-        if [ "$?" == "0" ]; then
+    if res=$(eval ovsdb-client transact \'${transact_string}\'); then
+        if echo "${res}" | grep '\[{"rows":\[\]}\]'; then
             log -deb "unit_lib:check_ovsdb_entry - Entry does not exist"
             return 1
         else
@@ -1121,12 +1007,7 @@ check_ovsdb_table_field_exists()
     ovsdb_table=$1
     field_name=$2
 
-    $(${OVSH} s "$ovsdb_table" "$field_name" &> /dev/null)
-    if [ $? -eq 0 ]; then
-        return 0
-    else
-        return 1
-    fi
+    ${OVSH} s "$ovsdb_table" "$field_name" &> /dev/null
 }
 
 ###############################################################################
@@ -1185,7 +1066,8 @@ check_pid_udhcp()
         raise "unit_lib:check_pid_udhcp requires ${NARGS} input argument(s), $# given" -arg
     local if_name="${1}"
 
-    PID=$($(get_process_cmd) | grep -e udhcpc | grep -e "${if_name}" | grep -v 'grep' | awk '{ print $1 }')
+    ps_cmd=$(get_process_cmd)
+    PID=$(eval ${ps_cmd} | grep -e udhcpc | grep -e "${if_name}" | grep -v 'grep' | awk '{ print $1 }')
     if [ -z "$PID" ]; then
         log -deb "unit_lib:check_pid_udhcp - DHCP client not running on '${if_name}'"
         return 1
@@ -1203,17 +1085,22 @@ check_pid_udhcp()
 #   Raises exception on fail:
 #       - logs not found
 # INPUT PARAMETER(S):
-#   None.
+#   $1  Interface name (string, required)
 # RETURNS:
-#   0   On success.
-#   See DESCRIPTION.
+#   0   log found
+#   1   log not found
 # USAGE EXAMPLE(S):
-#   check_pm_report_log
+#   check_pm_report_log logread
 ###############################################################################
 check_pm_report_log()
 {
+    local NARGS=1
+    [ $# -ne ${NARGS} ] &&
+        raise "unit_lib:check_pm_report_log requires ${NARGS} input argument(s), $# given" -arg
+    local logread_cmd="${1}"
+
     log_msg="LM: Run log-pull procedure"
-    pm_log_grep="$LOGREAD | grep -i '$log_msg'"
+    pm_log_grep="${logread_cmd} | grep -i '$log_msg'"
 
     log "unit_lib:check_pm_report_log - $log_msg"
     wait_for_function_response 0 "${pm_log_grep}" &&
@@ -1291,8 +1178,7 @@ check_radio_vif_state()
     done
 
     log -deb "unit_lib:check_radio_vif_state - Checking if interface $if_name is up"
-    check_vif_interface_state_is_up "$if_name"
-    if [ "$?" -eq 0 ]; then
+    if check_vif_interface_state_is_up "$if_name"; then
         log -deb "unit_lib:check_radio_vif_state - Interface '$if_name' is up"
     else
         log -deb "unit_lib:check_radio_vif_state - Interface '$if_name' is not up"
@@ -1301,8 +1187,7 @@ check_radio_vif_state()
 
     func_params=${radio_args//$replace/-w}
     # shellcheck disable=SC2086
-    check_ovsdb_entry Wifi_Radio_State $func_params
-    if [ $? -eq 0 ]; then
+    if check_ovsdb_entry Wifi_Radio_State $func_params; then
         log -deb "unit_lib:check_radio_vif_state - Wifi_Radio_State is valid for given configuration"
     else
         log -deb "unit_lib:check_radio_vif_state - Entry with required radio arguments in Wifi_Radio_State does not exist"
@@ -1310,8 +1195,7 @@ check_radio_vif_state()
     fi
 
     func_params=${vif_args//$replace/-w}
-    eval check_ovsdb_entry Wifi_VIF_State $func_params
-    if [ $? -eq 0 ]; then
+    if eval check_ovsdb_entry Wifi_VIF_State $func_params; then
         log -deb "unit_lib:check_radio_vif_state - Wifi_VIF_State is valid for given configuration"
     else
         log -deb "unit_lib:check_radio_vif_state - Entry with required VIF arguments in Wifi_VIF_State does not exist"
@@ -1339,70 +1223,9 @@ check_resolv_conf()
         raise "unit_lib:check_resolv_conf requires ${NARGS} input argument(s), $# given" -arg
     primary_dns=$1
 
-    cat /tmp/resolv.conf | grep "nameserver $primary_dns" &&
+    grep "nameserver $primary_dns" /tmp/resolv.conf &&
         return 0 ||
         return 1
-}
-
-###############################################################################
-# DESCRIPTION:
-#   Function checks if the radio TX chainmask is applied at OS - LEVEL2.
-# STUB:
-#   This function is a stub. It always raises an exception and needs
-#   a function with the same name and usage in platform or device overrides.
-# INPUT PARAMETER(S):
-#   $1  Radio TX Chainmask (int, required)
-#   $2  Radio interface name (string, required)
-# RETURNS:
-#   0   Radio TX Chainmask on system matches expected value.
-# USAGE EXAMPLE(S):
-#   check_tx_chainmask_at_os_level 3 IF_NAME
-###############################################################################
-check_tx_chainmask_at_os_level()
-{
-    local NARGS=2
-    [ $# -ne ${NARGS} ] &&
-        raise "unit_lib:check_tx_chainmask_at_os_level requires ${NARGS} input argument(s), $# given" -arg
-    tx_chainmask=$1
-    if_name=$2
-
-    log "unit_lib:check_tx_chainmask_at_os_level - Checking Radio TX Chainmask for interface '$if_name' at OS - LEVEL2"
-    # Provide override in platform specific file
-    raise "This is a stub function. Override implementation needed." -l "unit_lib:check_tx_chainmask_at_os_level" -fc
-}
-
-###############################################################################
-# DESCRIPTION:
-#   Function checks if Tx Power is applied at OS - LEVEL2.
-#   Raises exception if actual Tx Power does not match expected value
-# INPUT PARAMETER(S):
-#   $1  Tx Power (int, required)
-#   $2  VIF interface name (string, required)
-#   $3  Radio interface name (string, required)
-# RETURNS:
-#   0  if actual Tx Power matches expected value
-#   See DESCRIPTION.
-# USAGE EXAMPLE(S):
-#   check_tx_power_at_os_level 21 home-ap-24 wifi0
-#   check_tx_power_at_os_level 14 wl0.2 wl0
-###############################################################################
-check_tx_power_at_os_level()
-{
-    local NARGS=3
-    [ $# -ne ${NARGS} ] &&
-        raise "unit_lib:check_tx_power_at_os_level requires ${NARGS} input argument(s), $# given" -arg
-    # shellcheck disable=SC2034
-    tx_power=$1
-    # shellcheck disable=SC2034
-    vif_if_name=$2
-    # shellcheck disable=SC2034
-    if_name=$3
-
-    log -deb "unit_lib:check_tx_power_at_os_level - Checking Tx Power for interface '$if_name' at OS - LEVEL2"
-    wait_for_function_output $tx_power "get_tx_power_from_os $vif_if_name" &&
-        log -deb "unit_lib:check_tx_power_at_os_level - Tx Power '$tx_power' is set at OS - LEVEL2 - Success" ||
-        raise "Tx Power '$tx_power' is not set at OS - LEVEL2" -l "unit_lib:check_tx_power_at_os_level" -tc
-    return 0
 }
 
 ###############################################################################
@@ -1420,33 +1243,6 @@ check_tx_power_at_os_level()
 check_vif_interface_state_is_up()
 {
     check_eth_interface_state_is_up "$@"
-}
-
-###############################################################################
-# DESCRIPTION:
-#   Function checks if vlan interface exists at OS level - LEVEL2.
-# STUB:
-#   This function is a stub. It always raises an exception and needs
-#   a function with the same name and usage in platform or device overrides.
-# INPUT PARAMETER(S):
-#   $1  Parent interface name (string, required)
-#   $2  VLAN ID (int, required)
-# RETURNS:
-#   0   vlan interface exists on system.
-# USAGE EXAMPLE(S):
-#  check_vlan_iface eth0 100
-###############################################################################
-check_vlan_iface()
-{
-    local NARGS=2
-    [ $# -ne ${NARGS} ] &&
-        raise "unit_lib:check_vlan_iface requires ${NARGS} input argument(s), $# given" -arg
-    parent_ifname=$1
-    vlan_id=$2
-
-    log "unit_lib:check_vlan_iface - Checking vlan interface at OS - LEVEL2"
-    # Provide override in platform specific file
-    raise "This is a stub function. Override implementation needed for each platform." -l "unit_lib:check_vlan_iface" -fc
 }
 
 ###############################################################################
@@ -1488,41 +1284,19 @@ check_wan_ip_l2()
 
 ###############################################################################
 # DESCRIPTION:
-#   Function checks if device supports WPA3
+#   Function clears the DNS cache by killing the dnsmasq process.
 # INPUT PARAMETER(S):
 #   None.
 # RETURNS:
-#   1   Always.
-# NOTE:
-#   This is a stub function. Provide function for each device in overrides.
-#   Defaults to 1 WPA3 incompatible
-# USAGE EXAMPLE(S):
-#   check_wpa3_compatibility
-###############################################################################
-check_wpa3_compatibility()
-{
-    log -deb "unit_lib:check_wpa3_compatibility - This is STUB function, provide override for device. Default to WPA3 incompatible"
-    return 1
-}
-
-###############################################################################
-# DESCRIPTION:
-#   Function clears the DNS cache.
-# STUB:
-#   This function is a stub. It always raises an exception and needs
-#   a function with the same name and usage in platform or device overrides.
-# INPUT PARAMETER(S):
-#   None.
-# RETURNS:
-#   0   If DNS cache on the device was cleared.
+#   0   On successful DNS cache clear.
+#   1   On failure to clear DNS cache.
 # USAGE EXAMPLE(S):
 #   clear_dns_cache
 ###############################################################################
 clear_dns_cache()
 {
-    log "unit_lib:clear_dns_cache - Clearing DNS cache on the device."
-    # Provide override in platform specific file
-    raise "This is a stub function. Override implementation needed." -l "unit_lib:clear_dns_cache" -fc
+    log -deb "unit_lib:clear_dns_cache - Clearing DNS cache by killing dnsmasq."
+    killall_process_by_name "dnsmasq"
 }
 
 ###############################################################################
@@ -1630,7 +1404,7 @@ configure_dhcp_server_on_interface()
 
 ###############################################################################
 # DESCRIPTION:
-#   Function configures STA VIF by populating the Wifi_VIF_Config OVSDB  table.
+#   Function configures STA VIF by populating the Wifi_VIF_Config OVSDB table.
 #
 # INPUT PARAMETER(S):
 #   Parameters are fed into function as key-value pairs. Only 'vif_if_name',
@@ -1639,7 +1413,7 @@ configure_dhcp_server_on_interface()
 #   Function supports the following keys for parameter values:
 #   -mac_list, -mac_list_type, -mode, -multi_ap, -parent, -ssid,
 #   -vif_if_name, -wpa, -wpa_key_mgmt, -wpa_oftags, -wpa_psks,
-#   -clear_wcc, -wait_ip
+#   -clear_wcc, -wait_ip, -network_if_name
 # RETURNS:
 #   0   On success.
 #   See DESCRIPTION.
@@ -1679,6 +1453,10 @@ configure_sta_interface()
                 ;;
             -wait_ip)
                 wait_ip=${1}
+                shift
+                ;;
+            -network_if_name)
+                network_if_name=${1}
                 shift
                 ;;
             -mac_list | \
@@ -1726,8 +1504,7 @@ configure_sta_interface()
 
     # Check if entry for if_name already exists in Wifi_VIF_Config table
     # Update if entry exists, insert otherwise
-    check_ovsdb_entry Wifi_VIF_Config -w if_name "${vif_if_name}"
-    if [ $? -eq 0 ]; then
+    if check_ovsdb_entry Wifi_VIF_Config -w if_name "${vif_if_name}"; then
         log -deb "unit_lib:configure_sta_interface - Updating existing VIF entry"
         function_to_call="update_ovsdb_entry"
         function_arg="-u"
@@ -1762,11 +1539,15 @@ configure_sta_interface()
         raise "wait_ovsdb_entry Wifi_VIF_State -w if_name $vif_if_name $func_params" -l "unit_lib:configure_sta_interface" -fc
 
     if [ "${wait_ip}" == "true" ]; then
-        log -deb "unit_lib:configure_sta_interface - Waiting for ${vif_if_name} Wifi_Inet_State address"
-        wait_for_function_response "notempty" "get_ovsdb_entry_value Wifi_Inet_State inet_addr -w if_name ${vif_if_name}"
-        wait_ovsdb_entry Wifi_Inet_State -w if_name "${vif_if_name}" -is_not inet_addr "0.0.0.0" &&
-            log -deb "unit_lib:configure_sta_interface - ${vif_if_name} inet_addr in Wifi_Inet_State is $(get_ovsdb_entry_value Wifi_Inet_State inet_addr -w if_name $vif_if_name)" ||
-            raise "${vif_if_name} inet_addr in Wifi_Inet_State is empty" -l "unit_lib:configure_sta_interface" -fc
+        if [ -z "${network_if_name}" ]; then
+            log -deb "unit_lib:configure_sta_interface - Network interface name argument empty, defaulting to: ${vif_if_name}"
+            network_if_name="${vif_if_name}"
+        fi
+        log -deb "unit_lib:configure_sta_interface - Waiting for ${network_if_name} Wifi_Inet_State address"
+        wait_for_function_response "notempty" "get_ovsdb_entry_value Wifi_Inet_State inet_addr -w if_name ${network_if_name}"
+        wait_ovsdb_entry Wifi_Inet_State -w if_name "${network_if_name}" -is_not inet_addr "0.0.0.0" &&
+            log -deb "unit_lib:configure_sta_interface - ${network_if_name} inet_addr in Wifi_Inet_State is $(get_ovsdb_entry_value Wifi_Inet_State inet_addr -w if_name $network_if_name)" ||
+            raise "${network_if_name} inet_addr in Wifi_Inet_State is empty" -l "unit_lib:configure_sta_interface" -fc
     fi
     log -deb "unit_lib:configure_sta_interface: STA VIF entry successfully configured"
     return 0
@@ -1861,21 +1642,23 @@ connect_to_fut_cloud()
 #   Function searches a list of values for a provided value.
 # INPUT PARAMETER(S):
 #   $1  Value to look for in the list
-#   $@  the values consisting the list from which to match the value
+#   $@  the values consisting the list from which to match the value. Can be
+#       one space separated string or several input arguments.
 # RETURNS:
 #   0   Value is found in the list
 #   1   Value is not found in the list
 # USAGE EXAMPLE(S):
-#   contains_element baz foo bar baz
+#   contains_element "baz" "foo" "bar" "baz"
+#   contains_element "baz" "foo bar baz"
 ###############################################################################
 contains_element()
 {
     local match="$1"
     shift
-    while [ -n "${1}" ]; do
-        value="${1}"
+    # shellcheck disable=SC2068
+    [ $# -eq 1 ] && set -- $@
+    for value in "$@"; do
         [ "${value}" == "${match}" ] && echo 0 && return 0
-        shift
     done
     echo 1 && return 1
 }
@@ -1987,8 +1770,7 @@ create_inet_entry()
     fi
 
     # Check if entry for given interface already exists, and if exists perform update action instead of insert
-    check_ovsdb_entry Wifi_Inet_Config -w if_name "${inet_if_name_val}"
-    if [ $? -eq 0 ]; then
+    if check_ovsdb_entry Wifi_Inet_Config -w if_name "${inet_if_name_val}"; then
         log -deb "unit_lib:create_inet_entry - Updating existing interface in Wifi_Inet_Config"
         function_to_call="update_ovsdb_entry"
         function_arg="-u"
@@ -2422,8 +2204,7 @@ create_vif_interface()
 
     # Check if entry for if_name already exists in Wifi_VIF_Config table
     # Update if entry exists, insert otherwise
-    check_ovsdb_entry Wifi_VIF_Config -w if_name "${vif_if_name}"
-    if [ $? -eq 0 ]; then
+    if check_ovsdb_entry Wifi_VIF_Config -w if_name "${vif_if_name}"; then
         log -deb "unit_lib:create_vif_interface - Updating existing VIF entry"
         function_to_call="update_ovsdb_entry"
         function_arg="-u"
@@ -2513,6 +2294,14 @@ device_init()
     disable_fatal_state &&
         log -deb "unit_lib:device_init - CM fatal state disabled - Success" ||
         raise "Could not disable CM fatal state" -l "unit_lib:device_init" -ds
+
+    # Check if all radio interfaces are created
+    radio_if_names=$(get_radio_if_names)
+    for if_name in ${radio_if_names:?}; do
+        wait_ovsdb_entry Wifi_Radio_State -w if_name "$if_name" -is if_name "$if_name" &&
+            log -deb "unit_lib:device_init - Wifi_Radio_State::if_name '$if_name' present - Success" ||
+            raise "Wifi_Radio_State::if_name for '$if_name' does not exist" -l "unit_lib:device_init" -ds
+    done
 }
 
 ###############################################################################
@@ -2545,12 +2334,43 @@ disable_fatal_state()
     if [ ! -d "${fatal_state_inhibit_dir:?}" ]; then
         mkdir -p "${fatal_state_inhibit_dir:?}"
     fi
-    touch "${fatal_state_inhibit_path:?}"
-    if [ $? != 0 ]; then
+    if ! touch "${fatal_state_inhibit_path:?}"; then
         log -deb "unit_lib:disable_fatal_state - ${fatal_state_inhibit_dir} is not writable, mount a tmpfs over it."
         mount -t tmpfs tmpfs "${fatal_state_inhibit_dir:?}"
         touch "${fatal_state_inhibit_path:?}"
     fi
+}
+
+###############################################################################
+# DESCRIPTION:
+#   Function disables all GRE interfaces by setting their enabled state to false
+#   in the Wifi_Inet_Config table.
+#   If no GRE interfaces are found, it will log a notification and exit gracefully.
+# INPUT PARAMETER(S):
+#   None
+# RETURNS:
+#   0   On success
+# USAGE EXAMPLE(S):
+#   disable_all_gre_interfaces
+###############################################################################
+disable_all_gre_interfaces()
+{
+    local gre_interfaces
+    gre_interfaces=$(get_gre_if_names)
+
+    if [ -z "$gre_interfaces" ]; then
+        log -deb "unit_lib:disable_all_gre_interfaces - No GRE interfaces found"
+        return 0
+    fi
+
+    echo "$gre_interfaces" | while read -r if_name; do
+        update_ovsdb_entry Wifi_Inet_Config -w if_name "$if_name" -u enabled false &&
+            log -deb "unit_lib:disable_all_gre_interfaces - Table Wifi_Inet_Config updated for $if_name" ||
+            raise "Failed to update table Wifi_Inet_Config for $if_name" -l "unit_lib:disable_all_gre_interfaces" -fc
+        wait_ovsdb_entry Wifi_Inet_State -w if_name "$if_name" -is enabled false &&
+            log -deb "unit_lib:disable_all_gre_interfaces - Table Wifi_Inet_State updated for $if_name" ||
+            raise "Failed to reflect Wifi_Inet_Config update in Wifi_Inet_State for $if_name" -l "unit_lib:disable_all_gre_interfaces" -fc
+    done
 }
 
 ###############################################################################
@@ -2640,6 +2460,21 @@ fut_info_dump_line()
 
 ###############################################################################
 # DESCRIPTION:
+#   Function echoes the GRE interface names in Wifi_Inet_State table.
+# INPUT PARAMETER(S):
+#   None.
+# RETURNS:
+#   Echoes GRE interface names.
+# USAGE EXAMPLE(S):
+#   get_gre_if_names
+###############################################################################
+get_gre_if_names()
+{
+    ${OVSH} s Wifi_Inet_State if_name -w if_type==gre -r
+}
+
+###############################################################################
+# DESCRIPTION:
 #   Function marks interface as no-flood.
 #   So, only the traffic matching the flow filter will hit the plugin.
 # INPUT PARAMETER(S):
@@ -2669,27 +2504,27 @@ gen_no_flood_cmd()
 
 ###############################################################################
 # DESCRIPTION:
-#   Function echoes chainmask of the radio.
-#   This function actually echoes chainmask without performing
-#   any action on the received value. An override function can
-#   be implemented for any target to change this behavior.
+#   Function echoes all ports from the provided network bridge to stdout.
 # INPUT PARAMETER(S):
-#   $1  Chainmask of the radio (int, required)
-#   $2  Frequency band of the radio (string, required)
+#   $1  Bridge name (string, required)
 # RETURNS:
-#   Transformed/actual chainmask of the radio.
+#   0   On success.
+#   See DESCRIPTION.
 # USAGE EXAMPLE(S):
-#   get_actual_chainmask 15 5GU
+#   get_all_ports_in_bridge br-home
 ###############################################################################
-get_actual_chainmask()
+get_all_ports_in_bridge()
 {
-    local NARGS=2
+    local NARGS=1
     [ $# -ne ${NARGS} ] &&
-        raise "unit_lib:get_actual_chainmask requires ${NARGS} input argument(s), $# given" -arg
-    chainmask=${1}
-    freq_band=${2}
+        raise "unit_lib:get_all_ports_in_bridge requires ${NARGS} input argument(s), $# given" -arg
+    bridge=$1
 
-    echo "${chainmask}"
+    if linux_native_bridge_enabled; then
+        nb_get_all_ports_in_bridge "${bridge}"
+    else
+        ovs_get_all_ports_in_bridge "${bridge}"
+    fi
 }
 
 ###############################################################################
@@ -2701,13 +2536,13 @@ get_actual_chainmask()
 # RETURNS:
 #   Allowed channels for the interface.
 # USAGE EXAMPLE(S):
-#   get_actual_chainmask 15 5GU
+#   get_allowed_channels_for_interface 15 5GU
 ###############################################################################
 get_allowed_channels_for_interface()
 {
     local NARGS=1
     [ $# -ne ${NARGS} ] &&
-        raise "unit_lib:check_is_channel_allowed requires ${NARGS} input argument(s), $# given" -arg
+        raise "unit_lib:get_allowed_channels_for_interface requires ${NARGS} input argument(s), $# given" -arg
     if_name=$1
 
     allowed_channels=$(get_ovsdb_entry_value Wifi_Radio_State allowed_channels -w if_name "$if_name" -r)
@@ -2734,7 +2569,7 @@ get_associated_leaf_ip()
     [ $# -ne ${NARGS} ] &&
         raise "unit_lib:get_associated_leaf_ip requires ${NARGS} input argument(s), $# given" -arg
 
-    cat /tmp/dhcp.leases | grep "${1}" | awk '{print $3}'
+    grep "${1}" /tmp/dhcp.leases | awk '{print $3}'
 }
 
 ###############################################################################
@@ -2743,7 +2578,6 @@ get_associated_leaf_ip()
 #   This is needed as all devices are not guaranteed to support indexed arrays.
 # INPUT PARAMETER(S):
 #   $1  index in the list from which to retrieve the value
-#   $@  the values consisting the list from which to retrieve the value
 # RETURNS:
 #   0   The value is retrieved
 #   1   The value is not retrieved
@@ -2755,7 +2589,6 @@ get_by_index_from_list()
     local index="$1"
     shift
     check_index=0
-    values="$@"
     while [ -n "${1}" ]; do
         value="${1}"
         [ "${check_index}" == "${index}" ] && echo "$value" && return 0
@@ -2763,31 +2596,6 @@ get_by_index_from_list()
         shift
     done
     return 1
-}
-
-###############################################################################
-# DESCRIPTION:
-#   Function returns channel set at OS - LEVEL2.
-# STUB:
-#   This function is a stub. It always raises an exception and needs
-#   a function with the same name and usage in platform or device overrides.
-# INPUT PARAMETER(S):
-#   $1  VIF interface name (string, required)
-# RETURNS:
-#   Echoes channel set for interface
-# USAGE EXAMPLE(S):
-#   get_channel_from_os home-ap-24
-###############################################################################
-get_channel_from_os()
-{
-    local NARGS=1
-    [ $# -ne ${NARGS} ] &&
-        raise "unit_lib:get_channel_from_os requires ${NARGS} input argument(s), $# given" -arg
-    vif_if_name=$1
-
-    log "unit_lib:get_channel_from_os - Getting channel from OS - LEVEL2"
-    # Provide override in platform specific file
-    raise "This is a stub function. Override implementation needed." -l "unit_lib:get_channel_from_os" -fc
 }
 
 get_channels_to_check_for_cac()
@@ -2802,7 +2610,6 @@ get_channels_to_check_for_cac()
     local NARGS=1
     [ $# -ne ${NARGS} ] &&
         raise "unit_lib:get_channels_to_check_for_cac requires ${NARGS} input argument(s), $# given" -arg
-    # shellcheck disable=SC2034
     if_name="${1}"
 
     # Check if channel is set in Wifi_Radio_State
@@ -2836,9 +2643,9 @@ get_channels_to_check_for_cac()
         channels_to_check="${state_channel}"
     else
         # Retrieve channel placement for given channel width
-        lower_placement_match=$(cat "${regulatory_file_path}" | grep -i "CHAN_PLACE_${state_freq_band}_${state_ht_mode}_LOWER")
+        lower_placement_match=$(grep -i "CHAN_PLACE_${state_freq_band}_${state_ht_mode}_LOWER" "${regulatory_file_path}")
         check_is_lower=$(contains_element "${state_channel}" ${lower_placement_match})
-        upper_placement_match=$(cat "${regulatory_file_path}" | grep -i "CHAN_PLACE_${state_freq_band}_${state_ht_mode}_UPPER")
+        upper_placement_match=$(grep -i "CHAN_PLACE_${state_freq_band}_${state_ht_mode}_UPPER" "${regulatory_file_path}")
         check_is_upper=$(contains_element "${state_channel}" ${upper_placement_match})
         if [ "${check_is_lower}" == "0" ]; then
             chan_placement="LOWER"
@@ -2851,17 +2658,13 @@ get_channels_to_check_for_cac()
         fi
         log -deb "unit_lib:get_channels_to_check_for_cac - Channel ${state_channel} placement in range ${state_ht_mode} is ${chan_placement}"
         if [ "${chan_placement}" != "MIDDLE" ]; then
-            chan_placement_match=$(cat "${regulatory_file_path}" | grep -i "CHAN_PLACE_${state_freq_band}_${state_ht_mode}_${chan_placement}")
-            placement_index=$(get_index_in_list "${state_channel}" ${chan_placement_match})
-            if [ "$?" != "0" ]; then
+            chan_placement_match=$(grep -i "CHAN_PLACE_${state_freq_band}_${state_ht_mode}_${chan_placement}" "${regulatory_file_path}")
+            placement_index=$(get_index_in_list "${state_channel}" ${chan_placement_match}) ||
                 raise "Failed to retrieve placement of ${state_channel} in ${chan_placement_match}" -l "unit_lib:get_channels_to_check_for_cac" -tc
-            fi
             log -deb "unit_lib:get_channels_to_check_for_cac - Placement index is ${placement_index} of ${state_channel} in ${chan_placement_match}"
-            chan_placement_match_invert=$(cat "${regulatory_file_path}" | grep -i "CHAN_PLACE_${state_freq_band}_${state_ht_mode}_${chan_placement_invert}")
-            invert_channel=$(get_by_index_from_list "${placement_index}" ${chan_placement_match_invert})
-            if [ "$?" != "0" ]; then
+            chan_placement_match_invert=$(grep -i "CHAN_PLACE_${state_freq_band}_${state_ht_mode}_${chan_placement_invert}" "${regulatory_file_path}")
+            invert_channel=$(get_by_index_from_list "${placement_index}" ${chan_placement_match_invert}) ||
                 raise "Failed to retrieve invert placement of ${placement_index} in ${chan_placement_match_invert}" -l "unit_lib:get_channels_to_check_for_cac" -tc
-            fi
             log -deb "unit_lib:get_channels_to_check_for_cac - Channel ${state_channel} invert ${chan_placement_invert} channel is ${invert_channel}"
         fi
         # If channel placement is LOWER, we need to traverse all channels until first UPPER channel for given HT range
@@ -2886,8 +2689,8 @@ get_channels_to_check_for_cac()
             # For example, in HT80 channel 108 is in the middle, his LOWER channel is 100, and his upper channel is 112
             # We need to get all channels, since we are in the MIDDLE of the range, we will first find range LOWER channel
             # And traverse to range UPPER channel - identical as in chan_placement==LOWER condition
-            chan_placement_match=$(cat "${regulatory_file_path}" | grep -i "CHAN_PLACE_${state_freq_band}_${state_ht_mode}_LOWER")
-            chan_placement_match_invert=$(cat "${regulatory_file_path}" | grep -i "CHAN_PLACE_${state_freq_band}_${state_ht_mode}_UPPER")
+            chan_placement_match=$(grep -i "CHAN_PLACE_${state_freq_band}_${state_ht_mode}_LOWER" "${regulatory_file_path}")
+            chan_placement_match_invert=$(grep -i "CHAN_PLACE_${state_freq_band}_${state_ht_mode}_UPPER" "${regulatory_file_path}")
             for check_channel in ${chan_placement_match}; do
                 lower_channel="${state_channel}"
                 # Only channels lower than the current state channel can be their lower channel
@@ -2912,10 +2715,8 @@ get_channels_to_check_for_cac()
                 fi
             done
             log -deb "unit_lib::get_channels_to_check_for_cac - Lower channel for ${state_channel} in ${state_ht_mode} is ${lower_channel}"
-            lower_placement_index=$(get_index_in_list "${lower_channel}" ${chan_placement_match})
-            if [ "$?" != "0" ]; then
+            lower_placement_index=$(get_index_in_list "${lower_channel}" ${chan_placement_match}) ||
                 raise "Failed to retrieve lower placement of ${lower_channel} in ${chan_placement_match}" -l "unit_lib:get_channels_to_check_for_cac" -tc
-            fi
             upper_channel=$(get_by_index_from_list "${lower_placement_index}" ${chan_placement_match_invert})
             log -deb "unit_lib::get_channels_to_check_for_cac - Upper channel for ${state_channel} in ${state_ht_mode} is ${upper_channel}"
             channels_to_check="${lower_channel}"
@@ -2927,33 +2728,6 @@ get_channels_to_check_for_cac()
         fi
     fi
     echo "${channels_to_check}"
-}
-
-###############################################################################
-# DESCRIPTION:
-#   Function returns HT mode set at OS - LEVEL2.
-# STUB:
-#   This function is a stub. It always raises an exception and needs
-#   a function with the same name and usage in platform or device overrides.
-# INPUT PARAMETER(S):
-#   $1  VIF interface name (string, required)
-#   $2  channel (int, not used, but still required, do not optimize)
-# RETURNS:
-#   Echoes HT mode set for interface
-# USAGE EXAMPLE(S):
-#   get_ht_mode_from_os home-ap-24 1
-###############################################################################
-get_ht_mode_from_os()
-{
-    local NARGS=2
-    [ $# -ne ${NARGS} ] &&
-        raise "unit_lib:get_ht_mode_from_os requires ${NARGS} input argument(s), $# given" -arg
-    vif_if_name=$1
-    channel=$2
-
-    log "unit_lib:check_ht_mode_at_os_level - Getting HT mode for channel '$channel' at OS - LEVEL2"
-    # Provide override in platform specific file
-    raise "This is a stub function. Override implementation needed." -l "unit_lib:get_ht_mode_from_os" -fc
 }
 
 ###############################################################################
@@ -2980,10 +2754,9 @@ get_iface_regulatory_domain()
     country=$(get_ovsdb_entry_value Wifi_Radio_State country -w if_name "${if_name}")
     if [ "${country}" == "[\"set\",[]]" ]; then
         log -deb "unit_lib:get_iface_regulatory_domain - Country is not set in Wifi_Radio_State."
-        hw_params_reg_domain=$(get_ovsdb_entry_value Wifi_Radio_State hw_params -w if_name "${if_name}" -json_value reg_domain)
-        log -deb "unit_lib:get_iface_regulatory_domain - Trying to acquire country region trough hw_params: ${hw_params_reg_domain}"
-        # 58 (3a hex) US | 55 (37 hex) EU
-        if [ ${?} == 0 ]; then
+        if hw_params_reg_domain=$(get_ovsdb_entry_value Wifi_Radio_State hw_params -w if_name "${if_name}" -json_value reg_domain); then
+            # 58 (3a hex) US | 55 (37 hex) EU
+            log -deb "unit_lib:get_iface_regulatory_domain - Trying to acquire country region trough hw_params: ${hw_params_reg_domain}"
             if [ ${hw_params_reg_domain} == '"58"' ]; then
                 country='US'
             elif [ ${hw_params_reg_domain} == '"55"' ]; then
@@ -3012,7 +2785,6 @@ get_iface_regulatory_domain()
 #   Function echoes the index of the value in the list.
 # INPUT PARAMETER(S):
 #   $1  Value to look for in the list
-#   $@  the values consisting the list from which to retrieve the index
 # RETURNS:
 #   0   Value is found in the list and the index provided
 #   1   Value is not found in the list
@@ -3024,7 +2796,6 @@ get_index_in_list()
     local index_for="$1"
     shift
     index=0
-    values="$@"
     while [ -n "${1}" ]; do
         value="${1}"
         [ "${value}" == "${index_for}" ] && echo $index && return 0
@@ -3059,7 +2830,7 @@ get_kconfig_option_value()
     if ! [ -f "${kconfig_path}" ]; then
         raise "kconfig file is not present on ${kconfig_path}" -l "unit_lib:get_kconfig_option_value" -ds
     fi
-    cat "${kconfig_path}" | grep "${kconfig_option_name}" |  cut -d "=" -f2
+    grep "${kconfig_option_name}" "${kconfig_path}" |  cut -d "=" -f2
 }
 
 ###############################################################################
@@ -3075,27 +2846,6 @@ get_location_id()
 {
     ${OVSH} s AWLAN_Node mqtt_headers |
         awk -F'"' '{for (i=1;i<NF;i++) {if ($(i)=="locationId"){print $(i+2)}}}'
-}
-
-###############################################################################
-# DESCRIPTION:
-#  Function returns interface MAC address at OS - LEVEL2.
-# INPUT PARAMETER(S):
-#  $1  VIF interface name (string, required)
-# RETURNS:
-#  Echoes MAC address for interface
-# USAGE EXAMPLE(S):
-#   get_mac_from_os wifi0
-###############################################################################
-get_mac_from_os()
-{
-    local NARGS=1
-    [ $# -ne ${NARGS} ] &&
-        raise "unit_lib:get_mac_from_os requires ${NARGS} input argument(s), $# given" -arg
-    if_name=$1
-
-    mac_address=$(ip -o link show dev "$if_name" | awk '{print $(NF-2)}')
-    echo "$mac_address"
 }
 
 ###############################################################################
@@ -3150,8 +2900,7 @@ get_node_id()
 ###############################################################################
 get_number_of_radios()
 {
-    num=$(${OVSH} s Wifi_Radio_State if_name -r | wc -l)
-    echo "$num"
+    get_radio_if_names | wc -l
 }
 
 ###############################################################################
@@ -3186,14 +2935,15 @@ get_ovs_version()
     local OVS_NAME="ovs-vswitchd"
     local OVS_CMD
 
-    OVS_CMD=$(command -v $OVS_NAME)
-    # try which if command utility is not available
+    OVS_CMD=$(which $OVS_NAME)
+    # try command -v if which utility is not available
     [ -z "${OVS_CMD}" ] &&
-        OVS_CMD=$(which $OVS_NAME)
+        OVS_CMD=$(command -v $OVS_NAME)
     [ -z "${OVS_CMD}" ] &&
         raise "Can not call ${OVS_NAME}" -l "unit_lib:get_ovs_version" -fc
 
     OVS_ACTUAL_VER=$(${OVS_CMD} -V | head -n1 | cut -d' ' -f4)
+    # shellcheck disable=SC2181
     ec=$?
     [ ${ec} -ne 0 ] &&
         raise "Error calling ${OVS_CMD}" -l "unit_lib:get_ovs_version" -ec ${ec} -fc
@@ -3270,12 +3020,12 @@ get_ovsdb_entry_value()
     fi
 
     echo "$raw_field_value" | grep -q '"uuid"'
+    # shellcheck disable=SC2181
     uuid_check_res="$?"
     if [ "$json_value" == "false" ] && [ "$raw" == "false" ] && [ "$uuid_check_res" == "0" ]; then
         value=$(echo "$raw_field_value" | cut -d ',' -f 2 | cut -d '"' -f 2)
     elif [ "$json_value" != "false" ]; then
-        value=$(echo "$raw_field_value" | sed -n "/${json_value}/{n;p;}")
-        if [ ${?} != 0 ]; then
+        if ! value=$(echo "$raw_field_value" | sed -n "/${json_value}/{n;p;}"); then
             value=$(echo "$raw_field_value" | awk "/${json_value}/{getline; print}")
         fi
         # Remove leading whitespaces from json output
@@ -3305,7 +3055,8 @@ get_pid()
     process_name=$1
 
     # Match parameter string, but exclude lines containing 'grep'.
-    PID=$($(get_process_cmd) | grep -e "$process_name" | grep -v 'grep' | awk '{ print $1 }')
+    ps_cmd=$(get_process_cmd)
+    PID=$(eval ${ps_cmd} | grep -e "$process_name" | grep -v 'grep' | awk '{ print $1 }')
     echo "$PID"
 }
 
@@ -3377,6 +3128,21 @@ get_radio_channel_state()
 
 ###############################################################################
 # DESCRIPTION:
+#   Function echoes the radio interface names in Wifi_Radio_Config table.
+# INPUT PARAMETER(S):
+#   None.
+# RETURNS:
+#   Echoes radio interface names.
+# USAGE EXAMPLE(S):
+#   get_radio_if_names
+###############################################################################
+get_radio_if_names()
+{
+    ${OVSH} s Wifi_Radio_Config if_name -r
+}
+
+###############################################################################
+# DESCRIPTION:
 #   Function returns MAC of radio interface from Wifi_Radio_State table.
 #   Using condition string interface can be selected by name, channel,
 #   frequency band etc. See USAGE EXAMPLE(S).
@@ -3398,8 +3164,6 @@ get_radio_mac_from_ovsdb()
 
     # No logging, this function echoes the requested value to caller!
     ${OVSH} s Wifi_Radio_State -w ${where_clause} mac -r
-    return $?
-
 }
 
 ###############################################################################
@@ -3426,42 +3190,25 @@ get_radio_mac_from_system()
 
 ###############################################################################
 # DESCRIPTION:
-#   Function echoes the path to the syslog rotate script.
+#   Function rotates the system logs. The expected directory path is
+#   "/var/log/" and the file is provided as an input parameter and defaults
+#   to "messages".
 # INPUT PARAMETER(S):
-#   None.
+#   $1  Name of the system log file (string, optional, default: messages)
 # RETURNS:
-#   Echoes path to the syslog rotate script.
+#   0   System log was successfully rotated.
 # USAGE EXAMPLE(S):
-#   get_syslog_rotate_cmd
+#   device_syslog_rotate
+#   device_syslog_rotate user
 ###############################################################################
-get_syslog_rotate_cmd()
+device_syslog_rotate()
 {
-    find ${OPENSYNC_ROOTDIR} -name "*_syslog_rotate.sh"
-}
-
-###############################################################################
-# DESCRIPTION:
-#   Function returns Radio TX Power set at OS - LEVEL2.
-# STUB:
-#   This function is a stub. It always raises an exception and needs
-#   a function with the same name and usage in platform or device overrides.
-# INPUT PARAMETER(S):
-#   $1  VIF interface name (string, required)
-# RETURNS:
-#   Echoes Radio TX Power set for interface
-# USAGE EXAMPLE(S):
-#   get_tx_power_from_os home-ap-24
-###############################################################################
-get_tx_power_from_os()
-{
-    local NARGS=1
-    [ $# -ne ${NARGS} ] &&
-        raise "unit_lib:get_tx_power_from_os requires ${NARGS} input argument(s), $# given" -arg
-    vif_if_name=$1
-
-    log "unit_lib:check_ht_mode_at_os_level - Getting Radio TX Power for interface '$vif_if_name' at OS - LEVEL2"
-    # Provide override in platform specific file
-    raise "This is a stub function. Override implementation needed." -l "unit_lib:get_tx_power_from_os" -fc
+    log_file=${1:-"messages"}
+    syslog_path=$(find /var/log -name ${log_file})
+    test -n "${syslog_path}" &&
+        log "unit_lib:device_syslog_rotate - syslog path: ${syslog_path}" ||
+        raise "Could not find syslog path" -l "unit_lib:device_syslog_rotate -" -ds
+    echo > ${syslog_path}
 }
 
 ###############################################################################
@@ -3568,7 +3315,6 @@ get_wan_uplink_interface_name()
 {
     # No logging, this function echoes the requested value to caller!
     ${OVSH} s Connection_Manager_Uplink -w is_used==true if_name -r
-    return $?
 }
 
 ###############################################################################
@@ -3661,8 +3407,7 @@ insert_ovsdb_entry()
 
     entry_command="${OVSH} i $ovsdb_table $insert_string $conditions_string"
     log -deb "unit_lib:insert_ovsdb_entry - Executing ${entry_command}"
-    eval ${entry_command}
-    if [ $? -eq 0 ]; then
+    if eval ${entry_command}; then
         log -deb "unit_lib:insert_ovsdb_entry - Entry inserted to $ovsdb_table - Success"
         ${OVSH} s "$ovsdb_table"
         return 0
@@ -3695,7 +3440,6 @@ is_busybox_builtin()
     cmd_name=$1
 
     type "${cmd_name}"
-    return $?
 }
 
 ###############################################################################
@@ -3803,8 +3547,6 @@ is_script_on_system()
 
     log -deb "unit_lib:is_script_on_system - Checking script ${script_path} presence"
     test -e "${script_path}"
-    rc=$?
-    return ${rc}
 }
 
 ###############################################################################
@@ -3828,14 +3570,17 @@ is_tool_on_system()
     cmd_name=$1
 
     log -deb "unit_lib:is_tool_on_system - Checking tool presence on system"
-    command -v "$cmd_name"
+    type "$cmd_name" 2>/dev/null
+    # shellcheck disable=SC2181
     rc=$?
     if [ $rc -gt 0 ] && [ $rc -ne 126 ]; then
-        which "$cmd_name"
+        which "$cmd_name" 2>/dev/null
+        # shellcheck disable=SC2181
         rc=$?
     fi
     if [ $rc -gt 0 ] && [ $rc -ne 126 ]; then
-        type "$cmd_name"
+        command -v "$cmd_name" 2>/dev/null
+        # shellcheck disable=SC2181
         rc=$?
     fi
     return ${rc}
@@ -3860,17 +3605,25 @@ killall_process_by_name()
     process_name=$1
     local PROCESS_PID
 
+    # Save time if possible
+    if is_tool_on_system "usleep"; then
+        sleep_cmd="usleep 10000"
+    else
+        sleep_cmd="sleep 1"
+    fi
+
     PROCESS_PID="$(pidof "${process_name}")"
     if [ -n "$PROCESS_PID" ]; then
         # In case of several returned values
         for P in $PROCESS_PID; do
             for S in TERM INT HUP KILL; do
                 kill -s "${S}" "${P}"
-                kill -0 "${P}"
-                if [ $? -ne 0 ]; then
+                ${sleep_cmd}
+                if ! kill -0 "${P}"; then
                     break
                 fi
             done
+            # shellcheck disable=SC2181
             if [ $? -eq 0 ]; then
                 log -deb "unit_lib:killall_process_by_name - killed process: ${P} with signal: ${S}"
             else
@@ -3886,14 +3639,25 @@ killall_process_by_name()
 # INPUT PARAMETER(S):
 #   None.
 # RETURNS:
-#   0 - CONFIG_TARGET_USE_NATIVE_BRIDGE is enabled
-#   1 - CONFIG_TARGET_USE_NATIVE_BRIDGE is disabled or not set
+#   0 - Native Bridge is enabled
+#   1 - Native Bridge is disabled or not set
 # USAGE EXAMPLE(S):
 #   linux_native_bridge_enabled
 ###############################################################################
 linux_native_bridge_enabled()
 {
-    check_kconfig_option "CONFIG_TARGET_USE_NATIVE_BRIDGE" "y"
+    # Check if the ovs_version exists in the AWLAN_Node OVSDB table
+    if check_ovsdb_table_field_exists AWLAN_Node ovs_version; then
+        ovs_version=$(get_ovsdb_entry_value AWLAN_Node ovs_version)
+        # Check if the ovs_version is set to "N/A" or actual value
+        if [ "$ovs_version" = "N/A" ]; then
+            return 0
+        else
+            return 1
+        fi
+    else
+        return 1
+    fi
 }
 
 ###############################################################################
@@ -3930,8 +3694,7 @@ nb_add_port_to_bridge()
         raise "Bridge '${bridge}' does not exist" -l "unit_lib:nb_add_port_to_bridge" -ds
 
     log "unit_lib:nb_add_port_to_bridge - checking if port '${port_name}' is configured to '${bridge}' bridge"
-    brctl show "${bridge}" | grep -w "${port_name}"
-    if [ $? = 0 ]; then
+    if check_if_port_in_bridge "${bridge}" "${port_name}"; then
         log -deb "unit_lib:nb_add_port_to_bridge - Port '${port_name}' already in bridge '${bridge}'"
         return 0
     fi
@@ -3956,13 +3719,10 @@ nb_add_port_to_bridge()
         log -deb "unit_lib:nb_add_port_to_bridge - Entry for $port_name in Wifi_Inet_Config already exists, skipping..."
     fi
 
-    sleep 5
-
-    check_if_port_in_bridge "${bridge}" "${port_name}"
-    if [ $? = 0 ]; then
+    if wait_for_function_exit_code 0 "check_if_port_in_bridge ${bridge} ${port_name}" 5 1; then
         log -deb "unit_lib:nb_add_port_to_bridge - adding port $port_name to $bridge - Success"
     else
-        raise "Could not add port '${port_name}' to bridge '${bridge_name}'" -l unit_lib:nb_add_port_to_bridge -ds
+        raise "Could not add port '${port_name}' to bridge '${bridge}'" -l unit_lib:nb_add_port_to_bridge -ds
     fi
     return 0
 }
@@ -4039,7 +3799,7 @@ nb_del_hairpin_config_if_present()
 
 ###############################################################################
 # DESCRIPTION:
-#   Function creates the configuration for adding port to the bridge.  This
+#   Function creates the configuration for adding port to the bridge. This
 #   function is used as a helper function to add port to the bridge.
 # INPUT PARAMETER(S):
 #   $1  Bridge name (string, required)
@@ -4047,7 +3807,7 @@ nb_del_hairpin_config_if_present()
 # RETURNS:
 #   NONE
 # USAGE EXAMPLE(S):
-#   nb_gen_add_port_to_br_config br-home br-home.dns
+#   nb_gen_add_port_to_br_config br-home b-50
 ###############################################################################
 nb_gen_add_port_to_br_config()
 {
@@ -4060,9 +3820,7 @@ nb_gen_add_port_to_br_config()
             "op": "insert",
             "table": "Interface",
             "row": {
-                "name": "${port}",
-                "type": "internal",
-                "ofport_request": 401
+                "name": "${port}"
             },
             "uuid-name": "iface"
         },
@@ -4083,6 +3841,31 @@ nb_gen_add_port_to_br_config()
         }
     ]
 EOF
+}
+
+###############################################################################
+# DESCRIPTION:
+#   When the device runs in Linux Native Bridge configuration, the function
+#   echoes all ports from the provided network bridge to stdout.
+# INPUT PARAMETER(S):
+#   $1  Bridge name (string, required)
+# RETURNS:
+#   0   On success.
+#   See DESCRIPTION.
+# USAGE EXAMPLE(S):
+#   nb_get_all_ports_in_bridge br-home
+###############################################################################
+nb_get_all_ports_in_bridge()
+{
+    local NARGS=1
+    [ $# -ne ${NARGS} ] &&
+        raise "unit_lib:nb_get_all_ports_in_bridge requires ${NARGS} input argument(s), $# given" -arg
+    bridge=$1
+
+    for port_uuid in $(get_ovsdb_entry_value Bridge ports -json_value uuid -w name ${bridge}); do
+        # Use separate echo to delimit by newline
+        echo "$(get_ovsdb_entry_value Port name -w _uuid '["uuid",'${port_uuid}']')"
+    done
 }
 
 ###############################################################################
@@ -4134,11 +3917,23 @@ nb_is_tc_rule_configured()
 
     log "unit_lib:nb_is_tc_rule_configured - Checking if $rule_type Traffic Control rule is applied on the device - LEVEL2"
 
-    if [ $rule_type = "ingress" ]; then
-        cmd="tc filter show dev ${ifname} parent ffff: | grep \"${expected_str}\" "
+    # Check if clsact qdisc is available
+    if tc qdisc show | grep -q "clsact"; then
+        # Use clsact syntax
+        if [ "$rule_type" = "ingress" ]; then
+            cmd="tc filter show dev ${ifname} ingress | grep \"${expected_str}\""
+        else
+            cmd="tc filter show dev ${ifname} | grep \"${expected_str}\""
+        fi
     else
-        cmd="tc filter show dev ${ifname} | grep \"${expected_str}\" "
+        # Use legacy syntax
+        if [ "$rule_type" = "ingress" ]; then
+            cmd="tc filter show dev ${ifname} parent ffff: | grep \"${expected_str}\""
+        else
+            cmd="tc filter show dev ${ifname} | grep \"${expected_str}\""
+        fi
     fi
+
     log "unit_lib:nb_is_tc_rule_configured - Executing ${cmd}"
     wait_for_function_response 0 "${cmd}" 10 &&
         log -deb "unit_lib:nb_is_tc_rule_configured -$rule_type Traffic Control rule is applied on the device - Success" ||
@@ -4173,11 +3968,23 @@ nb_is_tc_rule_removed()
 
     log "unit_lib:nb_is_tc_rule_removed - Checking if $rule_type Traffic Control rule is removed from the device - LEVEL2"
 
-    if [ $rule_type = "ingress" ]; then
-        cmd="tc filter show dev ${ifname} parent ffff: | grep \"${expected_str}\" "
+    # Check if clsact qdisc is available
+    if tc qdisc show | grep -q "clsact"; then
+        # Use clsact syntax
+        if [ "$rule_type" = "ingress" ]; then
+            cmd="tc filter show dev ${ifname} ingress | grep \"${expected_str}\""
+        else
+            cmd="tc filter show dev ${ifname} | grep \"${expected_str}\""
+        fi
     else
-        cmd="tc filter show dev ${ifname} | grep \"${expected_str}\" "
+        # Use legacy syntax
+        if [ "$rule_type" = "ingress" ]; then
+            cmd="tc filter show dev ${ifname} parent ffff: | grep \"${expected_str}\""
+        else
+            cmd="tc filter show dev ${ifname} | grep \"${expected_str}\""
+        fi
     fi
+
     log "unit_lib:nb_is_tc_rule_removed - Executing ${cmd}"
     wait_for_function_response 1 "${cmd}" 10 &&
         log -deb "unit_lib:nb_is_tc_rule_removed -$rule_type Traffic Control rule is removed from the device - Success" ||
@@ -4204,12 +4011,10 @@ nb_remove_port_from_bridge()
     local NARGS=2
     [ $# -ne ${NARGS} ] &&
         raise "unit_lib:nb_remove_port_from_bridge requires ${NARGS} input argument(s)" -arg
-
     bridge=$1
     port_name=$2
 
-    res=$(check_if_port_in_bridge "$bridge" "$port_name")
-    if [ "$?" != 0 ]; then
+    if ! check_if_port_in_bridge "$bridge" "$port_name"; then
         log -deb "unit_lib:nb_remove_port_from_bridge - Port '$port_name' does not exist in bridge $bridge"
         return 0
     fi
@@ -4284,12 +4089,12 @@ ovs_add_port_to_bridge()
 
     log "unit_lib:ovs_add_port_to_bridge - Adding port '${port_name}' to bridge '${bridge}'"
     ovs-vsctl br-exists "${bridge}"
+    # shellcheck disable=SC2181
     if [ $? = 2 ]; then
         raise "Bridge '${bridge}' does not exist" -l "unit_lib:ovs_add_port_to_bridge" -ds
     fi
     ovs-vsctl list-ports "${bridge}" || true
-    ovs-vsctl list-ports "${bridge}" | grep -wF "${port_name}"
-    if [ $? = 0 ]; then
+    if ovs-vsctl list-ports "${bridge}" | grep -wF "${port_name}"; then
         log -deb "unit_lib:ovs_add_port_to_bridge - Port '${port_name}' already in bridge '${bridge}'"
         return 0
     else
@@ -4297,6 +4102,29 @@ ovs_add_port_to_bridge()
             log -deb "unit_lib:ovs_add_port_to_bridge - ovs-vsctl add-port ${bridge} ${port_name} - Success" ||
             raise "Could not add port '${port_name}' to bridge '${bridge}'" -l unit_lib:ovs_add_port_to_bridge -ds
     fi
+}
+
+###############################################################################
+# DESCRIPTION:
+#   When the device runs in OVS Bridge configuration, the function
+#   echoes all ports from the provided network bridge to stdout.
+#   Function uses ovs-vsctl command, different from native Linux bridge.
+# INPUT PARAMETER(S):
+#   $1  Bridge name (string, required)
+# RETURNS:
+#   0   On success.
+#   See DESCRIPTION.
+# USAGE EXAMPLE(S):
+#   ovs_get_all_ports_in_bridge br-home
+###############################################################################
+ovs_get_all_ports_in_bridge()
+{
+    local NARGS=1
+    [ $# -ne ${NARGS} ] &&
+        raise "unit_lib:ovs_get_all_ports_in_bridge requires ${NARGS} input argument(s), $# given" -arg
+    bridge=$1
+
+    ovs-vsctl list-ifaces "${bridge}"
 }
 
 ###############################################################################
@@ -4441,12 +4269,12 @@ ovs_remove_port_from_bridge()
 
     log "unit_lib:ovs_remove_port_from_bridge - Removing port '${port_name}' from bridge '${bridge}'"
     ovs-vsctl br-exists "${bridge}"
+    # shellcheck disable=SC2181
     if [ $? = 2 ]; then
         raise "Bridge '${bridge}' does not exist" -l "unit_lib:ovs_remove_port_from_bridge" -ds
     fi
     ovs-vsctl list-ports "${bridge}" || true
-    ovs-vsctl list-ports "${bridge}" | grep -wF "${port_name}"
-    if [ $? = 0 ]; then
+    if ovs-vsctl list-ports "${bridge}" | grep -wF "${port_name}"; then
         log -deb "unit_lib:ovs_remove_port_from_bridge - Port '${port_name}' exists in bridge '${bridge}', removing."
         ovs-vsctl del-port "${bridge}" "${port_name}" &&
             log -deb "unit_lib:ovs_remove_port_from_bridge - ovs-vsctl del-port ${bridge} ${port_name} - Success" ||
@@ -4482,6 +4310,36 @@ print_tables()
     done
 
     return 0
+}
+
+###############################################################################
+# DESCRIPTION:
+#   Function removes all ports from the provided network bridge.
+#   Procedure:
+#       - get all ports in bridge and iterate over list
+#       - for each port call remove_port_from_bridge
+#   Raises an exception if
+#       - bridge does not exist,
+#       - any port cannot be removed.
+# INPUT PARAMETER(S):
+#   $1  Bridge name (string, required)
+# RETURNS:
+#   0   On success.
+#   See DESCRIPTION.
+# USAGE EXAMPLE(S):
+#   remove_all_ports_from_bridge br-home
+###############################################################################
+remove_all_ports_from_bridge()
+{
+    local NARGS=1
+    [ $# -ne ${NARGS} ] &&
+        raise "unit_lib:remove_all_ports_from_bridge requires ${NARGS} input argument(s), $# given" -arg
+    bridge=$1
+
+    ports=$(get_all_ports_in_bridge "${bridge}") || raise "unit_lib:remove_all_ports_from_bridge could not get ports from bridge ${bridge}" -arg
+    for port in ${ports}; do
+        remove_port_from_bridge "${bridge}" "${port}"
+    done
 }
 
 ###############################################################################
@@ -4565,8 +4423,7 @@ remove_ovsdb_entry()
 
     remove_command="${OVSH} d $ovsdb_table $conditions_string"
     log -deb "unit_lib:remove_ovsdb_entry - $remove_command"
-    ${remove_command}
-    if [ "$?" -eq 0 ]; then
+    if $remove_command; then
         log -deb "unit_lib:remove_ovsdb_entry - Entry removed"
     else
         print_tables "$ovsdb_table" ||
@@ -4590,7 +4447,6 @@ remove_sta_connections()
         raise "unit_lib:remove_sta_connections requires ${NARGS} input argument(s), $# given" -arg
     sta_if_name=$1
 
-    log -deb "[DEPRECATED] - Function unit_lib:remove_sta_connections is deprecated in favor of remove_sta_interfaces_exclude"
     log -deb "unit_lib:remove_sta_connections - Removing STA connections except $sta_if_name"
     ${OVSH} d Wifi_VIF_Config -w if_name!="$sta_if_name" -w mode==sta &&
         log -deb "unit_lib:remove_sta_connections - STA connections except '$sta_if_name' removed - Success" ||
@@ -4665,36 +4521,40 @@ remove_vif_interface()
 # DESCRIPTION:
 #     This function removes entries from the Wifi_VIF_Config and
 #     Wifi_Inet_Config OVSDB tables that match the specified AP
-#     virtual interface. Raises exception on fail.
+#     VIF and Inet interfaces. Raises exception on fail.
 # INPUT PARAMETER(S):
-#     - if_name: Wifi_VIF_Config::if_name
+# INPUT PARAMETER(S):
+#   $1  vif_if_name:  Wifi_VIF_Config::if_name (string, required)
+#   $2  inet_if_name: Wifi_Inet_Config::if_name (string, optional, defaults to vif_if_name)
 # RETURNS:
 #   0   On success.
 #   See DESCRIPTION.
 # USAGE EXAMPLE(S):
-#   remove_ap_interface b-ap-24
+#   remove_ap_interface h-24
+#   remove_ap_interface h-24 h-24
+#   remove_ap_interface h-24 mld2
 ###############################################################################
 remove_ap_interface()
 {
     local NARGS=1
-    [ $# -ne ${NARGS} ] &&
-        raise "unit_lib:remove_ap_interface requires ${NARGS} input argument(s), $# given" -arg
-    # shellcheck disable=SC2034
-    if_name=${1}
+    [ $# -lt ${NARGS} ] &&
+        raise "unit_lib:remove_ap_interface requires at least ${NARGS} input argument(s), $# given" -arg
+    vif_if_name=${1}
+    inet_if_name=${2:-$vif_if_name}
 
-    log -deb "unit_lib:remove_ap_interface - Resetting ${if_name} AP interface"
-    remove_ovsdb_entry Wifi_VIF_Config -w if_name $if_name ||
-        raise "remove_ovsdb_entry - Could not remove interface '$if_name' from Wifi_VIF_Config table" -l "unit_lib:remove_ap_interface" -fc
-    wait_ovsdb_entry_remove Wifi_VIF_State -w if_name $if_name ||
-        raise "wait_ovsdb_entry_remove - Could not reflect Wifi_VIF_Config to Wifi_VIF_State for '$if_name'" -l "unit_lib:remove_ap_interface" -fc
-    remove_ovsdb_entry Wifi_Inet_Config -w if_name $if_name ||
-        raise "remove_ovsdb_entry - Could not remove Wifi_Inet_Config entry for '$if_name' AP interface" -l "unit_lib:remove_ap_interface" -fc
-    wait_ovsdb_entry_remove Wifi_Inet_Config -w if_name $if_name ||
-        raise "wait_ovsdb_entry_remove - Could not reflect Wifi_Inet_Config to Wifi_Inet_State for '$if_name' AP interface" -l "unit_lib:remove_ap_interface" -fc
-    remove_ovsdb_entry Wifi_Inet_Config -w gre_ifname $if_name ||
-        raise "remove_ovsdb_entry - Could not remove Wifi_Inet_Config entry for '$if_name' GRE interface" -l "unit_lib:remove_ap_interface" -fc
-    wait_ovsdb_entry_remove Wifi_Inet_Config -w gre_ifname $if_name ||
-        raise "wait_ovsdb_entry_remove - Could not reflect Wifi_Inet_Config to Wifi_Inet_State for '$if_name' GRE interface" -l "unit_lib:remove_ap_interface" -fc
+    log -deb "unit_lib:remove_ap_interface - Resetting '${vif_if_name}' VIF and '${inet_if_name}' Inet interface"
+    remove_ovsdb_entry Wifi_VIF_Config -w if_name $vif_if_name ||
+        raise "remove_ovsdb_entry - Could not remove interface '$vif_if_name' from Wifi_VIF_Config table" -l "unit_lib:remove_ap_interface" -fc
+    wait_ovsdb_entry_remove Wifi_VIF_State -w if_name $vif_if_name ||
+        raise "wait_ovsdb_entry_remove - Could not reflect Wifi_VIF_Config to Wifi_VIF_State for '$vif_if_name'" -l "unit_lib:remove_ap_interface" -fc
+    remove_ovsdb_entry Wifi_Inet_Config -w if_name $inet_if_name ||
+        raise "remove_ovsdb_entry - Could not remove Wifi_Inet_Config entry for '$inet_if_name' AP interface" -l "unit_lib:remove_ap_interface" -fc
+    wait_ovsdb_entry_remove Wifi_Inet_State -w if_name $inet_if_name ||
+        raise "wait_ovsdb_entry_remove - Could not reflect Wifi_Inet_Config to Wifi_Inet_State for '$inet_if_name' AP interface" -l "unit_lib:remove_ap_interface" -fc
+    remove_ovsdb_entry Wifi_Inet_Config -w gre_ifname $vif_if_name ||
+        raise "remove_ovsdb_entry - Could not remove Wifi_Inet_Config entry for '$vif_if_name' GRE interface" -l "unit_lib:remove_ap_interface" -fc
+    wait_ovsdb_entry_remove Wifi_Inet_State -w gre_ifname $vif_if_name ||
+        raise "wait_ovsdb_entry_remove - Could not reflect Wifi_Inet_Config to Wifi_Inet_State for '$vif_if_name' GRE interface" -l "unit_lib:remove_ap_interface" -fc
     return 0
 }
 
@@ -4765,7 +4625,6 @@ reset_sta_interface()
     local NARGS=1
     [ $# -ne ${NARGS} ] &&
         raise "unit_lib:reset_sta_interface requires ${NARGS} input argument(s), $# given" -arg
-    # shellcheck disable=SC2034
     if_name=${1}
 
     log -deb "unit_lib:reset_sta_interface - Resetting STA ${if_name} interface"
@@ -4777,16 +4636,15 @@ reset_sta_interface()
         -u security "[\"map\",[]]" \
         -u ssid "" \
         -u ssid_broadcast "[\"set\",[]]" &&
-            log -deb "unit_lib:reset_sta_interface - STA VIF-s reset"
-    check_ovsdb_table_field_exists Wifi_VIF_Config "wpa"
-    if [ "${?}" == "0" ]; then
-        log -deb "unit_lib:reset_sta_interface - Checking and resetting wpa, wpa_key_mgmt, wpa_oftags, wpa_psks for STA VIF-s"
+            log -deb "unit_lib:reset_sta_interface - STA VIF ${if_name} reset"
+    if check_ovsdb_table_field_exists Wifi_VIF_Config "wpa"; then
+        log -deb "unit_lib:reset_sta_interface - Checking and resetting wpa, wpa_key_mgmt, wpa_oftags, wpa_psks for STA VIF ${if_name}"
         update_ovsdb_entry Wifi_VIF_Config -w if_name "${if_name}" -w mode "sta" \
             -u wpa "[\"set\",[]]" \
             -u wpa_key_mgmt "[\"set\",[]]" \
             -u wpa_oftags "[\"map\",[]]" \
             -u wpa_psks "[\"map\",[]]" &&
-                log -deb "unit_lib:reset_sta_interface - wpa, wpa_key_mgmt, wpa_oftags, wpa_psks are reset for STA VIF-s"
+                log -deb "unit_lib:reset_sta_interface - wpa, wpa_key_mgmt, wpa_oftags, wpa_psks are reset for STA VIF ${if_name}"
     else
         log -err "unit_lib:reset_sta_interface - WPA not implemented for this OS implementation"
         print_tables Wifi_VIF_Config
@@ -4844,8 +4702,8 @@ restart_managers()
 {
     log -deb "unit_lib:restart_managers - Restarting OpenSync managers"
     MANAGER_SCRIPT=$(get_managers_script)
-    # shellcheck disable=2034
-    ret=$($MANAGER_SCRIPT restart)
+    $MANAGER_SCRIPT restart
+    # shellcheck disable=SC2181
     ec=$?
     log -deb "unit_lib:restart_managers - manager restart exit code ${ec}"
     return $ec
@@ -4944,9 +4802,7 @@ set_interface_down()
     [ $# -ne ${NARGS} ] &&
         raise "unit_lib:set_interface_down requires ${NARGS} input argument(s), $# given" -arg
     if_name=$1
-
     ifconfig "$if_name" down
-    return $?
 }
 
 ###############################################################################
@@ -5033,9 +4889,7 @@ set_interface_up()
     [ $# -ne ${NARGS} ] &&
         raise "unit_lib:set_interface_up requires ${NARGS} input argument(s), $# given" -arg
     if_name=$1
-
     ifconfig "$if_name" up
-    return $?
 }
 
 ###############################################################################
@@ -5119,8 +4973,7 @@ set_manager_log()
     log_severity=$2
 
     log -deb "unit_lib:set_manager_log - Checking if AW_Debug contains ${name}"
-    check_ovsdb_entry AW_Debug -w name "${name}"
-    if [ "$?" == 0 ];then
+    if check_ovsdb_entry AW_Debug -w name "${name}"; then
         log -deb "unit_lib:set_manager_log - AW_Debug contains ${name}, will update"
         update_ovsdb_entry AW_Debug -w name "${name}" -u log_severity "${log_severity}" &&
             log -deb "unit_lib:set_manager_log - AW_Debug ${name} updated to ${log_severity}" ||
@@ -5146,7 +4999,7 @@ set_manager_log()
 ###############################################################################
 show_bridge_details()
 {
-    linux_native_bridge_enabled && brctl show || ovs-vsctl show
+    ovs-vsctl show
 }
 
 ###############################################################################
@@ -5192,8 +5045,8 @@ start_managers()
         raise "Issue during OpenSync manager start" -l "unit_lib:start_managers" -ds
 
     # Check dm slave PID
-    # shellcheck disable=2091
-    PID=$($(get_process_cmd) | grep -e "${OPENSYNC_ROOTDIR}/bin/dm" | grep -v 'grep' | grep -v slave | awk '{ print $1 }')
+    ps_cmd=$(get_process_cmd)
+    PID=$(eval ${ps_cmd} | grep -e "${OPENSYNC_ROOTDIR}/bin/dm" | grep -v 'grep' | grep -v slave | awk '{ print $1 }')
     if [ -z "$PID" ]; then
         raise "Issue during manager start, dm slave not running" -l "unit_lib:start_managers" -ds
     else
@@ -5201,8 +5054,8 @@ start_managers()
     fi
 
     # Check dm master PID
-    # shellcheck disable=2091
-    PID=$($(get_process_cmd) | grep -e "${OPENSYNC_ROOTDIR}/bin/dm" | grep -v 'grep' | grep -v master | awk '{ print $1 }')
+    ps_cmd=$(get_process_cmd)
+    PID=$(eval ${ps_cmd} | grep -e "${OPENSYNC_ROOTDIR}/bin/dm" | grep -v 'grep' | grep -v master | awk '{ print $1 }')
     if [ -z "$PID" ]; then
         raise "Issue during manager start, dm master not running" -l "unit_lib:start_managers" -ds
     else
@@ -5245,11 +5098,10 @@ start_specific_manager()
 
     # Start manager
     # shellcheck disable=SC2018,SC2019
-    log -deb "unit_lib:start_specific_manager - Starting $manager $option" | tr a-z A-Z
+    log -deb "unit_lib:start_specific_manager - Starting $manager $option" | tr '[a-z]' '[A-Z]'
 
     if [ "$1" == "wm" ]; then
-        ps_out=$(pgrep $manager)
-        if [ $? -eq 0 ]; then
+        if ps_out=$(pgrep $manager); then
             kill -9 $ps_out && log -deb "unit_lib:start_specific_manager - Old pid killed for $manager"
         fi
         sleep 10
@@ -5312,9 +5164,11 @@ trigger_cloud_reboot()
 #
 #   -w (where)  field value used as a condition to select ovsdb table column
 #
-#   If -w option is used then two additional parameters must follow to
-#   define condition string. Several -w options are possible, but for any
-#   additional -w option used, there must always be 2 additional parameters.
+#   -wn (where not)  field value used as a condition to select ovsdb table column (opposite of -w)
+#
+#   If -w or -wn option is used then two additional parameters must follow to
+#   define condition string. Several -w or -wn options are possible, but for any
+#   additional -w or -wn option used, there must always be 2 additional parameters.
 #   In short, optional parameters come in groups of 3.
 #
 #   -u (update)
@@ -5323,9 +5177,9 @@ trigger_cloud_reboot()
 #
 # INPUT PARAMETER(S):
 #   $1  ovsdb table (string, required)
-#   $2  option, supported options: -m, -w, -u, -force
-#   $3  ovsdb field in ovsdb table (-w option); update method (-m option)
-#   $4  ovsdb field value (-w option)
+#   $2  option, supported options: -m, -w, -wn, -u, -force
+#   $3  ovsdb field in ovsdb table (-w/-wn option); update method (-m option)
+#   $4  ovsdb field value (-w/-wn option)
 # RETURNS:
 #   0   On success.
 #   See DESCRIPTION.
@@ -5353,6 +5207,10 @@ update_ovsdb_entry()
                 conditions_string="$conditions_string -w $1==$2"
                 shift 2
                 ;;
+            -wn)
+                conditions_string="$conditions_string -w $1!=$2"
+                shift 2
+                ;;
             -u)
                 echo ${2} | grep -e "[ \"]" -e '\\' &&
                     update_string="${update_string} ${1}${update_method}$(single_quote_arg "${2}")" ||
@@ -5372,9 +5230,7 @@ update_ovsdb_entry()
     entry_command="${OVSH} u $ovsdb_table $conditions_string $update_string"
     log -deb "unit_lib:update_ovsdb_entry - Executing update command:\n\t$entry_command"
 
-    eval ${entry_command}
-    # shellcheck disable=SC2181
-    if [ "$?" -eq 0 ]; then
+    if eval ${entry_command}; then
         log -deb "unit_lib:update_ovsdb_entry - Entry updated"
         log -deb "${OVSH} s $ovsdb_table $conditions_string"
         # shellcheck disable=SC2086
@@ -5435,7 +5291,6 @@ validate_cac()
     local NARGS=1
     [ $# -ne ${NARGS} ] &&
         raise "unit_lib:validate_cac requires ${NARGS} input argument(s), $# given" -arg
-    # shellcheck disable=SC2034
     if_name="${1}"
 
     # WM reconfiguration time - used to wait from nop_finished to cac_started channel status
@@ -5474,10 +5329,10 @@ validate_cac()
 
     # Check channel type if it requires CAC
     log -deb "unit_lib:validate_cac - Country: ${state_country} | Channel: ${state_channel} | Freq band: ${state_freq_band} | HT mode: ${state_ht_mode}"
-    reg_dfs_standard_match=$(cat "${regulatory_file_path}" | grep -i "${state_country}_dfs_standard_${state_freq_band}_${state_ht_mode}")
+    reg_dfs_standard_match=$(grep -i "${state_country}_dfs_standard_${state_freq_band}_${state_ht_mode}" "${regulatory_file_path}")
     check_standard=$(contains_element "${state_channel}" ${reg_dfs_standard_match})
 
-    reg_dfs_weather_match=$(cat "${regulatory_file_path}" | grep -i "${state_country}_dfs_weather_${state_freq_band}_${state_ht_mode}")
+    reg_dfs_weather_match=$(grep -i "${state_country}_dfs_weather_${state_freq_band}_${state_ht_mode}" "${regulatory_file_path}")
     check_weather=$(contains_element "${state_channel}" ${reg_dfs_weather_match})
 
     # If HT mode is HT20 and channel is not dfs nor weather, skip next steps to preserve time.
@@ -5487,10 +5342,8 @@ validate_cac()
     fi
 
     # Check if Radio is associated to any AP VIF (ignore STA vif-s)
-    vif_states_uuids="$(get_ovsdb_entry_value Wifi_Radio_State vif_states -w if_name "${if_name}" -json_value uuid)"
-    if [ "$?" != 0 ]; then
+    vif_states_uuids="$(get_ovsdb_entry_value Wifi_Radio_State vif_states -w if_name "${if_name}" -json_value uuid)" ||
         raise "unit_lib:validate_cac - Failed to acquire vif_states uuid-s for ${if_name}" -ds
-    fi
     # Check if there is AP VIF and is enabled for specific Radio
     vif_found=1
     for i in ${vif_states_uuids}; do
@@ -5510,7 +5363,6 @@ validate_cac()
     channels_to_check=$(get_channels_to_check_for_cac "${if_name}" | tail -1)
 
     log -deb "unit_lib:validate_cac - Acquiring channels to validate CAC for ${state_channel} in range of ${state_ht_mode} are ${channels_to_check}"
-    # shellcheck disable=SC1073
     for check_channel in ${channels_to_check}; do
         check_standard=$(contains_element "${check_channel}" ${reg_dfs_standard_match})
         check_weather=$(contains_element "${check_channel}" ${reg_dfs_weather_match})
@@ -5613,8 +5465,8 @@ validate_pre_cac_behaviour()
         return 0
     fi
 
-    reg_dfs_standard_match=$(cat "${regulatory_file_path}" | grep -i "${reg_domain}_dfs_standard_${state_freq_band}_${state_ht_mode}")
-    reg_dfs_weather_match=$(cat "${regulatory_file_path}" | grep -i "${reg_domain}_dfs_weather_${state_freq_band}_${state_ht_mode}")
+    reg_dfs_standard_match=$(grep -i "${reg_domain}_dfs_standard_${state_freq_band}_${state_ht_mode}" "${regulatory_file_path}")
+    reg_dfs_weather_match=$(grep -i "${reg_domain}_dfs_weather_${state_freq_band}_${state_ht_mode}" "${regulatory_file_path}")
     cac_channels=$(get_channels_to_check_for_cac "${if_name}" | tail -1)
 
     if [ -z "${cac_channels}" ]; then
@@ -5696,8 +5548,7 @@ verify_channel_is_in_nop_finished()
         raise "Channel $channel_1 is not allowed on radio $if_name" -l "unit_lib:verify_channel_is_in_nop_finished" -ds
 
     # Echo channel_1 if it is in nop_finished state for the test.
-    check_is_nop_finished "$channel_1" "$if_name" >/dev/null 2>&1
-    [ $? = 0 ] && echo "${channel_1}" && return
+    check_is_nop_finished "$channel_1" "$if_name" >/dev/null 2>&1 && echo "${channel_1}" && return
 
     # If channel_1 is not in nop_finished state, iterate for new channel. If not found raise the exception
     get_chan_list=$(get_ovsdb_entry_value Wifi_Radio_State allowed_channels -w if_name "$if_name" -r)
@@ -5709,8 +5560,7 @@ verify_channel_is_in_nop_finished()
     # is not the one provided in the argument.
     for channel in ${list_of_chans}; do
         [ "$channel" -eq "$channel_2" ] && continue
-        check_is_nop_finished "$channel" "$if_name" >/dev/null 2>&1
-        [ $? = 0 ] && echo "$channel" && return
+        check_is_nop_finished "$channel" "$if_name" >/dev/null 2>&1 && echo "$channel" && return
     done
 
     raise "Could not find alternative channel in NOP_FINISHED state" -l "unit_lib:verify_channel_is_in_nop_finished" -s
@@ -5747,19 +5597,16 @@ verify_client_certificate_file()
     ca_file="${FUT_TOPDIR}/${ca_cert}"
     plume_ca_file="${FUT_TOPDIR}/shell/tools/server/files/${plume_ca}"
 
-    openssl x509 -in $cert_file -noout > /dev/null
-    [ $? -eq 0 ] &&
+    openssl x509 -in $cert_file -noout > /dev/null &&
         log "unit_lib:verify_client_certificate_file - Certificate ${client_cert} is in valid PEM format" ||
         raise "Certificate ${client_cert} format is not valid. Expected format of the certificate is PEM!" -l "unit_lib:verify_client_certificate_file" -tc
 
-    openssl verify -verbose -CAfile $plume_ca_file $ca_file > /dev/null
-    [ $? -eq 0 ] &&
+    openssl verify -verbose -CAfile $plume_ca_file $ca_file > /dev/null &&
         log "unit_lib:verify_client_certificate_file - CA certificate: ${ca_cert} approved by Plume CA: $plume_ca_file" ||
         raise "CA Certificate: ${ca_cert} not approved by Plume CA: $plume_ca_file" -l "unit_lib:verify_client_certificate_file" -tc
 
     end_date=$(openssl x509 -enddate -noout -in $cert_file | cut -d'=' -f2-)
-    openssl x509 -checkend 0 -noout -in $cert_file > /dev/null
-    [ $? -eq 0 ] &&
+    openssl x509 -checkend 0 -noout -in $cert_file > /dev/null &&
         log "unit_lib:verify_client_certificate_file - Certificate ${client_cert} is not expired, valid until $end_date" ||
         raise "Certificate ${client_cert} has expired on $end_date" -l "unit_lib:verify_client_certificate_file" -tc
 }
@@ -5769,28 +5616,44 @@ verify_client_certificate_file()
 #   Function resets VIF STA interfaces and removes all VIF AP interfaces from
 #   the Wifi_VIF_Config table and waits for Wifi_VIF_State table to reflect.
 #   Specific interface names, which should be reset, can be passed to this script
-#   as optional arguments. Raises exception on failure.
+#   as optional arguments. If Wifi_VIF_Config::if_name is not equal to
+#   Wifi_Inet_Config::if_name, provide one or more comma delimited strings.
+#   Raises exception on failure.
 # INPUT PARAMETER(S):
-#   [interface1] [interface2] ... (str, optional)
+#   if_name:                    Wifi_VIF_Config::if_name (string, optional)
+#       or alternatively comma delimited string(s)
+#   vif_if_name;inet_if_name:   Wifi_VIF_Config::if_name and Wifi_Inet_Config::if_name (string, optional)
 # RETURNS:
 #   0 On Success.
 #   See DESCRIPTION.
 # USAGE EXAMPLE(S):
 #   vif_reset
 #   vif_reset b-ap-24
+#   vif_reset b-24 h-60
+#   vif_reset h-60,mld2
+#   vif_reset h-60,mld2 b-24,mld1
 ###############################################################################
 vif_reset()
 {
+    # Enable all STA VIFs
+    update_ovsdb_entry Wifi_VIF_Config -w mode sta -u enabled true ||
+        raise "update_ovsdb_entry - Could not set all STA VIFs to enabled in Wifi_VIF_Config table" -l "unit_lib:vif_reset" -fc
+
+    log -deb "unit_lib:vif_reset - All STA VIFs enabled"
+
     # Reset specific VIFs
     if [ $# -ne 0 ]; then
         log -deb "unit_lib:vif_reset - Resetting VIFs: $*"
-        for iface in "$@"; do
-            iface_mode=$(get_ovsdb_entry_value Wifi_VIF_Config mode -w if_name "$iface")
+        for if_name in "$@"; do
+            vif_if_name=$(echo ${if_name} | cut -d',' -f1)
+            inet_if_name=$(echo ${if_name} | cut -d',' -f2)
+            inet_if_name=${inet_if_name:-$vif_if_name}
+            iface_mode=$(get_ovsdb_entry_value Wifi_VIF_Config mode -w if_name "$vif_if_name")
             if [ "$iface_mode" = "ap" ]; then
-                remove_ap_interface "$iface" ||
-                    raise "remove_ap_interface - Could not remove AP interface in Wifi_VIF_Config table" -l "unit_lib:vif_reset" -fc
+                remove_ap_interface "$vif_if_name" "$inet_if_name" ||
+                    raise "remove_ap_interface - Could not remove AP interface in Wifi_VIF_Config and Wifi_Inet_Config tables" -l "unit_lib:vif_reset" -fc
             else
-                reset_sta_interface "$iface" ||
+                reset_sta_interface "$vif_if_name" ||
                     raise "reset_sta_interface - Could not reset STA interface in Wifi_VIF_Config table" -l "unit_lib:vif_reset" -fc
             fi
         done
@@ -5806,9 +5669,15 @@ vif_reset()
 
         # Remove all AP VIFs
         ap_iface_list=$(get_ovsdb_entry_value Wifi_VIF_Config if_name -w mode ap)
-        for ap_iface in $ap_iface_list; do
-            remove_ap_interface "$ap_iface" ||
-                raise "remove_ap_interface - Could not remove AP interface in the Wifi_VIF_Config table" -l "unit_lib:vif_reset" -fc
+        for vif_if_name in $ap_iface_list; do
+            get_inet_if_name_str="get_ovsdb_entry_value Wifi_VIF_State mld_if_name -w if_name $vif_if_name -r"
+            if wait_for_function_output "notempty" "${get_inet_if_name_str}" 1 1 >/dev/null 2>&1; then
+                inet_if_name=$($get_inet_if_name_str) || raise "${get_inet_if_name_str}" -l "unit_lib:remove_ap_interface" -fc
+            else
+                inet_if_name=${vif_if_name}
+            fi
+            remove_ap_interface "$vif_if_name" "$inet_if_name" ||
+                raise "remove_ap_interface - Could not remove AP interface in Wifi_VIF_Config and Wifi_Inet_Config tables" -l "unit_lib:vif_reset" -fc
         done
 
         log -deb "unit_lib:vif_reset- VIF interfaces reset - Success"
@@ -5887,7 +5756,7 @@ wait_cloud_state_not()
 #   $1  expected exit code (int, required)
 #   $2  function call, function returning value (string, required)
 #   $3  retry count, number of iterations to stop checks
-#                    (int, optional, default=DEFAULT_WAIT_TIME)
+#                    (int, optional, default=180)
 #   $4  retry sleep, time in seconds between checks (int, optional, default=1)
 # RETURNS:
 #   0   On success.
@@ -5903,12 +5772,13 @@ wait_for_function_exit_code()
         raise "unit_lib:wait_for_function_exit_code requires ${NARGS_MIN}-${NARGS_MAX} input arguments, $# given" -arg
     local exp_ec=$1
     local function_to_wait_for=$2
-    local retry_count=${3:-$DEFAULT_WAIT_TIME}
+    local retry_count=${3:-180}
     local retry_sleep=${4:-1}
     local fn_exec_cnt=1
 
     log -deb "unit_lib:wait_for_function_exit_code - Executing $function_to_wait_for, waiting for exit code ${exp_ec}"
     $function_to_wait_for
+    # shellcheck disable=SC2181
     local act_ec=$?
     while [ ${act_ec} -ne "${exp_ec}" ]; do
         log -deb "unit_lib:wait_for_function_exit_code - Retry ${fn_exec_cnt}, exit code: ${act_ec}, expecting: ${exp_ec}"
@@ -5918,12 +5788,11 @@ wait_for_function_exit_code()
         fi
         sleep "${retry_sleep}"
         $function_to_wait_for
+        # shellcheck disable=SC2181
         act_ec=$?
         fn_exec_cnt=$(( $fn_exec_cnt + 1 ))
     done
-
     log -deb "unit_lib:wait_for_function_exit_code - Exit code: ${act_ec} equal to expected: ${exp_ec}"
-
     return 0
 }
 
@@ -5942,7 +5811,7 @@ wait_for_function_exit_code()
 #   $1  wait for output value (int, required)
 #   $2  function call, function returning value (string, required)
 #   $3  retry count, number of iterations to stop checks
-#                    (int, optional, default=DEFAULT_WAIT_TIME)
+#                    (int, optional, default=180)
 #   $4  retry_sleep, time in seconds between checks (int, optional, default=1)
 # RETURNS:
 #   0   On success.
@@ -5964,12 +5833,12 @@ wait_for_function_output()
     fi
     local wait_for_value=${1}
     local function_to_wait_for=${2}
-    local retry_count=${3:-$DEFAULT_WAIT_TIME}
+    local retry_count=${3:-180}
     local retry_sleep=${4:-1}
     local fn_exec_cnt=0
     local is_get_ovsdb_entry_value=0
 
-    [ $(echo "$function_to_wait_for" | grep -wF "get_ovsdb_entry_value") ] &&
+    [ "$(echo "$function_to_wait_for" | grep -wF "get_ovsdb_entry_value")" ] &&
         is_get_ovsdb_entry_value=1
 
     log -deb "unit_lib:wait_for_function_output - Executing $function_to_wait_for, waiting for $wait_for_value response"
@@ -6005,7 +5874,7 @@ wait_for_function_output()
     done
 
     if [ $fn_exec_cnt -gt "$retry_count" ]; then
-        raise "Function $function_to_wait_for timed out" -l "unit_lib:wait_for_function_output"
+        log -err "unit_lib:wait_for_function_output - Function $function_to_wait_for timed out"
         return 1
     else
         return 0
@@ -6048,7 +5917,7 @@ wait_for_function_response()
         raise "unit_lib:wait_for_function_response requires ${NARGS_MIN}-${NARGS_MAX} input arguments, $# given" -arg
     wait_for_value="$1"
     function_to_wait_for="$2"
-    wait_time=${3:-$DEFAULT_WAIT_TIME}
+    wait_time=${3:-180}
     func_exec_time=0
     is_get_ovsdb_entry_value=1
     local retval=1
@@ -6209,12 +6078,14 @@ wait_ovsdb_entry()
     if [ -n "${wait_entry_equal_command}" ]; then
         log "unit_lib:wait_ovsdb_entry - Waiting for entry:\n\t$wait_entry_equal_command"
         eval ${wait_entry_equal_command}
+        # shellcheck disable=SC2181
         wait_entry_equal_command_ec="$?"
     fi
 
     if [ -n "${wait_entry_not_equal_command}" ]; then
         log -deb "unit_lib:wait_ovsdb_entry - Waiting for entry:\n\t$wait_entry_not_equal_command"
         eval ${wait_entry_not_equal_command}
+        # shellcheck disable=SC2181
         wait_entry_not_equal_command_ec="$?"
     fi
 
@@ -6240,7 +6111,7 @@ wait_ovsdb_entry()
 ###############################################################################
 # DESCRIPTION:
 #   Function waits removal of selected entry from ovsdb table. Always
-#   waits for default wait time (DEFAULT_WAIT_TIME). If selected entry is not
+#   waits for default wait time (180). If selected entry is not
 #   removed after wait time, it raises an exception.
 #
 #   It can be used with supported option(s):
@@ -6268,7 +6139,6 @@ wait_ovsdb_entry_remove()
     ovsdb_table=$1
     shift
     conditions_string=""
-    info_string="unit_lib:wait_ovsdb_entry_remove - Waiting for entry removal:\n"
 
     while [ -n "$1" ]; do
         option=$1
@@ -6276,7 +6146,6 @@ wait_ovsdb_entry_remove()
         case "$option" in
             -w)
                 conditions_string="$conditions_string -w $1==$2"
-                info_string="$info_string where $1 is $2\n"
                 shift 2
                 ;;
             *)
@@ -6284,11 +6153,15 @@ wait_ovsdb_entry_remove()
                 ;;
         esac
     done
-
-    log "$info_string"
+    if [ $# -ne 0 ]; then
+        wait_ovsdb_entry_remove_timeout=${1}
+    else
+        wait_ovsdb_entry_remove_timeout=180
+    fi
     select_entry_command="$ovsdb_table $conditions_string"
+    log "unit_lib:wait_ovsdb_entry_remove - Waiting for entry removal: ${select_entry_command}, timeout=${wait_ovsdb_entry_remove_timeout}"
     wait_time=0
-    while [ $wait_time -le $DEFAULT_WAIT_TIME ]; do
+    while [ $wait_time -le ${wait_ovsdb_entry_remove_timeout} ]; do
         wait_time=$((wait_time+1))
 
         # shellcheck disable=SC2086
@@ -6300,11 +6173,42 @@ wait_ovsdb_entry_remove()
         sleep 1
     done
 
-    if [ $wait_time -gt "$DEFAULT_WAIT_TIME" ]; then
-        raise "Could not remove entry from $ovsdb_table" -l "unit_lib:wait_ovsdb_entry_remove" -fc
+    if [ $wait_time -gt ${wait_ovsdb_entry_remove_timeout} ]; then
+        raise "Could not remove entry ${select_entry_command}" -l "unit_lib:wait_ovsdb_entry_remove" -fc
         return 1
     else
-        log -deb "unit_lib:wait_ovsdb_entry_remove - Entry deleted - Success"
+        log -deb "unit_lib:wait_ovsdb_entry_remove - Entry ${select_entry_command} deleted - Success"
         return 0
+    fi
+}
+
+###############################################################################
+# DESCRIPTION:
+#   Function checks if WAN link selection by OpenSync is enabled on the device.
+#   The Kconfig value CONFIG_TARGET_ENABLE_WAN_LINK_SELECTION is evaluated.
+#   The legacy Kconfig value TARGET_CAP_EXTENDER is evaluated too for backward
+#   compatibility.
+#
+# RETURNS:
+#   0   OpenSync selects the WAN link and ensures internet connectivity.
+#   1   OpenSync does NOT select the WAN link or ensure internet connectivity.
+###############################################################################
+wan_link_selection_enabled()
+{
+    if check_kconfig_option_exists "CONFIG_TARGET_ENABLE_WAN_LINK_SELECTION"; then
+        wan_link_selection_kconfig_value="CONFIG_TARGET_ENABLE_WAN_LINK_SELECTION"
+    elif check_kconfig_option_exists "CONFIG_TARGET_CAP_EXTENDER"; then
+        wan_link_selection_kconfig_value="CONFIG_TARGET_CAP_EXTENDER"
+    else
+        log "unit_lib:wan_link_selection_enabled - OpenSync does NOT select the WAN link or ensure internet connectivity."
+        return 1
+    fi
+    log -deb "unit_lib:wan_link_selection_enabled - Checking value of kconfig option ${wan_link_selection_kconfig_value}."
+    if check_kconfig_option "${wan_link_selection_kconfig_value:?}" "y"; then
+        log "unit_lib:wan_link_selection_enabled - OpenSync selects the WAN link and ensures internet connectivity."
+        return 0
+    else
+        log "unit_lib:wan_link_selection_enabled - OpenSync does NOT select the WAN link or ensure internet connectivity."
+        return 1
     fi
 }

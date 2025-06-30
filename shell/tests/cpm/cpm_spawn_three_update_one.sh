@@ -2,13 +2,11 @@
 
 # Spawn three tinyproxy processes, then update one
 
-# FUT environment loading
-# shellcheck disable=SC1091
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
-[ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
-[ -e "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "${PLATFORM_OVERRIDE_FILE}" ] && . "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
+[ -e "${MODEL_OVERRIDE_FILE}" ] && . "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
 
 usage()
 {
@@ -39,7 +37,7 @@ validate_tinyproxies()
     tinyproxy_pids=$(pidof tinyproxy)
     for pid in $tinyproxy_pids
     do
-        uuid=$(cat /proc/"$pid"/cmdline | grep -Eo "tinyproxy\..*\.conf" | sed 's/tinyproxy\.//' | sed 's/\.conf//')
+        uuid=$(grep -Eo "tinyproxy\..*\.conf" /proc/"$pid"/cmdline | sed 's/tinyproxy\.//' | sed 's/\.conf//')
         if [ -z "$uuid" ]; then
             log "No tinyproxies found with the following uuid: $uuid"
             return 1

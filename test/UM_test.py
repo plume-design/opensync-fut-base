@@ -3,353 +3,347 @@ import random
 import string
 from pathlib import Path
 
-import allure
 import pytest
 
-from framework.fut_configurator import FutConfigurator
-from framework.lib.fut_lib import determine_required_devices, step
+from framework.handlers.server_handler import ServerHandler
+from framework.lib.fut_lib import get_command_arguments, reboot_pods_and_wait_available, step
 from lib_testbed.generic.util.logger import log
 
 
-ExpectedShellResult = pytest.expected_shell_result
-pytest.fut_configurator = FutConfigurator()
-um_config = pytest.fut_configurator.get_test_config()
+# Global FW name variable. Seto to the correct value during um_setup()
+um_fw_name: str = ""
 
 
-@pytest.fixture(scope="class", autouse=True)
-def um_setup():
-    test_class_name = ["TestUm"]
-    nodes, clients = determine_required_devices(test_class_name)
-    log.info(f"Required devices for UM: {nodes + clients}")
-    server = pytest.server
-    um_fw_name = um_config["um_image"][0]["fw_name"]
-    um_fw_md5_path = f"{server.fut_base_dir}/resource/um/{um_fw_name}.md5"
-    um_fw_path_local = f"{server.fut_base_dir}/resource/um/{um_fw_name}"
-    um_fw_path_remote = f"{server.fut_dir}/resource/um/{um_fw_name}"
-    if not Path(um_fw_path_local).is_file():
-        pytest.skip(f"UM test FW image is missing in {um_fw_path_local}. Skipping UM test cases.")
-    if not Path(um_fw_md5_path).is_file():
-        # The um_fw_name should have been transferred during server setup
-        assert server.execute("tools/server/um/create_md5_file", um_fw_path_remote)[0] == ExpectedShellResult
-    for node in nodes:
-        if not hasattr(pytest, node):
-            raise RuntimeError(f"{node.upper()} handler is not set up correctly.")
-        node_handler = getattr(pytest, node)
-        if "UM" not in node_handler.get_kconfig_managers():
-            pytest.skip("UM not present on device")
-        fw_download_path = node_handler.capabilities.get_fw_download_path()
-        setup_args = node_handler.get_command_arguments(fw_download_path)
-        node_handler.fut_device_setup(test_suite_name="um", setup_args=setup_args)
-        service_status = node_handler.get_node_services_and_status()
-        if service_status["um"]["status"] != "enabled":
-            pytest.skip("UM not enabled on device")
-    # Set the baseline OpenSync PIDs used for reboot detection
-    pytest.session_baseline_os_pids = pytest.gw.opensync_pid_retrieval(tracked_node_services=pytest.tracked_managers)
+@pytest.fixture(scope="module")
+def um_setup(request: pytest.FixtureRequest, full_test_config, server_handler):
+    module_name = request.module.__name__.split(".")[1].split("_")[0]
+    fixturenames = {fixturename for item in request.session.items for fixturename in item.fixturenames}
+    with step(f"{module_name} module setup"):
+        global um_fw_name
+        um_fw_name = full_test_config["um_image"][0]["fw_name"]
+        um_fw_md5_path = f"{server_handler.FUT_BASE_DIR}/resource/um/{um_fw_name}.md5"
+        um_fw_path_local = f"{server_handler.FUT_BASE_DIR}/resource/um/{um_fw_name}"
+        um_fw_path_remote = f"{server_handler.FUT_DIR}/resource/um/{um_fw_name}"
+
+        if not Path(um_fw_path_local).is_file():
+            pytest.skip(f"UM: test FW image is missing in {um_fw_path_local}, skipping test cases.")
+
+        if not Path(um_fw_md5_path).is_file():
+            # The um_fw_name should have been transferred during server setup
+            assert server_handler.execute("tools/server/um/create_md5_file", um_fw_path_remote)[0] == 0
+
+        handlers = []
+        if "gw_handler" in fixturenames:
+            gw_handler = request.getfixturevalue("gw_handler")
+            handlers.append(gw_handler)
+
+            manager_name = module_name.lower()
+            if manager_name.upper() not in gw_handler.kconfig_managers:
+                pytest.skip(f"{manager_name.upper()} not present on device")
+
+            if gw_handler.node_service_status[manager_name]["status"] != "enabled":
+                pytest.skip(f"{manager_name.upper()} not enabled on device")
+
+        if "l1_handler" in fixturenames:
+            l1_handler = request.getfixturevalue("l1_handler")
+            handlers.append(l1_handler)
+
+        if "l2_handler" in fixturenames:
+            l2_handler = request.getfixturevalue("l2_handler")
+            handlers.append(l2_handler)
+
+        reboot_pods_and_wait_available(handlers)
+
+        if "gw_handler" in fixturenames:
+            fw_download_path = gw_handler.capabilities.get_fw_download_path()
+            setup_args = get_command_arguments(fw_download_path)
+            gw_handler.device_test_setup(test_suite_name=manager_name, setup_args=setup_args)
+    yield
 
 
-class TestUm:
-    @staticmethod
-    def generate_image_key():
-        """Generate image key used in UM (Upgrade Manager) testcases.
+def _generate_image_key():
+    """Generate image key used in UM (Upgrade Manager) testcases.
 
-        Used when image key is not provided in testcase configuration.
+    Used when image key is not provided in testcase configuration.
 
-        Returns:
-            (str): FW image key
-        """
-        letters_and_digits = string.ascii_lowercase + string.digits + string.ascii_uppercase
-        image_key_pure = "".join(random.choice(letters_and_digits) for i in range(32))
+    Returns:
+        (str): FW image key
+    """
+    letters_and_digits = string.ascii_lowercase + string.digits + string.ascii_uppercase
+    image_key_pure = "".join(random.choice(letters_and_digits) for _ in range(32))
 
-        return str(base64.b64encode(image_key_pure.encode("ascii"))).replace("\"b'", "").replace("'", "")
+    return str(base64.b64encode(image_key_pure.encode("ascii"))).replace("\"b'", "").replace("'", "")
 
-    @staticmethod
-    def get_um_fw_url(prefix=""):
-        """Return URL to FW image file with optionally pre-pended prefix.
 
-        Args:
-            prefix (str, optional): prefix to FW image file name. Defaults to ''.
+def _get_um_fw_url(server: ServerHandler, prefix: str = ""):
+    """Return URL to FW image file with optionally pre-pended prefix.
 
-        Returns:
-            str: URL to FW image file.
-        """
-        um_fw_name = um_config["um_image"][0]["fw_name"]
-        curl_host = f"http://{pytest.fut_configurator.fut_test_hostname}:{pytest.fut_configurator.curl_port_rate_limit}"
-        um_fw_url = f"{curl_host}/{pytest.server.fut_dir}/resource/um/{prefix}{um_fw_name}"
+    Args:
+        server (ServerHandler): Server handler object.
+        prefix (str, optional): prefix to FW image file name. Defaults to ''.
 
-        return um_fw_url
+    Returns:
+        str: URL to FW image file.
+    """
+    curl_host = "http://fut.opensync.io:8000"
+    um_fw_url = f"{curl_host}/{server.FUT_DIR}/resource/um/{prefix}{um_fw_name}"
 
-    @staticmethod
-    def duplicate_image(prefix=""):
-        """Create duplicated FW image file with optionally pre-pended prefix.
+    return um_fw_url
 
-        Args:
-            prefix (str, optional): prefix to FW image file name. Defaults to "".
 
-        Raises:
-            OSError: If the duplicated image cannot be created.
+def _duplicate_image(server: ServerHandler, prefix: str = ""):
+    """Create duplicated FW image file with optionally pre-pended prefix.
 
-        Returns:
-            bool: Returns True if FW image file is created, False otherwise.
-        """
-        server = pytest.server
-        um_fw_name = um_config["um_image"][0]["fw_name"]
-        # Set file names for original iamge and for duplicated image
-        um_fw_path = f"{server.fut_dir}/resource/um/{um_fw_name}"
-        um_fw_prefix_path = f"{server.fut_dir}/resource/um/{prefix}{um_fw_name}"
-        res = server.device_api.run_raw(f"cp -r {um_fw_path} {um_fw_prefix_path}")
-        if res[0] != 0:
-            raise OSError(f"Unable to duplicate image.\n{res[1]}\n{res[2]}")
-        return True
+    Args:
+        server (ServerHandler): Server handler object.
+        prefix (str, optional): prefix to FW image file name. Defaults to "".
 
-    @staticmethod
-    def remove_duplicate_image(prefix=""):
-        """Remove duplicated FW image file with optionally pre-pended prefix.
+    Raises:
+        OSError: If the duplicated image cannot be created.
 
-        Args:
-            prefix (str, optional): prefix to FW image file name. Defaults to ''.
+    Returns:
+        bool: Returns True if FW image file is created, False otherwise.
+    """
+    # Set file names for original image and for duplicated image
+    um_fw_path = f"{server.FUT_DIR}/resource/um/{um_fw_name}"
+    um_fw_prefix_path = f"{server.FUT_DIR}/resource/um/{prefix}{um_fw_name}"
+    res = server.run_raw(f"cp -r {um_fw_path} {um_fw_prefix_path}")
+    if res[0] != 0:
+        raise OSError(f"Unable to duplicate image.\n{res[1]}\n{res[2]}")
+    return True
 
-        Returns:
-            bool: Returns True if FW image file is removed, False otherwise.
-        """
-        server = pytest.server
-        um_fw_name = um_config["um_image"][0]["fw_name"]
-        um_fw_prefix_path = f"{server.fut_dir}/resource/um/{prefix}{um_fw_name}"
-        res = server.device_api.run_raw(f"rm -f {um_fw_prefix_path}")
-        if res[0] != 0:
-            log.warning(msg=f"Unable to remove duplicated image.\n{res[1]}\n{res[2]}")
-        return True
 
-    @staticmethod
-    def get_um_fw_path(prefix=""):
-        """Return path to FW image file with optionally pre-pended prefix.
+def _remove_duplicate_image(server: ServerHandler, prefix: str = ""):
+    """Remove duplicated FW image file with optionally pre-pended prefix.
 
-        Args:
-            prefix (str, optional): prefix to FW image file name. Defaults to ''.
+    Args:
+        server (ServerHandler): Server handler object.
+        prefix (str, optional): prefix to FW image file name. Defaults to ''.
 
-        Returns:
-            str: Path to FW image file.
-        """
-        server = pytest.server
-        um_fw_name = um_config["um_image"][0]["fw_name"]
-        um_fw_path = f"{server.fut_dir}/resource/um/{prefix}{um_fw_name}"
+    Returns:
+        bool: Returns True if FW image file is removed, False otherwise.
+    """
+    um_fw_prefix_path = f"{server.FUT_DIR}/resource/um/{prefix}{um_fw_name}"
+    res = server.run_raw(f"rm -f {um_fw_prefix_path}")
+    if res[0] != 0:
+        log.warning(msg=f"Unable to remove duplicated image.\n{res[1]}\n{res[2]}")
+    return True
 
-        return um_fw_path
 
-    @allure.severity(allure.severity_level.NORMAL)
-    @pytest.mark.parametrize("cfg", um_config.get("um_corrupt_image", []))
-    def test_um_corrupt_image(self, cfg: dict):
-        server, gw = pytest.server, pytest.gw
+def _get_um_fw_path(fut_dir: str, prefix: str = ""):
+    """Return path to FW image file with optionally pre-pended prefix.
 
-        with step("Create corrupted image and MD5 files"):
-            assert (
-                server.execute("tools/server/um/create_corrupt_image_file", self.get_um_fw_path())[0]
-                == ExpectedShellResult
-            )
-            assert (
-                server.execute("tools/server/um/create_md5_file", self.get_um_fw_path(prefix="corrupt_"))[0]
-                == ExpectedShellResult
-            )
-        with step("Preparation of testcase parameters"):
-            # Arguments from test case configuration
-            fw_path = cfg.get("fw_path", gw.capabilities.get_fw_download_path())
-            test_args = gw.get_command_arguments(
-                fw_path,
-                self.get_um_fw_url(prefix="corrupt_"),
-            )
-        with step("Test case"):
-            assert gw.execute("tests/um/um_corrupt_image", test_args)[0] == ExpectedShellResult
+    Args:
+        fut_dir (str): FUT directory where FW image file is located.
+        prefix (str, optional): prefix to FW image file name. Defaults to ''.
 
-    @allure.severity(allure.severity_level.NORMAL)
-    @pytest.mark.parametrize("cfg", um_config.get("um_corrupt_md5_sum", []))
-    def test_um_corrupt_md5_sum(self, cfg: dict):
-        server, gw = pytest.server, pytest.gw
+    Returns:
+        str: Path to FW image file.
+    """
+    um_fw_path = f"{fut_dir}/resource/um/{prefix}{um_fw_name}"
 
-        with step("Create corrupted MD5sum file and FW image file"):
-            md5_fw_prefix = "corrupt_md5_sum_"
-            assert self.duplicate_image(prefix=md5_fw_prefix)
-            assert (
-                server.execute("tools/server/um/create_corrupt_md5_file", self.get_um_fw_path(prefix=md5_fw_prefix))[0]
-                == ExpectedShellResult
-            )
-        with step("Preparation of testcase parameters"):
-            # Arguments from test case configuration
-            fw_path = cfg.get("fw_path", gw.capabilities.get_fw_download_path())
-            test_args = gw.get_command_arguments(
-                fw_path,
-                self.get_um_fw_url(prefix=md5_fw_prefix),
-            )
-        with step("Test case"):
-            assert gw.execute("tests/um/um_corrupt_md5_sum", test_args)[0] == ExpectedShellResult
-        with step("Cleanup"):
-            assert self.remove_duplicate_image(prefix=md5_fw_prefix)
+    return um_fw_path
 
-    @allure.severity(allure.severity_level.NORMAL)
-    @pytest.mark.parametrize("cfg", um_config.get("um_download_image_while_downloading", []))
-    def test_um_download_image_while_downloading(self, cfg: dict):
-        server, gw = pytest.server, pytest.gw
 
-        with step("Create duplicate testcase image"):
-            copied_prefix = "copied_"
-            self.duplicate_image(prefix=copied_prefix)
-            assert (
-                server.execute("tools/server/um/create_md5_file", self.get_um_fw_path(prefix=copied_prefix))[0]
-                == ExpectedShellResult
-            )
-        with step("Preparation of testcase parameters"):
-            # Arguments from test case configuration
-            fw_path = cfg.get("fw_path", gw.capabilities.get_fw_download_path())
-            um_fw_url = self.get_um_fw_url()
-            copied_um_fw_url = self.get_um_fw_url(prefix=copied_prefix)
-            fw_dl_timer = cfg.get("fw_dl_timer")
-            test_args = gw.get_command_arguments(
-                fw_path,
-                um_fw_url,
-                copied_um_fw_url,
-                fw_dl_timer,
-            )
-        with step("Test case"):
-            assert gw.execute("tests/um/um_download_image_while_downloading", test_args)[0] == ExpectedShellResult
-        with step("Cleanup"):
-            assert self.remove_duplicate_image(prefix=copied_prefix)
+def test_um_corrupt_image(um_setup, parametrized_test_config, server_handler, gw_handler):
+    with step("Create corrupted image and MD5 files"):
+        assert (
+            server_handler.execute(
+                "tools/server/um/create_corrupt_image_file",
+                _get_um_fw_path(fut_dir=server_handler.FUT_DIR),
+            )[0]
+            == 0
+        )
+        assert (
+            server_handler.execute(
+                "tools/server/um/create_md5_file",
+                _get_um_fw_path(fut_dir=server_handler.FUT_DIR, prefix="corrupt_"),
+            )[0]
+            == 0
+        )
+    with step("Preparation of testcase parameters"):
+        # Arguments from test case configuration
+        fw_path = parametrized_test_config.get("fw_path", gw_handler.capabilities.get_fw_download_path())
+        test_args = get_command_arguments(
+            fw_path,
+            _get_um_fw_url(server=server_handler, prefix="corrupt_"),
+        )
+    with step("Test case"):
+        assert gw_handler.execute("tests/um/um_corrupt_image", test_args)[0] == 0
 
-    @allure.severity(allure.severity_level.NORMAL)
-    @pytest.mark.parametrize("cfg", um_config.get("um_missing_md5_sum", []))
-    def test_um_missing_md5_sum(self, cfg: dict):
-        gw = pytest.gw
 
-        with step("Preparation of testcase parameters"):
-            # Arguments from test case configuration
-            fw_path = cfg.get("fw_path", gw.capabilities.get_fw_download_path())
+def test_um_corrupt_md5_sum(um_setup, parametrized_test_config, server_handler, gw_handler):
+    with step("Create corrupted MD5sum file and FW image file"):
+        md5_fw_prefix = "corrupt_md5_sum_"
+        assert _duplicate_image(server=server_handler, prefix=md5_fw_prefix)
+        assert (
+            server_handler.execute(
+                "tools/server/um/create_corrupt_md5_file",
+                _get_um_fw_path(fut_dir=server_handler.FUT_DIR, prefix=md5_fw_prefix),
+            )[0]
+            == 0
+        )
+    with step("Preparation of testcase parameters"):
+        # Arguments from test case configuration
+        fw_path = parametrized_test_config.get("fw_path", gw_handler.capabilities.get_fw_download_path())
+        test_args = get_command_arguments(
+            fw_path,
+            _get_um_fw_url(server=server_handler, prefix=md5_fw_prefix),
+        )
+    with step("Test case"):
+        assert gw_handler.execute("tests/um/um_corrupt_md5_sum", test_args)[0] == 0
+    with step("Cleanup"):
+        assert _remove_duplicate_image(server=server_handler, prefix=md5_fw_prefix)
 
-            # Constant arguments
-            md5_fw_prefix = "missing_md5_sum_"
 
-            assert self.duplicate_image(prefix=md5_fw_prefix)
-            test_args = gw.get_command_arguments(
-                fw_path,
-                self.get_um_fw_url(prefix=md5_fw_prefix),
-            )
-        with step("Test case"):
-            assert gw.execute("tests/um/um_missing_md5_sum", test_args)[0] == ExpectedShellResult
-        with step("Cleanup"):
-            assert self.remove_duplicate_image(prefix=md5_fw_prefix)
+def test_um_download_image_while_downloading(um_setup, parametrized_test_config, server_handler, gw_handler):
+    with step("Create duplicate testcase image"):
+        copied_prefix = "copied_"
+        _duplicate_image(server=server_handler, prefix=copied_prefix)
+        assert (
+            server_handler.execute(
+                "tools/server/um/create_md5_file",
+                _get_um_fw_path(fut_dir=server_handler.FUT_DIR, prefix=copied_prefix),
+            )[0]
+            == 0
+        )
+    with step("Preparation of testcase parameters"):
+        # Arguments from test case configuration
+        fw_path = parametrized_test_config.get("fw_path", gw_handler.capabilities.get_fw_download_path())
+        um_fw_url = _get_um_fw_url(server=server_handler)
+        copied_um_fw_url = _get_um_fw_url(server=server_handler, prefix=copied_prefix)
+        fw_dl_timer = parametrized_test_config.get("fw_dl_timer")
+        test_args = get_command_arguments(
+            fw_path,
+            um_fw_url,
+            copied_um_fw_url,
+            fw_dl_timer,
+        )
+    with step("Test case"):
+        assert gw_handler.execute("tests/um/um_download_image_while_downloading", test_args)[0] == 0
+    with step("Cleanup"):
+        assert _remove_duplicate_image(server=server_handler, prefix=copied_prefix)
 
-    @allure.severity(allure.severity_level.NORMAL)
-    @pytest.mark.parametrize("cfg", um_config.get("um_set_firmware_url", []))
-    def test_um_set_firmware_url(self, cfg: dict):
-        gw = pytest.gw
 
-        with step("Get UM firmware URL"):
-            um_fw_url = self.get_um_fw_url()
+def test_um_missing_md5_sum(um_setup, parametrized_test_config, server_handler, gw_handler):
+    with step("Preparation of testcase parameters"):
+        # Arguments from test case configuration
+        fw_path = parametrized_test_config.get("fw_path", gw_handler.capabilities.get_fw_download_path())
 
-        with step("Preparation of testcase parameters"):
-            # Arguments from test case configuration
-            fw_path = cfg.get("fw_path", gw.capabilities.get_fw_download_path())
-            test_args = gw.get_command_arguments(
-                fw_path,
-                um_fw_url,
-            )
-        with step("Test case"):
-            assert gw.execute("tests/um/um_set_firmware_url", test_args)[0] == ExpectedShellResult
+        # Constant arguments
+        md5_fw_prefix = "missing_md5_sum_"
 
-    @allure.severity(allure.severity_level.NORMAL)
-    @pytest.mark.parametrize("cfg", um_config.get("um_set_invalid_firmware_pass", []))
-    def test_um_set_invalid_firmware_pass(self, cfg: dict):
-        gw = pytest.gw
+        assert _duplicate_image(server=server_handler, prefix=md5_fw_prefix)
+        test_args = get_command_arguments(
+            fw_path,
+            _get_um_fw_url(server=server_handler, prefix=md5_fw_prefix),
+        )
+    with step("Test case"):
+        assert gw_handler.execute("tests/um/um_missing_md5_sum", test_args)[0] == 0
+    with step("Cleanup"):
+        assert _remove_duplicate_image(server=server_handler, prefix=md5_fw_prefix)
 
-        with step("Generate invalid FW password"):
-            fw_pass = self.generate_image_key() if "fw_pass" not in cfg else cfg.get("fw_pass")
 
-        with step("Preparation of testcase parameters"):
-            # Arguments from test case configuration
-            fw_path = cfg.get("fw_path", gw.capabilities.get_fw_download_path())
-            test_args = gw.get_command_arguments(
-                fw_path,
-                self.get_um_fw_url(),
-                fw_pass,
-            )
-        with step("Test case"):
-            assert gw.execute("tests/um/um_set_invalid_firmware_pass", test_args)[0] == ExpectedShellResult
+def test_um_set_firmware_url(um_setup, parametrized_test_config, server_handler, gw_handler):
+    with step("Get UM firmware URL"):
+        um_fw_url = _get_um_fw_url(server=server_handler)
 
-    @allure.severity(allure.severity_level.NORMAL)
-    @pytest.mark.parametrize("cfg", um_config.get("um_set_invalid_firmware_url", []))
-    def test_um_set_invalid_firmware_url(self, cfg: dict):
-        gw = pytest.gw
+    with step("Preparation of testcase parameters"):
+        # Arguments from test case configuration
+        fw_path = parametrized_test_config.get("fw_path", gw_handler.capabilities.get_fw_download_path())
+        test_args = get_command_arguments(
+            fw_path,
+            um_fw_url,
+        )
+    with step("Test case"):
+        assert gw_handler.execute("tests/um/um_set_firmware_url", test_args)[0] == 0
 
-        with step("Preparation of testcase parameters"):
-            # Arguments from test case configuration
-            fw_path = cfg.get("fw_path", gw.capabilities.get_fw_download_path())
-            test_args = gw.get_command_arguments(
-                fw_path,
-                self.get_um_fw_url(prefix="non_existing_fw_url_"),
-            )
-        with step("Test case"):
-            assert gw.execute("tests/um/um_set_invalid_firmware_url", test_args)[0] == ExpectedShellResult
 
-    @allure.severity(allure.severity_level.NORMAL)
-    @pytest.mark.parametrize("cfg", um_config.get("um_set_upgrade_dl_timer_end", []))
-    def test_um_set_upgrade_dl_timer_end(self, cfg: dict):
-        gw = pytest.gw
+def test_um_set_invalid_firmware_pass(um_setup, parametrized_test_config, server_handler, gw_handler):
+    with step("Generate invalid FW password"):
+        fw_pass = (
+            _generate_image_key()
+            if "fw_pass" not in parametrized_test_config
+            else parametrized_test_config.get("fw_pass")
+        )
 
-        with step("Preparation of testcase parameters"):
-            # Arguments from test case configuration
-            fw_path = cfg.get("fw_path", gw.capabilities.get_fw_download_path())
-            fw_dl_timer = cfg.get("fw_dl_timer")
-            test_args = gw.get_command_arguments(
-                fw_path,
-                self.get_um_fw_url(),
-                fw_dl_timer,
-            )
-        with step("Test case"):
-            assert gw.execute("tests/um/um_set_upgrade_dl_timer_end", test_args)[0] == ExpectedShellResult
+    with step("Preparation of testcase parameters"):
+        # Arguments from test case configuration
+        fw_path = parametrized_test_config.get("fw_path", gw_handler.capabilities.get_fw_download_path())
+        test_args = get_command_arguments(
+            fw_path,
+            _get_um_fw_url(server=server_handler),
+            fw_pass,
+        )
+    with step("Test case"):
+        assert gw_handler.execute("tests/um/um_set_invalid_firmware_pass", test_args)[0] == 0
 
-    @allure.severity(allure.severity_level.NORMAL)
-    @pytest.mark.parametrize("cfg", um_config.get("um_set_upgrade_timer", []))
-    def test_um_set_upgrade_timer(self, cfg: dict):
-        gw = pytest.gw
 
-        with step("Preparation of testcase parameters"):
-            # Arguments from test case configuration
-            fw_path = cfg.get("fw_path", gw.capabilities.get_fw_download_path())
-            fw_up_timer = cfg.get("fw_up_timer")
-            fw_name = um_config["um_image"][0]["fw_name"]
-            test_args = gw.get_command_arguments(
-                fw_path,
-                self.get_um_fw_url(),
-                fw_up_timer,
-                fw_name,
-            )
-        with step("Test case"):
-            assert gw.execute("tests/um/um_set_upgrade_timer", test_args)[0] == ExpectedShellResult
+def test_um_set_invalid_firmware_url(um_setup, parametrized_test_config, server_handler, gw_handler):
+    with step("Preparation of testcase parameters"):
+        # Arguments from test case configuration
+        fw_path = parametrized_test_config.get("fw_path", gw_handler.capabilities.get_fw_download_path())
+        test_args = get_command_arguments(
+            fw_path,
+            _get_um_fw_url(server=server_handler, prefix="non_existing_fw_url_"),
+        )
+    with step("Test case"):
+        assert gw_handler.execute("tests/um/um_set_invalid_firmware_url", test_args)[0] == 0
 
-    @allure.severity(allure.severity_level.NORMAL)
-    @pytest.mark.parametrize("cfg", um_config.get("um_verify_firmware_url_length", []))
-    def test_um_verify_firmware_url_length(self, cfg: dict):
-        gw = pytest.gw
 
-        with step("Preparation of testcase parameters"):
-            # Arguments from test case configuration
-            url_max_length = cfg.get("url_max_length")
-            fw_download_path = cfg.get("fw_path", gw.capabilities.get_fw_download_path())
+def test_um_set_upgrade_dl_timer_end(um_setup, parametrized_test_config, server_handler, gw_handler):
+    with step("Preparation of testcase parameters"):
+        # Arguments from test case configuration
+        fw_path = parametrized_test_config.get("fw_path", gw_handler.capabilities.get_fw_download_path())
+        fw_dl_timer = parametrized_test_config.get("fw_dl_timer")
+        test_args = get_command_arguments(
+            fw_path,
+            _get_um_fw_url(server=server_handler),
+            fw_dl_timer,
+        )
+    with step("Test case"):
+        assert gw_handler.execute("tests/um/um_set_upgrade_dl_timer_end", test_args)[0] == 0
 
-            # Constant arguments
-            firmware_url_base = "http://fut.opensync.io:8000/fut-base/resource/um/"
-            firmware_url_suffix = ".img"
-            url_mid_length = url_max_length - len(firmware_url_base) - len(firmware_url_suffix)
-            # Make sure there is space for middle part of URL
-            assert url_mid_length > 0
-            # Create middle part of the URL from random characters and insert it in FW URL
-            firmware_url_mid = "".join(
-                random.choices(string.ascii_uppercase + string.ascii_lowercase + string.digits, k=url_mid_length),
-            )
-            firmware_url = f"{firmware_url_base}{firmware_url_mid}{firmware_url_suffix}"
-            # Make sure total length of firmware URL is exactly max length
-            assert len(firmware_url) == url_max_length
 
-            test_args = gw.get_command_arguments(
-                fw_download_path,
-                firmware_url,
-            )
+def test_um_set_upgrade_timer(um_setup, parametrized_test_config, server_handler, gw_handler):
+    with step("Preparation of testcase parameters"):
+        # Arguments from test case configuration
+        fw_path = parametrized_test_config.get("fw_path", gw_handler.capabilities.get_fw_download_path())
+        fw_up_timer = parametrized_test_config.get("fw_up_timer")
+        test_args = get_command_arguments(
+            fw_path,
+            _get_um_fw_url(server=server_handler),
+            fw_up_timer,
+            um_fw_name,
+        )
+    with step("Test case"):
+        assert gw_handler.execute("tests/um/um_set_upgrade_timer", test_args)[0] == 0
 
-        with step("Test case"):
-            assert gw.execute("tests/um/um_verify_firmware_url_length", test_args)[0] == ExpectedShellResult
+
+def test_um_verify_firmware_url_length(um_setup, parametrized_test_config, server_handler, gw_handler):
+    with step("Preparation of testcase parameters"):
+        # Arguments from test case configuration
+        url_max_length = parametrized_test_config.get("url_max_length")
+        fw_download_path = parametrized_test_config.get("fw_path", gw_handler.capabilities.get_fw_download_path())
+
+        # Constant arguments
+        firmware_url_base = "http://fut.opensync.io:8000/fut-base/resource/um/"
+        firmware_url_suffix = ".img"
+        url_mid_length = url_max_length - len(firmware_url_base) - len(firmware_url_suffix)
+        # Make sure there is space for middle part of URL
+        assert url_mid_length > 0
+        # Create middle part of the URL from random characters and insert it in FW URL
+        firmware_url_mid = "".join(
+            random.choices(string.ascii_uppercase + string.ascii_lowercase + string.digits, k=url_mid_length),
+        )
+        firmware_url = f"{firmware_url_base}{firmware_url_mid}{firmware_url_suffix}"
+        # Make sure total length of firmware URL is exactly max length
+        assert len(firmware_url) == url_max_length
+
+        test_args = get_command_arguments(
+            fw_download_path,
+            firmware_url,
+        )
+
+    with step("Test case"):
+        assert gw_handler.execute("tests/um/um_verify_firmware_url_length", test_args)[0] == 0

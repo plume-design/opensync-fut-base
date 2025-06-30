@@ -1,13 +1,18 @@
 test_inputs = {
+    "tpsm_setup": {
+        "args_mapping": ["if_role"],
+        "inputs": [
+            ["phy_radio_name"],
+        ],
+    },
     "tpsm_crash_speedtest_verify_reporting": {
-        "args_mapping": ["test_type", "other_cfg", "extra_step"],
+        "args_mapping": ["test_type", "other_cfg"],
         "inputs": [
             [
                 "IPERF3_C",
                 {"timeout": 30, "st_dir": "DL", "st_server": "fut.opensync.io", "st_port": 5201},
-                "iperf3_server",
             ],
-            ["OOKLA", {"kconfig": "CONFIG_3RDPARTY_OOKLA"}, None],
+            ["OOKLA", {"kconfig": "CONFIG_3RDPARTY_OOKLA"}],
         ],
     },
     "tpsm_verify_iperf3_speedtest": {

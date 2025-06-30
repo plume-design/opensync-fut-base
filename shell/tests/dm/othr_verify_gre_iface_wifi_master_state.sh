@@ -1,12 +1,10 @@
 #!/bin/sh
 
-# FUT environment loading
-# shellcheck disable=SC1091
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
-[ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
-[ -e "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "${PLATFORM_OVERRIDE_FILE}" ] && . "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
+[ -e "${MODEL_OVERRIDE_FILE}" ] && . "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
 
 usage()
 {
@@ -62,16 +60,12 @@ bhaul_ip_assign_scheme="none"
 
 log "othr/othr_verify_gre_iface_wifi_master_state.sh: - Verify wifi_master_state table is populated with GRE interface"
 
-${OVSH} s Wifi_Master_State
-if [ $? -eq 0 ]; then
-    log "othr/othr_verify_gre_iface_wifi_master_state.sh: Wifi_Master_State table exists"
-else
+${OVSH} s Wifi_Master_State &&
+    log "othr/othr_verify_gre_iface_wifi_master_state.sh: Wifi_Master_State table exists" ||
     raise "Wifi_Master_State table does not exist" -l "othr/othr_verify_gre_iface_wifi_master_state.sh" -tc
-fi
 
 ap_inet_addr=$(get_ovsdb_entry_value Wifi_Inet_Config inet_addr -w if_name "${bhaul_ap_if_name}" -r)
 
-# TESTCASE:
 log "othr/othr_verify_gre_iface_wifi_master_state.sh: Create GW GRE parent interface"
 create_inet_entry \
     -if_name "${gre_name}" \

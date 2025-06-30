@@ -10,7 +10,6 @@ from typing import Any, Literal
 
 from framework.lib.fut_lib import output_to_json
 from lib_testbed.generic.mqtt.mqtt_client import MqttClient
-from lib_testbed.generic.mqtt.opensync_stats_pb2 import Report as StatsReportSchema
 
 
 def parse_arguments():
@@ -55,7 +54,7 @@ def parse_arguments():
         "--timeout",
         type=int,
         required=False,
-        default=300,
+        default=70,
         help="Time to wait for new messages",
     )
     parser.add_argument(
@@ -92,6 +91,7 @@ def extract_mqtt_data(
     value_list: list,
     data_key: int | str | tuple,
     simplify: bool = False,
+    unique: bool = False,
 ) -> list[Any]:
     """Extract data from the collected MQTT messages.
 
@@ -102,6 +102,7 @@ def extract_mqtt_data(
         simplify (bool): If element is a list of type int the average value is calculated,
                          if element is a list of type str or bool only the first element
                          is returned if all elements are equal
+        unique (bool): Remove duplicates of elements
     """
     if isinstance(data, dict):
         for key, value in data.items():
@@ -127,6 +128,9 @@ def extract_mqtt_data(
             elif isinstance(element, (int, float)):
                 value_list = round(mean(value_list), 4)
                 break
+    if unique and isinstance(value_list, list) and len(value_list) > 1:
+        value_list = list(set(value_list))
+
     return value_list
 
 
@@ -134,6 +138,7 @@ def extract_mqtt_data_as_dict(
     data: dict,
     data_keys: list[int | str | tuple],
     simplify: bool = False,
+    unique: bool = False,
 ) -> dict[int | str | tuple, Any]:
     """Extract multiple values from the collected MQTT messages and output them in a dictionary format.
 
@@ -141,11 +146,12 @@ def extract_mqtt_data_as_dict(
         data (dict): Data in a dictionary format
         data_keys (list): Define the list of keys for which the values are extracted
         simplify (bool): Simplify the extracted data
+        unique (bool): Remove duplicates in extracted data
     """
     extracted_data = []
     for data_key in data_keys:
         value_list: list = []
-        extracted_data.append(extract_mqtt_data(data, value_list, data_key, simplify))
+        extracted_data.append(extract_mqtt_data(data, value_list, data_key, simplify, unique))
         if not value_list:
             raise KeyError(f"Failed to extract data from the MQTT messages for the following key: {data_key}")
     extracted_data_dict = dict(zip(data_keys, extracted_data))
@@ -207,8 +213,7 @@ if __name__ == "__main__":
     else:
         on_message_cb = node_filter_func
 
-    # Change StatsReportSchema() if the usage of a different protobuf decoder is required
-    mqtt_client.report_proto = StatsReportSchema()
+    mqtt_client.report_proto = mqtt_client.proto_util.get_proto_decoder(topic)
     mqtt_client.connect(mqtt_config["mqtt_hostname"], topic, certs=mqtt_config["certs"], on_message_cb=on_message_cb)
 
     if collect_messages:

@@ -1,51 +1,53 @@
 from pathlib import Path
 
-import allure
 import pytest
 
 from config.defaults import unit_test_resource_dir, unit_test_subdir
-from framework.lib.fut_lib import determine_required_devices, step
+from framework.lib.fut_lib import reboot_pods_and_wait_available, step
 from lib_testbed.generic.util.logger import log
 
-ExpectedShellResult = pytest.expected_shell_result
+
+@pytest.fixture(scope="module")
+def ut_setup(request: pytest.FixtureRequest):
+    module_name = request.module.__name__.split(".")[1].split("_")[0]
+    fixturenames = {fixturename for item in request.session.items for fixturename in item.fixturenames}
+    with step(f"OpenSync firmware {module_name} module setup"):
+        handlers = []
+        if "gw_handler" in fixturenames:
+            gw_handler = request.getfixturevalue("gw_handler")
+            handlers.append(gw_handler)
+
+            manager_name = "nm"
+            if manager_name.upper() not in gw_handler.kconfig_managers:
+                pytest.skip(f"{manager_name.upper()} not present on device")
+
+            if gw_handler.node_service_status[manager_name]["status"] != "enabled":
+                pytest.skip(f"{manager_name.upper()} not enabled on device")
+
+        if "l1_handler" in fixturenames:
+            l1_handler = request.getfixturevalue("l1_handler")
+            handlers.append(l1_handler)
+
+        if "l2_handler" in fixturenames:
+            l2_handler = request.getfixturevalue("l2_handler")
+            handlers.append(l2_handler)
+
+        reboot_pods_and_wait_available(handlers)
+
+        if "gw_handler" in fixturenames:
+            transfer_dir = Path(unit_test_resource_dir).joinpath(unit_test_subdir)
+            if not transfer_dir.is_dir():
+                raise FileNotFoundError(
+                    f"Can not transfer {transfer_dir} to {gw_handler.nickname}, directory does not exist.",
+                )
+            log.debug(f"Transfer {transfer_dir} to {gw_handler.nickname}.")
+            gw_handler.file_transfer(folders=[transfer_dir], as_sudo=False, skip_env_file=True)
+            gw_handler.device_test_setup(test_suite_name=module_name.lower())
+    yield
 
 
-@pytest.fixture(scope="class", autouse=True)
-def ut_setup():
-    test_class_name = ["TestUt"]
-    nodes, clients = determine_required_devices(test_class_name)
-    log.info(f"Required devices for UT: {nodes + clients}")
-    for node in nodes:
-        if not hasattr(pytest, node):
-            raise RuntimeError(f"{node.upper()} handler is not set up correctly.")
-        try:
-            node_handler = getattr(pytest, node)
-            node_handler.fut_device_setup(test_suite_name="ut")
-        except FileNotFoundError as exception:
-            log.warning(f"Unable to transfer unit tests: {exception}.")
-    _ut_transfer_files(node_handler)
-    # Set the baseline OpenSync PIDs used for reboot detection
-    pytest.session_baseline_os_pids = pytest.gw.opensync_pid_retrieval(tracked_node_services=pytest.tracked_managers)
-
-
-def _ut_transfer_files(node_handler):
-    transfer_dir = Path(unit_test_resource_dir).joinpath(unit_test_subdir)
-    if not transfer_dir.is_dir():
-        raise FileNotFoundError(f"Can not transfer {transfer_dir} to {node_handler.name}, directory does not exist.")
-    log.debug(f"Transfer {transfer_dir} to {node_handler.name}.")
-    node_handler.file_transfer(folders=[transfer_dir], as_sudo=False, skip_env_file=True)
-
-
-class TestUt:
-    @allure.severity(allure.severity_level.NORMAL)
-    @pytest.mark.no_process_restart_detection
-    @pytest.mark.parametrize("cfg", getattr(pytest, "unit_test_files", []))
-    def test_device_unit_test(self, cfg: dict):
-        gw = pytest.gw
-        with step("Preparation of testcase parameters"):
-            unit_test_file = cfg.get("unit_test_file")
-        with step("Test case"):
-            assert (
-                gw.execute(Path(unit_test_file).name, suffix="", folder=Path(unit_test_file).parent)[0]
-                == ExpectedShellResult
-            )
+def test_device_unit_test(ut_setup, parametrized_test_config, gw_handler):
+    with step("Preparation of testcase parameters"):
+        unit_test_file = parametrized_test_config.get("unit_test_file")
+    with step("Test case"):
+        assert gw_handler.execute(Path(unit_test_file).name, suffix="", folder=Path(unit_test_file).parent)[0] == 0

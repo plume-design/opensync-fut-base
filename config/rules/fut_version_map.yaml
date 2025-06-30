@@ -1,12 +1,13 @@
 debian_client:
-  recommended: '3.0.32'
-  legacy: '3.0.32'
+  recommended: '3.0.59'
+  non-WiFi-7-regression: '3.0.41'
+  legacy: '3.0.44'
   public: '3.1.12'
 debian_server:
-  recommended: '3.0.25'
-  legacy: '3.0.25'
+  recommended: '3.0.59'
+  legacy: '3.0.44'
   public: '3.1.10'
 rpi_server:
-  recommended: '2.0-195'
-  legacy: 'v2.0-187'
+  recommended: '2.0-209'
+  legacy: 'v2.0-205'
   public: 'v2.1-12'

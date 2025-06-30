@@ -13,13 +13,11 @@
 #
 
 
-# FUT environment loading
-# shellcheck disable=SC1091
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
-[ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
-[ -e "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "${PLATFORM_OVERRIDE_FILE}" ] && . "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
+[ -e "${MODEL_OVERRIDE_FILE}" ] && . "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
 
 usage()
 {
@@ -51,8 +49,9 @@ validate_1_up_2_gone()
     uuid_1=$(get_ovsdb_entry_value Captive_Portal _uuid -w name "default")
     tp_count=$(pidof tinyproxy | wc -w)
     if [ "$tp_count" = "1" ]; then
-        tp_pid=$($(get_process_cmd) | grep tinyproxy | grep -v grep | awk '{print $1}')
-        tp_uuid_1=$(cat /proc/"$tp_pid"/cmdline | grep -Eo "$uuid_1")
+        ps_cmd=$(get_process_cmd)
+        tp_pid=$(eval ${ps_cmd} | grep tinyproxy | grep -v grep | awk '{print $1}')
+        tp_uuid_1=$(grep -Eo "$uuid_1" /proc/"$tp_pid"/cmdline)
         if [ "$tp_uuid_1" = "$uuid_1" ]; then
             tp_config_count=$(ls -l /tmp/tinyproxy | wc -l)
             if [ "$tp_config_count" = "2" ]; then

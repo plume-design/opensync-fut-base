@@ -1,245 +1,214 @@
-import allure
 import pytest
 
-from framework.fut_configurator import FutConfigurator
-from framework.lib.fut_lib import determine_required_devices, step
+from framework.lib.fut_lib import get_command_arguments, reboot_pods_and_wait_available, step
 from lib_testbed.generic.util.logger import log
 
 
-ExpectedShellResult = pytest.expected_shell_result
-pytest.fut_configurator = FutConfigurator()
-nfm_config = pytest.fut_configurator.get_test_config()
+@pytest.fixture(scope="module")
+def nfm_setup(request: pytest.FixtureRequest):
+    module_name = request.module.__name__.split(".")[1].split("_")[0]
+    fixturenames = {fixturename for item in request.session.items for fixturename in item.fixturenames}
+    with step(f"{module_name} module setup"):
+        handlers = []
+        if "gw_handler" in fixturenames:
+            gw_handler = request.getfixturevalue("gw_handler")
+            handlers.append(gw_handler)
+
+            manager_name = module_name.lower()
+            if manager_name.upper() not in gw_handler.kconfig_managers:
+                pytest.skip(f"{manager_name.upper()} not present on device")
+
+            if gw_handler.node_service_status[manager_name]["status"] != "enabled":
+                pytest.skip(f"{manager_name.upper()} not enabled on device")
+
+        if "l1_handler" in fixturenames:
+            l1_handler = request.getfixturevalue("l1_handler")
+            handlers.append(l1_handler)
+
+        if "l2_handler" in fixturenames:
+            l2_handler = request.getfixturevalue("l2_handler")
+            handlers.append(l2_handler)
+
+        reboot_pods_and_wait_available(handlers)
+
+        if "gw_handler" in fixturenames:
+            gw_handler.device_test_setup(test_suite_name=manager_name)
+    yield
 
 
-@pytest.fixture(scope="class", autouse=True)
-def nfm_setup():
-    test_class_name = ["TestNfm"]
-    nodes, clients = determine_required_devices(test_class_name)
-    log.info(f"Required devices for NFM: {nodes + clients}")
-    for node in nodes:
-        if not hasattr(pytest, node):
-            raise RuntimeError(f"{node.upper()} handler is not set up correctly.")
-        node_handler = getattr(pytest, node)
-        if "NFM" not in node_handler.get_kconfig_managers():
-            pytest.skip("NFM not present on device")
-        node_handler.fut_device_setup(test_suite_name="nfm")
-        service_status = node_handler.get_node_services_and_status()
-        if service_status["nfm"]["status"] != "enabled":
-            pytest.skip("NFM not enabled on device")
-    # Set the baseline OpenSync PIDs used for reboot detection
-    pytest.session_baseline_os_pids = pytest.gw.opensync_pid_retrieval(tracked_node_services=pytest.tracked_managers)
-
-
-class TestNfm:
-    @allure.severity(allure.severity_level.NORMAL)
-    @pytest.mark.parametrize("cfg", nfm_config.get("nfm_native_ebtable_check", []))
-    def test_nfm_native_ebtable_check(self, cfg: dict):
-        gw = pytest.gw
-
-        with step("Check bridge type"):
-            if not gw.get_bridge_type() == "native_bridge":
-                pytest.skip(
-                    "Test is applicable only when device is configured with Linux Native Bridge, skipping the test.",
-                )
-
-        with step("Preparation of testcase parameters"):
-            # Arguments from test case configuration
-            name = cfg.get("name")
-            chain_name = cfg.get("chain_name")
-            table_name = cfg.get("table_name")
-            rule = cfg.get("rule")
-            target = cfg.get("target")
-            priority = cfg.get("priority")
-            update_target = cfg.get("update_target")
-            test_args = gw.get_command_arguments(
-                name,
-                chain_name,
-                table_name,
-                rule,
-                target,
-                priority,
-                update_target,
+def test_nfm_native_ebtable_check(nfm_setup, parametrized_test_config, gw_handler):
+    with step("Check bridge type"):
+        if not gw_handler.bridge_type == "native_bridge":
+            pytest.skip(
+                "Test is applicable only when device is configured with Linux Native Bridge, skipping the test.",
             )
 
-        with step("Test Case"):
-            assert gw.execute_with_logging("tests/nfm/nfm_native_ebtable_check", test_args)[0] == ExpectedShellResult
+    with step("Preparation of testcase parameters"):
+        # Arguments from test case configuration
+        name = parametrized_test_config.get("name")
+        chain_name = parametrized_test_config.get("chain_name")
+        table_name = parametrized_test_config.get("table_name")
+        rule = parametrized_test_config.get("rule")
+        target = parametrized_test_config.get("target")
+        priority = parametrized_test_config.get("priority")
+        update_target = parametrized_test_config.get("update_target")
+        test_args = get_command_arguments(
+            name,
+            chain_name,
+            table_name,
+            rule,
+            target,
+            priority,
+            update_target,
+        )
 
-    @allure.severity(allure.severity_level.NORMAL)
-    @pytest.mark.parametrize("cfg", nfm_config.get("nfm_native_ebtable_template_check", []))
-    def test_nfm_native_ebtable_template_check(self, cfg: dict):
-        gw = pytest.gw
+    with step("Test Case"):
+        assert gw_handler.execute_with_logging("tests/nfm/nfm_native_ebtable_check", test_args)[0] == 0
 
-        with step("Check bridge type"):
-            if not gw.get_bridge_type() == "native_bridge":
-                pytest.skip(
-                    "Test is applicable only when device is configured with Linux Native Bridge, skipping the test.",
-                )
 
-        with step("Preparation of testcase parameters"):
-            # Arguments from test case configuration
-            name = cfg.get("name")
-            chain_name = cfg.get("chain_name")
-            table_name = cfg.get("table_name")
-            target = cfg.get("target")
-            priority = cfg.get("priority")
-            update_target = cfg.get("update_target")
-            test_args = gw.get_command_arguments(
-                name,
-                chain_name,
-                table_name,
-                target,
-                priority,
-                update_target,
+def test_nfm_native_ebtable_template_check(nfm_setup, parametrized_test_config, gw_handler):
+    with step("Check bridge type"):
+        if not gw_handler.bridge_type == "native_bridge":
+            pytest.skip(
+                "Test is applicable only when device is configured with Linux Native Bridge, skipping the test.",
             )
 
-        with step("Test Case"):
-            assert (
-                gw.execute_with_logging("tests/nfm/nfm_native_ebtable_template_check", test_args)[0]
-                == ExpectedShellResult
-            )
+    with step("Preparation of testcase parameters"):
+        # Arguments from test case configuration
+        name = parametrized_test_config.get("name")
+        chain_name = parametrized_test_config.get("chain_name")
+        table_name = parametrized_test_config.get("table_name")
+        target = parametrized_test_config.get("target")
+        priority = parametrized_test_config.get("priority")
+        update_target = parametrized_test_config.get("update_target")
+        test_args = get_command_arguments(
+            name,
+            chain_name,
+            table_name,
+            target,
+            priority,
+            update_target,
+        )
 
-    @allure.severity(allure.severity_level.NORMAL)
-    @pytest.mark.parametrize("cfg", nfm_config.get("nfm_nat_loopback_check", []))
-    def test_nfm_nat_loopback_check(self, cfg: dict):
-        fut_configurator, gw, l1, w1, w2 = pytest.fut_configurator, pytest.gw, pytest.l1, pytest.w1, pytest.w2
+    with step("Test Case"):
+        assert gw_handler.execute_with_logging("tests/nfm/nfm_native_ebtable_template_check", test_args)[0] == 0
 
-        with step("Put GW into router mode"):
-            assert gw.configure_device_mode(device_mode="router")
 
-        with step("Preparation of testcase parameters"):
-            # Arguments from test case configuration
-            channel = cfg["channel"]
-            ht_mode = cfg["ht_mode"]
-            gw_radio_band = cfg["radio_band"]
-            topology = cfg["topology"]
-            encryption = cfg.get("encryption", "WPA2")
-            client_retry = cfg.get("client_retry", 2)
+def test_nfm_nat_loopback_check(nfm_setup, parametrized_test_config, gw_handler, l1_handler, w1_handler, w2_handler):
+    with step("Put GW into router mode"):
+        gw_handler.configure_device_mode(device_mode="router")
 
-            # Constant arguments
-            ssid, psk = fut_configurator.base_ssid, fut_configurator.base_psk
-            l1_home_ap_ssid, l1_home_ap_psk = f"{ssid}_home", f"{psk}_home"
-            port = 55687
+    with step("Preparation of testcase parameters"):
+        # Arguments from test case configuration
+        channel = parametrized_test_config["channel"]
+        ht_mode = parametrized_test_config["ht_mode"]
+        gw_radio_band = parametrized_test_config["radio_band"]
+        encryption = parametrized_test_config.get("encryption", "WPA2")
+        client_retry = parametrized_test_config.get("client_retry", 2)
 
-            # GW specific arguments
-            gw_lan_ip_addr = gw.device_api.get_ips(iface="br-home")["ipv4"]
+        # Constant arguments
+        ssid, psk = gw_handler.base_ssid, gw_handler.base_psk
+        l1_home_ap_ssid, l1_home_ap_psk = f"{ssid}_home", f"{psk}_home"
+        port = 55687
 
-            # L1 specific arguments
-            l1_radio_band = l1.get_radio_band_from_remote_channel_and_band(channel, gw_radio_band)
+        # GW specific arguments
+        gw_lan_ip_addr = gw_handler.get_ips(iface="br-home")["ipv4"]
 
-            # W1 specific arguments
-            w1_wlan_if_name = w1.device_config.get("wlan_if_name")
-            w1_mac = w1.device_api.get_mac(if_name=w1_wlan_if_name)
+        # L1 specific arguments
+        l1_radio_band = l1_handler.get_radio_band_from_remote_channel_and_band(channel, gw_radio_band)
 
-            # W2 specific arguments
-            w2_wlan_if_name = w2.device_config.get("wlan_if_name")
-            w2_mac = w2.device_api.get_mac(if_name=w2_wlan_if_name)
+        # W1 specific arguments
+        w1_wlan_if_name = w1_handler.wlan_ifname
+        w1_mac = w1_handler.get_mac(if_name=w1_wlan_if_name)
 
-            # Topology-based arguments
-            if topology == "line":
-                w1_node, w2_node = gw, l1
-                w1_ssid, w2_ssid = ssid, l1_home_ap_ssid
-                w1_psk, w2_psk = psk, l1_home_ap_psk
-            elif topology == "tree":
-                w1_node, w2_node = l1, l1
-                w1_ssid, w2_ssid = l1_home_ap_ssid, l1_home_ap_ssid
-                w1_psk, w2_psk = l1_home_ap_psk, l1_home_ap_psk
+        # W2 specific arguments
+        w2_wlan_if_name = w2_handler.wlan_ifname
+        w2_mac = w2_handler.get_mac(if_name=w2_wlan_if_name)
 
-            iperf3_server_args = w2.get_command_arguments(port)
+        # Topology-based arguments
+        w1_node, w2_node = gw_handler, l1_handler
+        w1_ssid, w2_ssid = ssid, l1_home_ap_ssid
+        w1_psk, w2_psk = psk, l1_home_ap_psk
 
-            # GW interface creation
-            gw.create_interface_object(
+        iperf3_server_args = get_command_arguments(port)
+
+        # GW interface creation
+        gw_handler.create_interface_object(
+            channel=channel,
+            ht_mode=ht_mode,
+            radio_band=gw_radio_band,
+            encryption=encryption,
+            interface_role="home_ap",
+            ssid=ssid,
+            wpa_psks=psk,
+        )
+
+        # L1 interface creation
+        l1_handler.create_interface_object(
+            channel=channel,
+            ht_mode=ht_mode,
+            radio_band=l1_radio_band,
+            encryption=encryption,
+            interface_role="home_ap",
+            ssid=l1_home_ap_ssid,
+            wpa_psks=l1_home_ap_psk,
+        )
+
+    try:
+        with step("Determine GW WAN IP"):
+            gw_wan_iface = gw_handler.capabilities.get_primary_wan_iface()
+            gw_wan_inet_addr = gw_handler.get_ips(iface=gw_wan_iface)["ipv4"]
+            if gw_wan_inet_addr is not False:
+                log.info(f"Successfully retrieved the IP addresses -> GW: {gw_wan_inet_addr}")
+            else:
+                raise ValueError("Unable to retrieve GW WAN IP address")
+        with step("GW backhaul AP and L1 STA creation"):
+            assert gw_handler.create_and_configure_backhaul(
                 channel=channel,
-                ht_mode=ht_mode,
+                leaf_device=l1_handler,
                 radio_band=gw_radio_band,
-                encryption=encryption,
-                interface_role="home_ap",
-                ssid=ssid,
-                wpa_psks=psk,
-            )
-
-            # L1 interface creation
-            l1.create_interface_object(
-                channel=channel,
                 ht_mode=ht_mode,
-                radio_band=l1_radio_band,
                 encryption=encryption,
-                interface_role="home_ap",
-                ssid=l1_home_ap_ssid,
-                wpa_psks=l1_home_ap_psk,
             )
-
-        try:
-            with step("Determine GW WAN IP"):
-                gw_wan_iface = gw.capabilities.get_primary_wan_iface()
-                gw_wan_inet_addr = gw.device_api.get_ips(iface=gw_wan_iface)["ipv4"]
-                if gw_wan_inet_addr is not False:
-                    log.info(f"Successfully retrieved the IP addresses -> GW: {gw_wan_inet_addr}")
-                else:
-                    raise ValueError("Unable to retrieve GW WAN IP address")
-            with step("GW backhaul AP and L1 STA creation"):
-                assert gw.create_and_configure_backhaul(
-                    channel=channel,
-                    leaf_device=l1,
-                    radio_band=gw_radio_band,
-                    ht_mode=ht_mode,
-                    encryption=encryption,
-                )
-            with step("GW Home AP configuration"):
-                assert gw.interfaces["home_ap"].configure_interface() == ExpectedShellResult
-            with step("L1 Home AP configuration"):
-                assert l1.interfaces["home_ap"].configure_interface() == ExpectedShellResult
-            with step(f"W1 client connection to {w1_node.name.upper()}"):
-                w1.device_api.connect(
-                    ssid=w1_ssid,
-                    psk=w1_psk,
-                    retry=client_retry,
-                )
-            with step(f"Verify W1 client connection to {w1_node.name.upper()}"):
-                assert w1_mac in w1_node.device_api.get_wifi_associated_clients()
-            with step(f"W2 client connection to {w2_node.name.upper()}"):
-                w2.device_api.connect(
-                    ssid=w2_ssid,
-                    psk=w2_psk,
-                    retry=client_retry,
-                )
-            with step(f"Verify W2 client connection to {w2_node.name.upper()}"):
-                assert w2_mac in w2_node.device_api.get_wifi_associated_clients()
-            with step("Retrieve W1 and W2 IPs"):
-                w1_client_ip = w1.device_api.get_client_ips(interface=w1_wlan_if_name)["ipv4"]
-                w2_client_ip = w2.device_api.get_client_ips(interface=w2_wlan_if_name)["ipv4"]
-                if w1_client_ip is not False and w2_client_ip is not False:
-                    log.info(f"Successfully retrieved the IP addresses -> W1: {w1_client_ip}, W2: {w2_client_ip}")
-                else:
-                    raise ValueError("Unable to retrieve W1 and W2 IP addresses")
-            with step("GW NAT loopback configuration"):
-                nat_loopback_args = gw.get_command_arguments(
-                    gw_lan_ip_addr,
-                    w2_client_ip,
-                    port,
-                )
-                assert (
-                    gw.execute_with_logging("tests/nfm/nfm_nat_loopback_check", nat_loopback_args)[0]
-                    == ExpectedShellResult
-                )
-            with step("Testcase"):
-                # Start Iperf3 server on W2
-                assert (
-                    w2.execute("tools/server/run_iperf3_server", iperf3_server_args, as_sudo=True)[0]
-                    == ExpectedShellResult
-                )
-                # Check NAT loopback functionality
-                check_traffic_args = w1.get_command_arguments(
-                    gw_wan_inet_addr,
-                    port,
-                )
-                assert (
-                    w1.execute("tools/server/check_traffic_to_client", check_traffic_args, as_sudo=True)[0]
-                    == ExpectedShellResult
-                )
-        finally:
-            with step("Cleanup"):
-                # GW, L1: complete VIF reset
-                gw.vif_reset()
-                l1.vif_reset()
-                # Remove Netfilter entries
-                assert gw.execute("tools/device/ovsdb/empty_ovsdb_table", "Netfilter")[0] == ExpectedShellResult
+        with step("GW Home AP configuration"):
+            assert gw_handler.interface["home_ap"].configure_interface() == 0
+        with step("L1 Home AP configuration"):
+            assert l1_handler.interface["home_ap"].configure_interface() == 0
+        with step(f"W1 client connection to {w1_node.nickname.upper()}"):
+            w1_handler.connect(ssid=w1_ssid, psk=w1_psk, retry=client_retry, node=w1_node)
+        with step(f"Verify W1 client connection to {w1_node.nickname.upper()}"):
+            assert w1_mac in w1_node.get_wifi_associated_clients()
+        with step(f"W2 client connection to {w2_node.nickname.upper()}"):
+            w2_handler.connect(ssid=w2_ssid, psk=w2_psk, retry=client_retry, node=w2_node)
+        with step(f"Verify W2 client connection to {w2_node.nickname.upper()}"):
+            assert w2_mac in w2_node.get_wifi_associated_clients()
+        with step("Retrieve W1 and W2 IPs"):
+            w1_client_ip = w1_handler.get_client_ips(interface=w1_wlan_if_name)["ipv4"]
+            w2_client_ip = w2_handler.get_client_ips(interface=w2_wlan_if_name)["ipv4"]
+            if w1_client_ip is not False and w2_client_ip is not False:
+                log.info(f"Successfully retrieved the IP addresses -> W1: {w1_client_ip}, W2: {w2_client_ip}")
+            else:
+                raise ValueError("Unable to retrieve W1 and W2 IP addresses")
+        with step("GW NAT loopback configuration"):
+            nat_loopback_args = get_command_arguments(
+                gw_lan_ip_addr,
+                w2_client_ip,
+                port,
+            )
+            assert gw_handler.execute_with_logging("tests/nfm/nfm_nat_loopback_check", nat_loopback_args)[0] == 0
+        with step("Testcase"):
+            # Start Iperf3 server on W2
+            assert w2_handler.execute("tools/server/run_iperf3_server", iperf3_server_args, as_sudo=True)[0] == 0
+            # Check NAT loopback functionality
+            check_traffic_args = get_command_arguments(
+                gw_wan_inet_addr,
+                port,
+            )
+            assert w1_handler.execute("tools/server/check_traffic_to_client", check_traffic_args, as_sudo=True)[0] == 0
+    finally:
+        with step("Cleanup"):
+            # GW, L1: complete VIF reset
+            gw_handler.vif_reset()
+            l1_handler.vif_reset()
+            # Remove Netfilter entries
+            assert gw_handler.execute("tools/device/ovsdb/empty_ovsdb_table", "Netfilter")[0] == 0

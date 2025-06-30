@@ -1,12 +1,10 @@
 #!/bin/sh
 
-# FUT environment loading
-# shellcheck disable=SC1091
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
-[ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
-[ -e "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "${PLATFORM_OVERRIDE_FILE}" ] && . "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
+[ -e "${MODEL_OVERRIDE_FILE}" ] && . "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
 
 # Fallback to the "/home/plume/" directory in case of missing file
 if [ ! -e "$client_upnp_server_file" ]; then
@@ -27,8 +25,9 @@ Arguments:
     \$5 (modelDescription) : UPnP Device modelDescription value : (string)(required)
     \$6 (modelName)        : UPnP Device modelName value        : (string)(required)
     \$7 (modelNumber)      : UPnP Device modelNumber value      : (string)(required)
+    \$8 (logread_cmd)      : The command for reading system logs: (string)(required)
 Script usage example:
-    ./fsm/fsm_test_upnp_plugin.sh 'urn:fut-test:device:test:1' 'FUT test device' 'FUT testing, Inc' 'https://www.fut.com' 'FUT UPnP service' 'FUT tester' '1.0'
+    ./fsm/fsm_test_upnp_plugin.sh 'urn:fut-test:device:test:1' 'FUT test device' 'FUT testing, Inc' 'https://www.fut.com' 'FUT UPnP service' 'FUT tester' '1.0' 'logread'
 usage_string
 }
 
@@ -45,7 +44,7 @@ trap '
     exit $fut_ec
 ' EXIT INT TERM
 
-NARGS=7
+NARGS=8
 [ $# -ne ${NARGS} ] && usage && raise "Requires exactly ${NARGS} input argument(s)" -arg
 deviceType=${1}
 friendlyName=${2}
@@ -54,6 +53,7 @@ manufacturerURL=${4}
 modelDescription=${5}
 modelName=${6}
 modelNumber=${7}
+logread_cmd=${8}
 
 log_title "fsm/fsm_test_upnp_plugin.sh: FSM test - Test UPnP plugin - Verify presence of load message"
 
@@ -62,12 +62,12 @@ if [ -z "${client_mac}" ]; then
     raise "Could not acquire Client MAC address from Wifi_Associated_Clients, is client connected?" -l "fsm/fsm_test_upnp_plugin.sh"
 fi
 # shellcheck disable=SC2018,SC2019
-client_mac=$(echo "${client_mac}" | tr a-z A-Z)
+client_mac=$(echo "${client_mac}" | tr '[a-z]' '[A-Z]')
 # Use first MAC from Wifi_Associated_Clients
 client_mac="${client_mac%%,*}"
 
 # FSM logs objects in non-constant order, reason for multiple grep-s
-fsm_message_regex="$LOGREAD |
+fsm_message_regex="$logread_cmd |
  tail -3000 |
  grep fsm_send_report |
  grep upnpInfo |

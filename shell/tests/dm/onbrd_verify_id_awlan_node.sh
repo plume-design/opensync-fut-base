@@ -1,12 +1,10 @@
 #!/bin/sh
 
-# FUT environment loading
-# shellcheck disable=SC1091
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
-[ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
-[ -e "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "${PLATFORM_OVERRIDE_FILE}" ] && . "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
+[ -e "${MODEL_OVERRIDE_FILE}" ] && . "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
 
 manager_setup_file="onbrd/onbrd_setup.sh"
 usage()
@@ -48,8 +46,7 @@ log_title "onbrd/onbrd_verify_id_awlan_node.sh: ONBRD test - Verify id field in 
 node_id=$(get_ovsdb_entry_value AWLAN_Node id -r)
 serial_num=$(get_ovsdb_entry_value AWLAN_Node serial_number -r)
 
-check_id_pattern "${node_id}" "${dut_mac}" "${serial_num}"
-[ $? -eq 0 ] &&
+check_id_pattern "${node_id}" "${dut_mac}" "${serial_num}" &&
     log "onbrd/onbrd_verify_id_awlan_node.sh: AWLAN_Node::id is valid - Success" ||
     raise "AWLAN_Node::id is not valid" -l "onbrd/onbrd_verify_id_awlan_node.sh" -tc
 

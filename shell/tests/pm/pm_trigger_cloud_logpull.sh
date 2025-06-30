@@ -1,14 +1,11 @@
 #!/bin/sh
 
-# FUT environment loading
-# shellcheck disable=SC1091
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
-[ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
-[ -e "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "${PLATFORM_OVERRIDE_FILE}" ] && . "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
+[ -e "${MODEL_OVERRIDE_FILE}" ] && . "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
 
-manager_setup_file="pm/pm_setup.sh"
 usage()
 {
 cat << usage_string
@@ -23,14 +20,12 @@ Description:
       specified location, using the upload token as credentials.
 Arguments:
     -h  show this help message
-    \$1 (upload_location)  : AW_LM_Config::upload_location : (string)(required)
-    \$2 (upload_token)     : AW_LM_Config::upload_token : (string)(required)
-    \$3 (name)             : AW_LM_Config::name : (string)(required)
-Testcase procedure:
-    - On DEVICE: Run: ./${manager_setup_file} (see ${manager_setup_file} -h)
-                 Run: ./pm/pm_trigger_cloud_logpull.sh <UPLOAD_LOCATION> <UPLOAD_TOKEN> <NAME>
+    \$1 (upload_location)  : AW_LM_Config::upload_location       : (string)(required)
+    \$2 (upload_token)     : AW_LM_Config::upload_token          : (string)(required)
+    \$3 (name)             : AW_LM_Config::name                  : (string)(required)
+    \$4 (logread_cmd)      : The command for reading system logs : (string)(required)
 Script usage example:
-    ./pm/pm_trigger_cloud_logpull.sh <UPLOAD_LOCATION> <UPLOAD_TOKEN> <NAME>
+    ./pm/pm_trigger_cloud_logpull.sh <UPLOAD_LOCATION> <UPLOAD_TOKEN> <NAME> <LOGREAD_CMD>
 usage_string
 }
 
@@ -38,11 +33,12 @@ case "${1}" in
     -h | --help)  usage ; exit 0 ;;
 esac
 
-NARGS=3
+NARGS=4
 [ $# -lt ${NARGS} ] && usage && raise "Requires ${NARGS} input argument(s)" -l "pm/pm_verify_log_severity.sh" -arg
 upload_location=${1}
 upload_token=${2}
 aw_lm_config_name=${3}
+logread_cmd=${4}
 
 log_title "pm/pm_trigger_cloud_logpull.sh: LM test - Verify Cloud triggered logpull event"
 
@@ -82,7 +78,7 @@ insert_ovsdb_entry AW_LM_Config \
         log "pm/pm_trigger_cloud_logpull.sh: AW_LM_Config values inserted - Success" ||
         raise "Failed to insert_ovsdb_entry" -l "pm/pm_trigger_cloud_logpull.sh" -fc
 
-check_pm_report_log &&
+check_pm_report_log "${logread_cmd}" &&
     log "pm/pm_trigger_cloud_logpull.sh: PM logpull log found - Success" ||
     raise "PM logpull log not found" -l "pm/pm_trigger_cloud_logpull.sh" -tc
 

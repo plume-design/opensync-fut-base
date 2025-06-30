@@ -1,12 +1,10 @@
 #!/bin/sh
 
-# FUT environment loading
-# shellcheck disable=SC1091
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
-[ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
-[ -e "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "${PLATFORM_OVERRIDE_FILE}" ] && . "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
+[ -e "${MODEL_OVERRIDE_FILE}" ] && . "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
 
 manager_setup_file="um/um_setup.sh"
 um_resource_path="resource/um/"
@@ -79,15 +77,12 @@ log "um/um_set_upgrade_dl_timer_abort.sh: Waiting for FW download to abort, AWLA
 # Giving extra seconds to AWLAN_Node::upgrade_status to indicate download was aborted.
 # After failed upgrade indication is expected to be instantaneous, still 2 secs cushion added.
 max_time=$((fw_dl_timer+2))
-wait_ovsdb_entry AWLAN_Node -is upgrade_status "$dl_abort_code" -t $max_time
-if [ $? -eq 0 ]; then
-{
+if wait_ovsdb_entry AWLAN_Node -is upgrade_status "$dl_abort_code" -t $max_time; then
     end_time=$(date -D "%H:%M:%S"  +"%Y.%m.%d-%H:%M:%S")
     t1=$(date -u -d "$start_time" +"%s")
     t2=$(date -u -d "$end_time" +"%s")
     download_time=$(( t2 - t1 ))
     log "um/um_set_upgrade_dl_timer_abort.sh: wait_ovsdb_entry - AWLAN_Node::upgrade_status is '$dl_abort_code', FW download aborted after $download_time secs - Success"
-}
 else
     raise "wait_ovsdb_entry - Failed to abort FW download after download timer ($fw_dl_timer secs) expired" -l "um/um_set_upgrade_dl_timer_abort.sh" -tc
 fi

@@ -7,16 +7,21 @@ FUT test suite but belong to no particular class.
 
 import hashlib
 import json
+import os
 import subprocess
+from concurrent.futures import as_completed, ThreadPoolExecutor
 from os import PathLike
 from pathlib import Path
-from typing import Any, Callable, Literal
+from time import sleep
+from typing import Any, Callable, Dict, List, Literal
 
 import allure  # type: ignore
 import yaml
+from mergedeep import merge, Strategy
 
-from config.defaults import all_bandwidth_list, radio_band_list
+from config.defaults import all_bandwidths, all_radio_bands
 from lib_testbed.generic.util.logger import log
+from lib_testbed.generic.util.ssh.common import EXECUTE_CMD_TIMEOUT
 
 
 type fileDescriptorOrPathstr = int | str | bytes | PathLike[str] | PathLike[bytes]
@@ -141,7 +146,7 @@ def output_to_json(
         raise RuntimeError(f"Input data: {data} contains non-basic objects unsupported by json.dumps(): {exception}")
 
 
-def check_if_dicts_match(dict1: dict, dict2: dict) -> list | Literal[True]:
+def check_if_dicts_match(dict1: dict, dict2: dict, inorder: bool) -> list | Literal[True]:
     """
     Verify if dictionaries match.
 
@@ -151,6 +156,7 @@ def check_if_dicts_match(dict1: dict, dict2: dict) -> list | Literal[True]:
     Args:
         dict1 (dict): Dictionary.
         dict2 (dict): Dictionary.
+        inorder (bool): If values are iterables, check them in order
 
     Returns:
         bool: True for success
@@ -171,8 +177,16 @@ def check_if_dicts_match(dict1: dict, dict2: dict) -> list | Literal[True]:
                         break
             elif key in dict2 and dict1[key].casefold() != dict2[key].casefold():
                 mismatching_keys.append(key)
-        elif key in dict2 and dict1[key] != dict2[key]:
-            mismatching_keys.append(key)
+        elif key in dict2:
+            if inorder and dict1[key] != dict2[key]:
+                mismatching_keys.append(key)
+            else:
+                try:
+                    if set(dict1[key]) != set(dict2[key]):
+                        mismatching_keys.append(key)
+                except TypeError:
+                    if dict1[key] != dict2[key]:
+                        mismatching_keys.append(key)
     if mismatching_keys:
         log.warning(f"Dictionaries {dict1} and {dict2} do not match for the following keys: {mismatching_keys}")
         return mismatching_keys
@@ -237,42 +251,6 @@ def flatten_list(nested_list: list[list]) -> list[Any]:
     ]
 
 
-def determine_required_devices(test_suites: list[str]) -> tuple[list[str], list[str]]:
-    """
-    Determine required devices for the execution of the specified tests.
-
-    Args:
-        test_suites (list): List of requested test class names
-
-    Returns:
-        tuple: Required nodes, required clients.
-    """
-    filename = "test_suite_device_requirements.yaml"
-    dirname = "config/rules"
-    filepaths: list[PathLike] = []
-    for parent_dir in [".", "internal"]:
-        if Path(parent_dir).joinpath(dirname).is_dir():
-            filepaths.append(*Path(parent_dir).joinpath(dirname).glob(filename))
-    loaded_device_req_file = {}
-    for file in filepaths:
-        with open(file) as device_req_file:
-            loaded_device_req_file.update(yaml.safe_load(device_req_file))
-
-    required_nodes, required_clients = [], []
-
-    for test_suite in test_suites:
-        required_nodes.append(loaded_device_req_file[test_suite]["nodes"])
-        required_clients.append(loaded_device_req_file[test_suite]["clients"])
-
-    # Flatten the lists and remove duplicated values
-    required_nodes, required_clients = (
-        list(filter(None, set(flatten_list(required_nodes)))),
-        list(filter(None, set(flatten_list(required_clients)))),
-    )
-
-    return required_nodes, required_clients
-
-
 def map_dict_key_path(dictionary: dict, key_mem: str = "") -> list[Any]:
     """Map dictionary to list.
 
@@ -333,11 +311,11 @@ def validate_channel_ht_mode_band(
         log.warning("Regulatory rules not found, loading")
         regulatory_rule = load_reg_rule()
     try:
-        assert ht_mode in all_bandwidth_list
-        assert radio_band in radio_band_list
+        assert ht_mode in all_bandwidths
+        assert radio_band in all_radio_bands
         if channel not in regulatory_rule[reg_domain.upper()]["band"][radio_band.lower()][ht_mode.upper()]:
             msg = f"Invalid combination of parameters: channel:{channel}, ht_mode:{ht_mode.upper()}, band:{radio_band.lower()}, regulatory domain: {reg_domain.upper()}"
-            log.debug(msg)
+            log.error(msg)
             if raise_broken:
                 raise RuntimeError(msg)
         else:
@@ -347,10 +325,24 @@ def validate_channel_ht_mode_band(
     except RuntimeError as e:
         log.error(e)
     except KeyError:
-        log.debug(
+        log.error(
             f"Parameters unsupported by device. channel:{channel}, ht_mode:{ht_mode}, band:{radio_band}, regulatory domain: {reg_domain}",
         )
     return False
+
+
+def get_chanspec(region: str, band: str, only_dfs=False):
+    regulatory = load_reg_rule()[region]
+    if only_dfs:
+        spectrum_specifier = "dfs"
+        dfs_regulatory = merge(
+            regulatory[spectrum_specifier]["standard"][band],
+            regulatory[spectrum_specifier]["weather"][band],
+            strategy=Strategy.ADDITIVE,
+        )
+        return dfs_regulatory
+    else:
+        return regulatory["band"][band]
 
 
 def get_str_hash(input_string: str, hash_length: int = 32) -> str:
@@ -381,3 +373,193 @@ def find_filename_in_dir(directory: str, pattern: str) -> list[str]:
     if list_of_files:
         log.info(f"Found files: {list_of_files}")
     return list_of_files
+
+
+def sanitize_arg(arg: str) -> str:
+    """
+    Sanitize the argument of selected characters.
+
+    Args:
+        arg (str): Argument to be sanitized.
+    Returns:
+        (str): Sanitized argument.
+    """
+    if (arg[0] == '"' and arg[-1] == '"') or (arg[0] == "'" and arg[-1] == "'") or (arg[0] == "-"):
+        # Argument is already surrounded by "" or '' or starts with -
+        pass
+    elif " " in arg:
+        arg = f'"{arg}"'
+    return arg
+
+
+def get_command_arguments(*args) -> str:
+    """
+    Return command arguments.
+
+    Returns command arguments as a string to feed the script.
+    Command arguments are separated by a space and with escaped "
+    or ' characters if present in arguments. Uses recursion if
+    argument is a list.
+    Returns:
+        (str): Command arguments as a string.
+    """
+    command = ""
+    for arg in args:
+        if isinstance(arg, list | tuple | set):
+            command = str(command) + get_command_arguments(*arg)
+        else:
+            if isinstance(arg, int):
+                arg = str(arg)
+            if isinstance(arg, str):
+                arg = arg.strip()
+            command = str(command) + " " + str(sanitize_arg(arg))
+    return command
+
+
+def get_testbed_name() -> str:
+    """
+    Get the testbed name.
+
+    Returns:
+        (str): Testbed name.
+    """
+    testbed_name = subprocess.run(["cat", "/etc/hostname"], stdout=subprocess.PIPE)
+
+    return testbed_name.stdout.decode("utf-8").strip()
+
+
+def fut_release_version() -> str | None:
+    """
+    Return the release version of the FUT sources.
+
+    Returns:
+        version (str): FUT release version.
+    """
+    version_file = Path(".version")
+    if not version_file.is_file():
+        return None
+    with open(version_file, "r") as version_fd:
+        version = version_fd.read().strip()
+    return version
+
+
+def read_md_description(test_name):
+    """
+    Read the Markdown file containing the description for a test case.
+
+    Args:
+        test_name (str): The name of the test case (without the `.md` extension),
+                          which is used to locate the corresponding Markdown file.
+
+    Returns:
+        str: The content of the Markdown file as the test description, or a
+             fallback message if the file is not found.
+    """
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    base_dir = os.path.abspath(os.path.join(script_dir, "../../doc/definitions"))
+    md_file = os.path.join(base_dir, f"{test_name}.md")
+
+    try:
+        with open(md_file, "r", encoding="utf-8") as f:
+            return f.read()
+    except FileNotFoundError:
+        return "Description not available."
+
+
+def execute_on_pods(pods: List[Any], pod_method: str, timeout: int = None, *args, **kwargs) -> Dict[str, Any]:
+    """
+    Execute a method on multiple pod instances in parallel.
+
+    This function takes a list of pod handler instances and executes a specified method on each of them
+    concurrently. It returns a dictionary mapping each pod's nickname to the result of the method call.
+    If a method call fails, the error is captured and returned in the results dictionary.
+
+    Args:
+        pods (List[Any]): List of pod instances (PodHandler objects) on which to execute the method.
+        pod_method (str): Name of the method to execute on each pod.
+        timeout (int, optional): Maximum time in seconds to wait for each method call to complete.
+            If None, the method will wait indefinitely. Defaults to None.
+        *args: Variable length argument list to pass to the pod method.
+        **kwargs: Arbitrary keyword arguments to pass to the pod method.
+
+    Returns:
+        Dict[str, Any]: A dictionary where keys are pod nicknames and values are the results
+            of the method calls. If a method call fails, the value will be a dictionary with
+            an "ERROR" key containing the error message.
+    """
+
+    def _call_method(pod):
+        try:
+            method = getattr(pod, pod_method)
+            return pod.nickname, method(*args, **kwargs)
+        except Exception as exception:
+            return pod.nickname, {
+                "ERROR": str(exception),
+            }
+
+    results: Dict[str, Any] = {}
+
+    with ThreadPoolExecutor(max_workers=len(pods)) as executor:
+        futures = {executor.submit(_call_method, pod): pod for pod in pods}
+        for future in as_completed(futures, timeout=timeout):
+            pod = futures[future]
+            try:
+                pod_name, result = future.result(timeout=timeout)
+                results[pod_name] = {"RESULT": result, "CMD": pod_method}
+            except Exception as exception:
+                results[pod.nickname] = {"ERROR": str(exception)}
+
+    log.info(f"Results of {pod_method} on pods:\n{json.dumps(results, indent=2)}")
+
+    return results
+
+
+def reboot_pods_and_wait_available(pods: List[Any]) -> Dict[str, Any]:
+    """
+    Reboot multiple pods and wait for them to become available again.
+
+    This function performs a complete reboot cycle on a list of pods:
+    1. First checks if all pods are available
+    2. Reboots all pods in parallel
+    3. Waits for a fixed time to allow pods to complete the reboot process
+    4. Verifies that all pods are available again after reboot
+
+    Args:
+        pods (List[Any]): List of pod instances (PodHandler objects) to reboot.
+
+    Returns:
+        Dict[str, Any]: A dictionary where keys are pod nicknames and values are the results
+            of the final availability check. If a pod fails to become available after reboot,
+            the value will be a dictionary with an "ERROR" key containing the error message.
+    """
+    if not pods:
+        return
+    execute_on_pods(pods, pod_method="wait_available", timeout=EXECUTE_CMD_TIMEOUT)
+    execute_on_pods(pods, pod_method="reboot", timeout=EXECUTE_CMD_TIMEOUT)
+    # Hardcoded delay to ensure pods are rebooted, do not optimize
+    sleep(20)
+    reboot_time = max(pod.reboot_time for pod in pods)
+    execute_on_pods(pods, pod_method="wait_available", timeout=reboot_time)
+
+
+def _find_target_path_in_root_dir(target_path: str, root_dirs: list[str] = None, **kwargs) -> list:
+    """
+    Return a list of paths to the target path, contained within any root_dir present in the current or any subdirectory.
+
+    Args:
+        target_path (str): The name or partial path of the target directory or file.
+        root_dir (list[str]): List of root directory paths within which to search for the target_path.
+
+    Returns:
+        paths (list): List of paths to all target_path found.
+    """
+    follow_symlinks = kwargs.pop("follow_symlinks", True)
+    if not root_dirs:
+        root_dirs = ["."]
+    paths = [
+        root.joinpath(target_path)
+        for root_dir in root_dirs
+        for root, _, _ in Path(root_dir).walk(follow_symlinks=follow_symlinks)
+        if root.joinpath(target_path).exists()
+    ]
+    return paths

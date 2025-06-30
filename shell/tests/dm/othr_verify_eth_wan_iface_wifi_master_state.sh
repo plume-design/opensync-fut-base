@@ -1,12 +1,10 @@
 #!/bin/sh
 
-# FUT environment loading
-# shellcheck disable=SC1091
-source /tmp/fut-base/shell/config/default_shell.sh
-[ -e "/tmp/fut-base/fut_set_env.sh" ] && source /tmp/fut-base/fut_set_env.sh
-source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
-[ -e "${PLATFORM_OVERRIDE_FILE}" ] && source "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
-[ -e "${MODEL_OVERRIDE_FILE}" ] && source "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
+[ -e "/tmp/fut-base/fut_set_env.sh" ] && . /tmp/fut-base/fut_set_env.sh
+. /tmp/fut-base/shell/config/default_shell.sh
+. "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
+[ -e "${PLATFORM_OVERRIDE_FILE}" ] && . "${PLATFORM_OVERRIDE_FILE}" || raise "${PLATFORM_OVERRIDE_FILE}" -ofm
+[ -e "${MODEL_OVERRIDE_FILE}" ] && . "${MODEL_OVERRIDE_FILE}" || raise "${MODEL_OVERRIDE_FILE}" -ofm
 
 manager_setup_file="dm/othr_setup.sh"
 
@@ -46,18 +44,12 @@ eth_wan_if_name=${1}
 
 log_title "othr/othr_verify_eth_wan_iface_wifi_master_state.sh: ONBRD test - Verify Wifi_Master_State table exists and has eth wan interface '$eth_wan_if_name' populated"
 
-${OVSH} s Wifi_Master_State
-if [ $? -eq 0 ]; then
-    log "othr/othr_verify_eth_wan_iface_wifi_master_state.sh: Wifi_Master_State table exists"
-else
+${OVSH} s Wifi_Master_State &&
+    log "othr/othr_verify_eth_wan_iface_wifi_master_state.sh: Wifi_Master_State table exists" ||
     raise "Wifi_Master_State table does not exist" -l "othr/othr_verify_eth_wan_iface_wifi_master_state.sh" -tc
-fi
 
-check_ovsdb_entry Wifi_Master_State -w if_name $eth_wan_if_name
-if [ $? -eq 0 ]; then
-    log "othr/othr_verify_eth_wan_iface_wifi_master_state.sh: Wifi_Master_State populated with eth wan interface '$eth_wan_if_name' - Success"
-else
+check_ovsdb_entry Wifi_Master_State -w if_name $eth_wan_if_name &&
+    log "othr/othr_verify_eth_wan_iface_wifi_master_state.sh: Wifi_Master_State populated with eth wan interface '$eth_wan_if_name' - Success" ||
     raise "Wifi_Master_State not populated with eth wan interface '$eth_wan_if_name'" -l "othr/othr_verify_eth_wan_iface_wifi_master_state.sh" -tc
-fi
 
 pass

@@ -1,23 +1,16 @@
 #!/usr/bin/env bash
 
 lib_dir=$(dirname "$(realpath "$BASH_SOURCE")")
-export FUT_TOPDIR="$(realpath "$lib_dir"/../..)"
+fut_topdir="$(realpath "$lib_dir"/../..)"
 export FUT_RPI_LIB_SRC=true
-[ "${FUT_UNIT_LIB_SRC}" != true ] && source "${FUT_TOPDIR}/shell/lib/unit_lib.sh"
-echo "${FUT_TOPDIR}/shell/lib/rpi_lib.sh sourced"
-
-####################### INFORMATION SECTION - START ###########################
-#
-#   Library of common functions to be executed on RPI
-#
-####################### INFORMATION SECTION - STOP ############################
+[ "${FUT_BASE_LIB_SRC}" != true ] && . "${fut_topdir}/shell/lib/base_lib.sh"
+echo "${fut_topdir}/shell/lib/rpi_lib.sh sourced"
 
 # RPI server "iptables" defaults to "xtables-nft-multi"
 iptables_cmd="iptables-legacy"
 iptables_chain="FORWARD"
 arptables_cmd="arptables"
-
-####################### UTILITY SECTION - START ###############################
+arping_cmd="arping"
 
 ###############################################################################
 # DESCRIPTION:
@@ -33,7 +26,6 @@ dpkg_is_package_installed()
 {
     package=$1
     dpkg -l | grep -w "${package}" | grep -E -q ^ii
-    return $?
 }
 
 ###############################################################################
@@ -55,7 +47,7 @@ dpkg_is_package_installed()
 start_cloud_simulation()
 {
     local cert_dir="/etc/haproxy/certs/fut/"
-    local ca_certificate_path="${FUT_TOPDIR}/shell/tools/server/files/ca_chain.pem"
+    local ca_certificate_path="${fut_topdir}/shell/tools/server/files/ca_chain.pem"
     log -deb "rpi_lib:start_cloud_simulation - Check if haproxy package is installed"
     dpkg_is_package_installed "haproxy" ||
         raise "haproxy not installed" -l "rpi_lib:start_cloud_simulation" -ds
@@ -64,9 +56,9 @@ start_cloud_simulation()
     sudo mkdir -p "${cert_dir}" ||
         raise "Could not create cert dir!" -l "rpi_lib:start_cloud_simulation" -ds
     log -deb "rpi_lib:start_cloud_simulation - Copy haproxy configuration file and certificates"
-    sudo cp "${FUT_TOPDIR}/shell/tools/server/files"/haproxy.cfg /etc/haproxy/haproxy.cfg ||
+    sudo cp "${fut_topdir}/shell/tools/server/files"/haproxy.cfg /etc/haproxy/haproxy.cfg ||
         raise "Config file not present!" -l "rpi_lib:start_cloud_simulation" -ds
-    sudo cp "${FUT_TOPDIR}/shell/tools/server/certs"/{server.pem,server.key,ca.pem} "${cert_dir}" ||
+    sudo cp "${fut_topdir}/shell/tools/server/certs"/{server.pem,server.key,ca.pem} "${cert_dir}" ||
         raise "Certificates not present!" -l "rpi_lib:start_cloud_simulation" -ds
     # Combine FUT ca.pem with ca_chain.pem
     sudo bash -c "cat ${ca_certificate_path} >> ${cert_dir}/ca.pem" ||
@@ -83,7 +75,7 @@ start_cloud_simulation()
     log -deb "rpi_lib:start_cloud_simulation - haproxy service running"
 
     log -deb "rpi_lib:start_cloud_simulation - Starting Cloud listener - logging path /tmp/cloud_listener.log"
-    "${FUT_TOPDIR}"/framework/tools/cloud_listener.py --verbose &> /tmp/cloud_listener.log &
+    "${fut_topdir}"/framework/tools/cloud_listener.py --verbose &> /tmp/cloud_listener.log &
     log -deb "rpi_lib:start_cloud_simulation - Cloud listener started" && exit 0
 }
 
@@ -107,7 +99,7 @@ stop_cloud_simulation()
         raise "haproxy not stopped" -l "rpi_lib:stop_cloud_simulation" -ds
     log -deb "rpi_lib:stop_cloud_simulation - haproxy service stopped"
     log "rpi_lib:stop_cloud_simulation - Stopping cloud_listener"
-    pkill -f "cloud_listener" > /dev/null 2>&1
+    pkill -f "cloud_listener" || : >/dev/null 2>&1
 }
 
 ###############################################################################
@@ -129,14 +121,14 @@ stop_cloud_simulation()
 start_fut_mqtt()
 {
     local cert_dir="/etc/mosquitto/certs/fut/"
-    local mqtt_conf_file="${FUT_TOPDIR}/shell/tools/server/files/fut_mqtt.conf"
+    local mqtt_conf_file="${fut_topdir}/shell/tools/server/files/fut_mqtt.conf"
 
     log -deb "rpi_lib:start_fut_mqtt - Creating cert dir: ${cert_dir}"
     sudo mkdir -p "${cert_dir}" ||
         raise "Failed to create cert dir!" -l "rpi_lib:start_fut_mqtt" -ds
 
     log -deb "rpi_lib:start_fut_mqtt - Copy mosquitto certificates"
-    sudo cp "${FUT_TOPDIR}/shell/tools/server/certs"/{ca.pem,server.pem,server.key} "${cert_dir}" ||
+    sudo cp "${fut_topdir}/shell/tools/server/certs"/{ca.pem,server.pem,server.key} "${cert_dir}" ||
         raise "Certificates not present!" -l "rpi_lib:start_fut_mqtt" -ds
 
     cur_user="$(id -u):$(id -g)"
@@ -144,10 +136,11 @@ start_fut_mqtt()
         raise "Failed to set permission for certificates!" -l "rpi_lib:start_fut_mqtt" -ds
 
     log -deb "rpi_lib:start_fut_mqtt - Start mosquitto service"
-    /usr/sbin/mosquitto -c "${mqtt_conf_file}" -d ||
-        raise "mosquitto not started" -l "rpi_lib:start_fut_mqtt" -ds
+    /usr/sbin/mosquitto -c "${mqtt_conf_file}" -d
 
-    log -deb "rpi_lib:start_fut_mqtt - mosquitto service running"
+    # pgrep is used because the previous command returns 0 upon failure
+    pgrep mosquitto && log -deb "rpi_lib:start_fut_mqtt - mosquitto service running" ||
+        raise "mosquitto not started" -l "rpi_lib:start_fut_mqtt" -ds
 }
 
 ###############################################################################
@@ -165,8 +158,7 @@ start_fut_mqtt()
 stop_fut_mqtt()
 {
     log -deb "rpi_lib:stop_fut_mqtt - Stopping MQTT daemon"
-    # shellcheck disable=SC2046
-    sudo kill $(ps aux | grep "mosquitto" | grep -v "grep" | awk '{print $2}') &&
+    pgrep mosquitto | xargs -r sudo kill &&
         log -deb "rpi_lib:stop_fut_mqtt - mosquitto service stopped" ||
         log -deb "rpi_lib:stop_fut_mqtt - mosquitto service not running"
 }
@@ -191,13 +183,6 @@ print_certificate_details()
     log "rpi_lib: print_certificate_details - Printing details of certificate: $cert_file"
     openssl x509 -in $cert_file -noout -text
 }
-####################### UTILITY SECTION - STOP ################################
-
-####################### NETWORK SECTION - START ###############################
-
-####################### NETWORK SECTION - STOP ################################
-
-####################### FW IMAGE SECTION - START ##############################
 
 ###############################################################################
 # DESCRIPTION:
@@ -220,6 +205,7 @@ create_md5_file()
 
     um_fw_name=${um_file_path##*/}
     um_file_cd_path=${um_file_path//"$um_fw_name"/""}
+    um_file_cd_path=${um_file_cd_path:-.}
 
     log "rpi_lib:create_md5_file - Creating md5 sum file of file $um_file_path"
     cd "$um_file_cd_path" && md5sum "$um_fw_name" > "$um_fw_name.md5" &&
@@ -250,6 +236,7 @@ create_corrupt_md5_file()
 
     um_fw_name=${um_file_path##*/}
     um_file_cd_path=${um_file_path//"$um_fw_name"/""}
+    um_file_cd_path=${um_file_cd_path:-.}
     um_md5_name="$um_file_cd_path/${um_fw_name}.md5"
     um_hash_only="$(cd "$um_file_cd_path" && md5sum "$um_fw_name" | cut -d' ' -f1)"
 
@@ -282,9 +269,8 @@ um_create_corrupt_image()
 
     um_fw_name=${um_fw_path##*/}
     um_file_cd_path=${um_fw_path//"$um_fw_name"/""}
+    um_file_cd_path=${um_file_cd_path:-.}
     um_corrupt_fw_path="$um_file_cd_path/corrupt_${um_fw_name}"
-    # shellcheck disable=SC2034
-    um_corrupt_size=$(("$(stat --printf="%s" "$um_fw_path")" - "1"))
 
     [ -f "$um_corrupt_fw_path" ] && rm "$um_corrupt_fw_path"
 
@@ -299,10 +285,6 @@ um_create_corrupt_image()
 
     return 0
 }
-
-####################### FW IMAGE SECTION - STOP ###############################
-
-####################### CM SECTION - START ####################################
 
 ###############################################################################
 # DESCRIPTION:
@@ -328,12 +310,13 @@ address_internet_manipulation()
         raise "rpi_lib:address_internet_manipulation requires ${NARGS_MIN}-${NARGS_MAX} input arguments, $# given" -arg
     local ip_address=${1}
     local type=${2}
+    local sudo_cmd=${3:-"sudo"}
     # Select command and exit code according to options.
     [[ $type == "block" ]] && type_arg="-I" || type_arg="-D"
     [[ $type == "block" ]] && type_ec=0 || type_ec=1
 
     log "rpi_lib:address_internet_manipulation - Manipulating internet for ip address '$ip_address'"
-    address_internet_check "$ip_address" "$type"
+    address_internet_check "$ip_address" "$type" "$sudo_cmd"
 
     wait_for_function_response "$type_ec" "${iptables_cmd} $type_arg FORWARD -s $ip_address -o eth0 -j DROP" &&
         log -deb "rpi_lib:address_internet_manipulation - Internet ${type}ed for address '$ip_address' - Success" ||
@@ -460,7 +443,7 @@ address_dns_manipulation()
     local iptables_args_tcp="${iptables_chain} -p tcp -s ${ip_address} --dport 53 -j DROP"
     local iptables_args_tcp_ssl="${iptables_chain} -p tcp -s ${ip_address} --dport 853 -j DROP"
 
-    address_dns_check "${ip_address}" "${type}" && return 0
+    address_dns_check "${ip_address}" "${type}" "${sudo_cmd}" && return 0
     if [ "${type}" == "block" ]; then
         local action_type='-I'
         local wait_exit_code=0
@@ -491,7 +474,7 @@ address_dns_manipulation()
     wait_for_function_exit_code "${wait_exit_code}" "${cmd_tcp_ssl}" "${retry_cnt}" &&
         log -deb "rpi_lib:address_dns_manipulation - DNS traffic ${type}ed for '${ip_address}'" ||
         raise "Could not ${type} DNS traffic for '${ip_address}'" -l "rpi_lib:address_dns_manipulation" -ds
-    address_dns_check "${ip_address}" "${type}" &&
+    address_dns_check "${ip_address}" "${type}" "${sudo_cmd}" &&
         log -deb "rpi_lib:address_dns_manipulation - Command '${cmd_udp}' success" ||
         raise "Command manipulating iptables incorrectly reported success, check system" -l "rpi_lib:address_dns_manipulation" -ds
 }
@@ -526,7 +509,6 @@ address_dns_check()
         exit_code=1
     fi
 
-    # shellcheck disable=SC2034
     check_ec=$(${sudo_cmd} ${iptables_cmd} -C ${iptables_chain} -p udp -s "$ip_address" --dport 53 -j DROP)
     if [ "$?" -eq "$exit_code" ]; then
         log -deb "rpi_lib:address_dns_check - DNS traffic already ${type}ed for address '$ip_address'"
@@ -559,12 +541,13 @@ arping_manipulation()
         raise "rpi_lib:arping_manipulation requires ${NARGS_MIN}-${NARGS_MAX} input arguments, $# given" -arg
     local ip_address=${1}
     local type=${2}
+    local sudo_cmd=${3:-"sudo"}
     # Select command and exit code according to options.
     [[ $type == "block" ]] && type_arg="-A OUTPUT -d ${ip_address} --opcode 2 -j DROP" || type_arg="-F OUTPUT"
     type_ec=0
 
     log "rpi_lib:arping_manipulation - Manipulating arping"
-    arping_check "$ip_address" "$type"
+    arping_check "$ip_address" "$type" "$sudo_cmd"
 
     wait_for_function_response "$type_ec" "${arptables_cmd} $type_arg" &&
         log -deb "rpi_lib:arping_manipulation - Internet ${type}ed for address '$ip_address' - Success" ||
@@ -608,10 +591,10 @@ arping_check()
     log -deb "run: ${arping_cmd} -L OUTPUT -n | grep DROP | grep -q ${ip_address})"
     check_ec=$(${sudo_cmd} ${arping_cmd} -L OUTPUT -n | grep DROP | grep -q ${ip_address})
     if [ "$?" -eq "$exit_code" ]; then
-        log -deb "Arping check resaulted in ${code}, should be != ${exit_code}"
+        log -deb "Arping check resulted in ${code}, should be != ${exit_code}"
         raise "Arping already ${type}ed" -l "rpi_lib:arping_check" -ec 0 -ds
     else
-        log -deb "Arping check resaulted in ${code}, should be != ${exit_code}"
+        log -deb "Arping check resulted in ${code}, should be != ${exit_code}"
         return 1
     fi
 }
@@ -639,14 +622,9 @@ check_traffic_iperf3_client()
     local port=${2}
 
     check_ec=$(iperf3 -c ${ip_address} -p ${port} -t 5)
-    echo "$check_ec" | grep -i "connected.*${ip_address}.*${port}"
-    if [ "$?" -eq 0 ]; then
-        log -deb "rpi_lib:check_traffic_iperf3_client: Traffic is reachable to WAN IP of the DUT: ${ip_address}:${port} - Success"
-    else
+    echo "$check_ec" | grep -i "connected.*${ip_address}.*${port}" &&
+        log -deb "rpi_lib:check_traffic_iperf3_client: Traffic is reachable to WAN IP of the DUT: ${ip_address}:${port} - Success" ||
         raise "Traffic failed to reach WAN IP of the DUT: ${ip_address}:${port}" -l "rpi_lib:check_traffic_iperf3_client" -tc
-    fi
-
-    return 0
 }
 
 #################################################################################
@@ -690,7 +668,7 @@ generate_fut_self_signed_certificates()
     local NARGS=0
     [ $# -ne ${NARGS} ] &&
         raise "rpi_lib:generate_fut_self_signed_certificates does not require any input argument(s), $# given" -arg
-    local certificate_path="${FUT_TOPDIR}/shell/tools/server/certs"
+    local certificate_path="${fut_topdir}/shell/tools/server/certs"
     local certificate_subjects_ca="/C=US/ST=FUT/L=FUT/O=FUT/CN=*.opensync.io:ca"
     local certificate_subjects_server="/C=US/ST=FUT/L=FUT/O=FUT/CN=*.opensync.io"
     log -deb "rpi_lib:generate_fut_self_signed_certificates - Removing any existing certificates in ${certificate_path}"
@@ -731,5 +709,3 @@ generate_fut_self_signed_certificates()
     tail ${certificate_path}/* || true
     return 0
 }
-
-####################### CM SECTION - STOP #####################################

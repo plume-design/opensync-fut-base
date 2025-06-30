@@ -8,12 +8,4 @@ sudo bash -c "echo '127.0.0.1 fut.opensync.io' >> /etc/hosts" &&
 envsubst '$OPENSYNC_ROOT' < /etc/nginx/sites-available/default.template > /tmp/default.nginx
 sudo cp /tmp/default.nginx /etc/nginx/sites-available/default
 sudo service nginx restart
-
-while true
-do
-    echo "Starting gatekeeper.py"
-    sudo service nginx start
-    python3 /var/www/gatekeeper/gatekeeper.py
-    echo "Crashed gatekeeper.py"
-    sleep 1
-done
+python3 /var/www/gatekeeper/gatekeeper.py
